@@ -50,3 +50,31 @@ def _onnx_rerank(prefix: str, candidates: list[str]) -> list[str] | None:
         return candidates
     except Exception:
         return None
+
+# Healthcare phrase suggestions
+
+_PHRASES = [
+    "I need an appointment",
+    "I need an appointment with my doctor",
+    "I need help booking an appointment",
+    "I want to cancel my appointment",
+    "I want to reschedule my appointment",
+    "I need to refill my prescription",
+    "I would like to speak to a doctor",
+    "I am experiencing pain",
+    "I need help understanding my medication",
+    "I want to confirm my appointment",
+    "Please contact me tomorrow",
+]
+
+
+def suggest_phrases(text: str, limit: int = 5) -> list[str]:
+    text = (text or "").lower().strip()
+
+    if not text:
+        return _PHRASES[:limit]
+
+    return [
+        phrase for phrase in _PHRASES
+        if text in phrase.lower()
+    ][:limit]
