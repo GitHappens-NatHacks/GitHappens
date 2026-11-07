@@ -27,7 +27,7 @@ class AccessibilitySettings:
     color_profile: str = "standard"
     letter_spacing_px: int = 0
     tint_color: str = "warm"
-    tint_opacity: int = 15
+    tint_opacity: int = 10
     speech_rate: int = 160
     initial_setup_complete: bool = False
     assistance_enabled: bool = True
@@ -49,7 +49,7 @@ PROFILES: dict[str, dict[str, Any]] = {
         "predictive_speech": False,
     },
     "cognitive": {
-        "label": "Simplified browsing", "description": "Fewer distractions and clearer instructions.",
+        "label": "Clearer interfaces", "description": "Fewer distractions in supported demo layouts.",
         "gaze_control": False, "steady_hand": False, "smart_interface": True,
         "predictive_speech": True,
     },
@@ -79,7 +79,7 @@ def load_settings(store: QSettings | None = None) -> AccessibilitySettings:
         candidate.font_size_pct = max(90, min(160, int(candidate.font_size_pct)))
         candidate.speech_rate = max(100, min(220, int(candidate.speech_rate)))
         candidate.letter_spacing_px = max(0, min(4, int(candidate.letter_spacing_px)))
-        candidate.tint_opacity = max(5, min(28, int(candidate.tint_opacity)))
+        candidate.tint_opacity = max(0, min(20, int(candidate.tint_opacity)))
         if candidate.color_profile not in ("standard", "high_contrast", "warm", "cool"):
             candidate.color_profile = "standard"
         if candidate.tint_color not in ("warm", "cool", "rose"):
