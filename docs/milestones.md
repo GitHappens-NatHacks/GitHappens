@@ -7,7 +7,7 @@
 - [ ] Shared module enable/disable polish
 
 ## Phase 2 — Independent prototypes
-- [ ] SteadyHand live pointer path + tremor sim metrics
+- [x] SteadyHand live pointer path + tremor sim metrics
 - [ ] Gaze preview + blink detection in UI
 - [ ] pyttsx3 confirmations from portal actions
 - [ ] Optional ONNX suggestion path
@@ -15,12 +15,12 @@
 ## Phase 3 — Integration
 - [ ] Profiles flip the right modules live
 - [ ] Gaze dwell/blink drives portal selection
-- [ ] SteadyHand assists tiny slot buttons
+- [x] SteadyHand assists tiny slot buttons
 - [ ] End-to-end booking per profile
 
 ## Phase 4 — Evaluation
-- [ ] Before/after click accuracy
-- [ ] Task completion time
+- [x] Before/after click accuracy
+- [x] Task completion time
 - [ ] Gaze selection notes
 - [ ] Demo machine permissions verified
 
