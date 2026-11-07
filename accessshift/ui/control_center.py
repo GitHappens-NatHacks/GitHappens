@@ -14,12 +14,15 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+    QApplication, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 
 from accessshift.engine.adaptive_engine import AdaptiveEngine
+from accessshift.modules.smartinterface import (
+    ScreenTintManager, VisualPreview, apply_accessshift_appearance,
+)
 from accessshift.modules.steadyhand.controller import SteadyHandController
 from accessshift.ui.control_center_components import (
     PreferenceRow, StatCard, button, card, label,
@@ -151,6 +154,8 @@ class MainWindow(QMainWindow):
         self._toggle_rows = {}
         self._sliders = {}
         self._preset_buttons = {}
+        self._base_qss = Path(__file__).with_name('control_center_styles.qss').read_text(encoding='utf-8')
+        self.tint_manager = ScreenTintManager(QApplication.instance())
         self._syncing_engine = True
         self._build_ui()
         self.engine.modules_changed.connect(self._on_external_modules_changed)
@@ -161,8 +166,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 790)
         self.setMinimumSize(930, 640)
         self.setWindowTitle('AccessShift AI  |  Accessibility Control Center')
-        style = Path(__file__).with_name('control_center_styles.qss')
-        self.setStyleSheet(style.read_text(encoding='utf-8'))
+        self._apply_visual_preferences()
 
     def _build_ui(self):
         root = QWidget()
@@ -414,24 +418,70 @@ class MainWindow(QMainWindow):
         return page
 
     def _page_interface(self):
-        page, lay = self._page('CLEARER, CALMER INTERFACES', 'Interface & communication',
-                               'Adjust layout preferences and communication assistance in one place.')
-        row = PreferenceRow('Enable SmartInterface', 'Simplify supported applications and website integrations.')
+        page, lay = self._page('SMARTINTERFACE / VISUAL ACCESSIBILITY', 'Make your screen easier to use',
+                               'Change fonts and colours immediately inside AccessShift. Optional screen tint works across displays.')
+        row = PreferenceRow('Enable SmartInterface', 'Enable visual accessibility preferences for supported integrations.')
         row.changed.connect(lambda v: self._change_module('smart_interface', v))
         self.interface_toggle = row
         lay.addWidget(row)
         options, ol = card()
-        self.simple_row = PreferenceRow('Reduce complexity', 'Fewer competing controls and a guided step-by-step layout.')
+        ol.addWidget(label('Live appearance settings', 'sectionTitle'))
+        self.simple_row = PreferenceRow('Reduce complexity', 'Guided layouts for supported interfaces (requires adapter integration).')
         self.simple_row.changed.connect(lambda v: self._change_option('reduce_complexity', v))
         ol.addWidget(self.simple_row)
-        ol.addWidget(label('Preferred text size', 'cardTitle'))
+        ol.addWidget(label('Text size in AccessShift', 'cardTitle'))
         self.font_slider, fr = self._slider(90, 160, 10, 'font_size_pct', '%')
         ol.addLayout(fr)
-        ol.addWidget(label('These preferences are passed to supported interface adapters; '
-                           'they cannot rewrite every third-party app by themselves.', 'bodyText', True))
+        ol.addWidget(label('Letter spacing in preview', 'cardTitle'))
+        self.spacing_slider, spacing_row = self._slider(0, 4, 1, 'letter_spacing_px', 'px')
+        ol.addLayout(spacing_row)
+        ol.addWidget(label('Colour theme', 'cardTitle'))
+        self.color_combo = QComboBox()
+        for text, value in [
+            ('Standard', 'standard'), ('High contrast', 'high_contrast'),
+            ('Warm reading', 'warm'), ('Cool blue', 'cool'),
+        ]:
+            self.color_combo.addItem(text, value)
+        self.color_combo.setAccessibleName('Colour theme')
+        self.color_combo.currentIndexChanged.connect(
+            lambda _: self._change_option('color_profile', self.color_combo.currentData()))
+        ol.addWidget(self.color_combo)
+        ol.addWidget(label('Live preview', 'cardTitle'))
+        self.visual_preview = VisualPreview()
+        ol.addWidget(self.visual_preview)
+        ol.addWidget(label('The chosen text size and colour theme now change AccessShift itself. '
+                           'Fonts and page layouts in unrelated apps are not modified.', 'bodyText', True))
         lay.addWidget(options)
+
+        tint, tl = card()
+        tl.addWidget(label('Optional desktop colour tint', 'sectionTitle'))
+        tl.addWidget(label('Adds a transparent colour overlay across connected screens. '
+                           'It does NOT rewrite the colours or fonts inside other applications. '
+                           'It turns off when AccessShift closes.', 'bodyText', True))
+        tint_controls = QHBoxLayout()
+        self.tint_color_combo = QComboBox()
+        for text, value in [
+            ('Warm amber', 'warm'), ('Cool blue', 'cool'), ('Soft rose', 'rose'),
+        ]:
+            self.tint_color_combo.addItem(text, value)
+        self.tint_color_combo.setAccessibleName('Screen tint colour')
+        self.tint_color_combo.currentIndexChanged.connect(
+            lambda _: self._change_option('tint_color', self.tint_color_combo.currentData()))
+        tint_controls.addWidget(self.tint_color_combo, 1)
+        tl.addLayout(tint_controls)
+        tl.addWidget(label('Tint strength (5–28%)', 'cardTitle'))
+        self.tint_slider, tint_row = self._slider(5, 28, 1, 'tint_opacity', '%')
+        tl.addLayout(tint_row)
+        self.tint_row = PreferenceRow('Show tint on my screens',
+                                      'Click-through overlay; disabled automatically when the app exits.')
+        self.tint_row.changed.connect(self._set_screen_tint)
+        tl.addWidget(self.tint_row)
+        self.tint_status = label('Screen tint is off', 'bodyText')
+        tl.addWidget(self.tint_status)
+        lay.addWidget(tint)
+
         speak, spl = card()
-        spl.addWidget(label('Speech & text assistance', 'sectionTitle'))
+        spl.addWidget(label('Speech & text assistance  •  Avneet integration', 'sectionTitle'))
         self.speech_row = PreferenceRow('Enable communication support', 'Activate speech and predictive text settings.')
         self.speech_row.changed.connect(lambda v: self._change_module('predictive_speech', v))
         spl.addWidget(self.speech_row)
@@ -448,6 +498,42 @@ class MainWindow(QMainWindow):
         lay.addWidget(speak)
         lay.addStretch()
         return page
+
+    def _set_screen_tint(self, enabled: bool) -> None:
+        try:
+            if enabled:
+                self.tint_manager.update(color=self.prefs.tint_color, opacity=self.prefs.tint_opacity)
+                self.tint_manager.enable()
+            else:
+                self.tint_manager.disable()
+        except Exception as exc:
+            self.tint_manager.disable()
+            QMessageBox.warning(self, 'Screen tint unavailable',
+                                'This operating system did not allow the screen overlay.\n\n' + str(exc))
+        self.tint_row.set_value(self.tint_manager.active)
+        self.tint_status.setText('Screen tint active — turn it off here before closing.' if self.tint_manager.active
+                                 else 'Screen tint is off')
+
+    def _apply_visual_preferences(self) -> None:
+        apply_accessshift_appearance(self, self._base_qss, self.prefs.font_size_pct, self.prefs.color_profile)
+        if hasattr(self, 'visual_preview'):
+            self.visual_preview.set_preferences(self.prefs.font_size_pct, self.prefs.color_profile,
+                                                self.prefs.letter_spacing_px)
+        if hasattr(self, 'color_combo'):
+            self.color_combo.blockSignals(True)
+            self.color_combo.setCurrentIndex(max(0, self.color_combo.findData(self.prefs.color_profile)))
+            self.color_combo.blockSignals(False)
+        if hasattr(self, 'tint_color_combo'):
+            self.tint_color_combo.blockSignals(True)
+            self.tint_color_combo.setCurrentIndex(max(0, self.tint_color_combo.findData(self.prefs.tint_color)))
+            self.tint_color_combo.blockSignals(False)
+        self.tint_manager.update(color=self.prefs.tint_color, opacity=self.prefs.tint_opacity)
+        if hasattr(self, 'tint_row'):
+            self.tint_row.set_value(self.tint_manager.active)
+
+    def closeEvent(self, event):
+        self.tint_manager.disable()
+        super().closeEvent(event)
 
     def _page_test(self):
         page, lay = self._page('TRY YOUR SETTINGS', 'Test & preview',
@@ -541,6 +627,8 @@ class MainWindow(QMainWindow):
         self._refresh()
 
     def _change_module(self, key, value):
+        if key == 'smart_interface' and not value and self.tint_manager.active:
+            self._set_screen_tint(False)
         setattr(self.prefs, key, bool(value))
         # A user can tweak a preset without losing its selected options.
         self.prefs.profile = 'custom'
@@ -589,6 +677,7 @@ class MainWindow(QMainWindow):
             slider.blockSignals(False)
             text.setText(f'{value} {suffix}')
         self.footer_status.setText('✓  Preferences saved locally')
+        self._apply_visual_preferences()
 
     def _request_calibration(self):
         self.calibration_requested.emit()
