@@ -39,33 +39,54 @@ def _font_size(percentage: int, base: int) -> int:
 
 
 def scaled_stylesheet(base_qss: str, font_size_pct: int) -> str:
-    """Scale existing Qt font-size declarations, preserving all other styling."""
-    def replace(m: re.Match[str]) -> str:
-        return f'font-size: {_font_size(font_size_pct, int(m.group(1)))}px'
-    return re.sub(r'font-size\s*:\s*(\d+)px', replace, base_qss)
+    """Scale content typography without making navigation/sidebar overflow."""
+    pct = max(90, min(160, int(font_size_pct)))
+    fixed = ('#navButton', '#sideSection', '#brandName', '#brandSub',
+             '#sidebarFoot', '#logoMark', '#topBarTitle', '#topBarBadge',
+             '#heroEyebrow', '#goodPill', '#footerText')
+
+    def update_rule(match: re.Match[str]) -> str:
+        selector, body = match.group(1), match.group(2)
+        if any(n in selector for n in fixed):
+            return match.group(0)
+        new = re.sub(r'font-size\s*:\s*(\d+)px',
+                     lambda m: f'font-size: {max(10, round(int(m.group(1)) * pct / 100))}px',
+                     body)
+        return selector + '{' + new + '}'
+
+    return re.sub(r'([^{}]+)\{([^{}]*)\}', update_rule, base_qss)
 
 
 def theme_override(profile: str) -> str:
-    """Override the app's predefined, named elements without modifying its layout."""
+    """Themed content surfaces; the persistent dark sidebar remains legible."""
     if profile == 'standard':
         return ''
     p = PALETTES.get(profile, PALETTES['standard'])
     return f'''
-    QWidget#appRoot, QWidget#scrollContent {{ background-color: {p.background}; color: {p.foreground}; }}
-    QFrame#sidebar, QFrame#card, QFrame#optionCard, QFrame#footerBar {{ background-color: {p.panel}; border-color: {p.border}; }}
-    QFrame#innerCard {{ background-color: {p.surface}; border-color: {p.border}; }}
-    QLabel, QLabel#brandName, QLabel#cardTitle, QLabel#pageTitle, QLabel#sectionTitle,
-    QLabel#number, QLabel#bodyText, QLabel#footerText {{ color: {p.foreground}; }}
-    QLabel#brandSub, QLabel#sideSection, QLabel#sidebarFoot, QLabel#eyebrow,
-    QLabel#pageDescription, QLabel#subtle, QLabel#micro {{ color: {p.muted}; }}
-    QPushButton#navButton, QPushButton#secondaryButton, QPushButton#presetButton {{
-      background-color: {p.panel}; color: {p.foreground}; border-color: {p.border};
+    QWidget#appRoot, QWidget#scrollContent {{ background: {p.background}; color: {p.foreground}; }}
+    QFrame#topBar, QFrame#footerBar {{ background: {p.panel}; border-color: {p.border}; }}
+    QFrame#card, QFrame#optionCard {{ background: {p.panel}; border-color: {p.border}; }}
+    QFrame#innerCard {{ background: {p.surface}; border-color: {p.border}; }}
+    QLabel#pageTitle, QLabel#sectionTitle, QLabel#cardTitle, QLabel#number,
+    QLabel#bodyText, QLabel#topBarTitle {{ color: {p.foreground}; }}
+    QLabel#pageDescription, QLabel#eyebrow, QLabel#subtle, QLabel#micro,
+    QLabel#footerText {{ color: {p.muted}; }}
+    QLabel#pill {{ background: {p.surface}; color: {p.foreground}; }}
+    QPushButton#secondaryButton, QPushButton#presetButton {{
+        background: {p.panel}; color: {p.foreground}; border-color: {p.border};
     }}
-    QPushButton#navButton:checked {{ background-color: {p.surface}; color: {p.accent}; }}
-    QPushButton#primaryButton {{ background-color: {p.accent}; color: {p.accent_text}; border-color: {p.accent}; }}
-    QLineEdit, QComboBox {{ background-color: {p.panel}; color: {p.foreground}; border-color: {p.border}; }}
-    QLabel#pill {{ background-color: {p.surface}; color: {p.foreground}; }}
+    QPushButton#presetButton:checked {{ background: {p.surface}; border-color: {p.accent}; color: {p.foreground}; }}
+    QPushButton#primaryButton {{ background: {p.accent}; color: {p.accent_text}; border-color: {p.accent}; }}
+    QLineEdit, QTextEdit, QComboBox {{ background: {p.panel}; color: {p.foreground}; border-color: {p.border}; }}
+    QComboBox QAbstractItemView {{ background: {p.panel}; color: {p.foreground}; }}
+    QFrame#sidebar QLabel#brandName {{ color: #FFFFFF; }}
+    QFrame#sidebar QLabel#brandSub {{ color: #98A4C8; }}
+    QFrame#sidebar QLabel#sideSection {{ color: #8591B6; }}
+    QFrame#sidebar QLabel#sidebarFoot {{ color: #8390B1; }}
+    QFrame#sidebar QFrame#innerCard {{ background: #252B49; border-color: #3B4267; }}
+    QFrame#sidebar QFrame#innerCard QLabel#micro {{ color: #BCC7E4; }}
     '''
+
 
 
 def apply_accessshift_appearance(window: Any, base_qss: str, font_size_pct: int, color_profile: str) -> None:
@@ -88,7 +109,7 @@ class VisualPreview(QFrame):
         self.body = QLabel('Make text easier to read with size, spacing and contrast adjustments.\n'
                            'This live preview updates as you move the controls.')
         self.body.setWordWrap(True)
-        self.note = QLabel('Changes are applied to AccessShift. Other applications require their own adapters.')
+        self.note = QLabel('Changes affect AccessShift and the local healthcare demo only.')
         self.note.setWordWrap(True)
         self.action = QPushButton('Try sample button')
         self.action.setAccessibleName('Try sample button in preview')
