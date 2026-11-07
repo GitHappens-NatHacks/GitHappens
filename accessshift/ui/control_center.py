@@ -7,14 +7,13 @@ not capabilities claimed by the UI.
 """
 from __future__ import annotations
 
-import math
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+    QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget,
     QVBoxLayout, QWidget,
 )
@@ -24,6 +23,8 @@ from accessshift.modules.smartinterface import (
     ScreenTintManager, VisualPreview, apply_accessshift_appearance,
 )
 from accessshift.modules.steadyhand.controller import SteadyHandController
+from accessshift.modules.steadyhand.metrics import Trial, save_results
+from accessshift.modules.steadyhand.targets import Target, TargetManager
 from accessshift.ui.control_center_components import (
     PreferenceRow, StatCard, button, card, label,
 )
@@ -31,18 +32,46 @@ from accessshift.ui.control_center_settings import (
     AccessibilitySettings, PROFILES, load_settings, save_settings,
 )
 
+SEQUENCE = ('doctor', 'date', 'time', 'review', 'book') * 2
+LABELS = {
+    'doctor': '1. Doctor',
+    'date': '2. Date',
+    'time': '3. Time',
+    'review': '4. Review',
+    'book': '5. Book',
+}
+
 
 class TremorPlayground(QWidget):
-    """Mouse-only demo of in-app tremor smoothing; never moves the OS pointer."""
-    metrics_changed = Signal(int, int)
+    """In-app tremor smoothing and target assistance evaluation canvas.
 
-    def __init__(self, controller: SteadyHandController):
+    Supports baseline, smoothing, target assistance, and combined modes with
+    healthcare workflow targets, live accuracy metrics, and JSON trial export.
+    """
+    metrics_changed = Signal(int, int)
+    trial_progress = Signal(object, object)
+    trial_completed = Signal(object)
+
+    MODES = [
+        'Baseline (Raw input)',
+        'SteadyHand smoothing',
+        'Target assistance',
+        'Smoothing + Target assistance',
+    ]
+
+    def __init__(self, controller: SteadyHandController, target_padding: float = 16.0):
         super().__init__()
         self.controller = controller
-        self.setMinimumHeight(250)
+        self.setMinimumHeight(300)
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.CrossCursor)
-        self.setAccessibleName('Tremor accuracy practice area; click the purple target')
+        self.setAccessibleName('SteadyHand accuracy practice and evaluation canvas')
+
+        self.target_manager = TargetManager(padding=target_padding)
+        self._mode_index = 3
+        self.use_filter = True
+        self.assisted = True
+
         self._inside = False
         self._mouse = (150.0, 130.0)
         self._raw = self._mouse
@@ -50,88 +79,194 @@ class TremorPlayground(QWidget):
         self._hits = 0
         self._misses = 0
         self._simulated = True
+        self._sim_start = time.perf_counter()
+
+        self.trial: Trial | None = None
+        self.results: list[Trial] = []
+
         self.timer = QTimer(self)
-        self.timer.setInterval(40)
+        self.timer.setInterval(30)
         self.timer.timeout.connect(self._tick)
         self.timer.start()
+        self._rebuild_targets()
+
+    def set_target_padding(self, padding: float) -> None:
+        self.target_manager.padding = max(0.0, float(padding))
+        self.update()
+
+    def set_mode(self, mode_index: int) -> None:
+        self._mode_index = max(0, min(len(self.MODES) - 1, mode_index))
+        self.use_filter = self._mode_index in (1, 3)
+        self.assisted = self._mode_index in (2, 3)
+        self.controller.enabled = self.use_filter
+        self.controller.reset()
+        self.update()
+
+    def start_trial(self) -> None:
+        self.set_mode(self._mode_index)
+        self.trial = Trial(self.MODES[self._mode_index], SEQUENCE)
+        self.controller.reset()
+        self._sim_start = time.perf_counter()
+        self.update()
+        self.trial_progress.emit(self.trial.summary(), self.trial.expected)
+
+    def abort_trial(self) -> None:
+        if self.trial and not self.trial.complete:
+            self.trial = None
+            self.update()
 
     def set_simulation(self, enabled: bool) -> None:
         self._simulated = enabled
+        self._sim_start = time.perf_counter()
+        self.controller.simulate_tremor = False
         self.update()
 
     def reset_scores(self) -> None:
-        self._hits = self._misses = 0
+        self._hits = 0
+        self._misses = 0
         self.metrics_changed.emit(0, 0)
         self.update()
 
-    def _target(self):
-        return (max(90.0, self.width() * .76), max(75.0, self.height() * .51))
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._rebuild_targets()
+
+    def _rebuild_targets(self) -> None:
+        w = max(400, self.width())
+        h = max(200, self.height())
+        btn_w = max(80.0, min(120.0, (w - 70) / 5.0 - 10.0))
+        btn_h = max(36.0, min(48.0, h * 0.16))
+        margin = 35.0
+        avail_w = w - 2 * margin
+        step_x = (avail_w - btn_w) / 4.0 if avail_w > btn_w else 90.0
+        base_y = h * 0.46
+        targets = []
+        for i, key in enumerate(('doctor', 'date', 'time', 'review', 'book')):
+            x = margin + i * step_x
+            y = base_y + ((-1) ** i) * (btn_h * 0.42)
+            targets.append(Target(key, LABELS[key], x, y, btn_w, btn_h))
+        self.target_manager.set_targets(targets)
 
     def _tick(self) -> None:
         if not self.isVisible():
             return
         x, y = self._mouse
+        now = time.perf_counter()
         if self._simulated:
-            t = time.perf_counter()
-            x += 9 * math.sin(t * 27) + 4 * math.sin(t * 39)
-            y += 9 * math.cos(t * 30) + 4 * math.cos(t * 46)
+            dx, dy = self.controller.tremor_offset(now - self._sim_start)
+            x += dx
+            y += dy
         self._raw = (x, y)
-        self._stable = self.controller.stabilize(x, y, time.perf_counter())
+        self._stable = self.controller.stabilize(x, y, now) if self.use_filter else (x, y)
         self.update()
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event) -> None:
         p = event.position()
         self._mouse = (p.x(), p.y())
         self._inside = True
         super().mouseMoveEvent(event)
 
-    def leaveEvent(self, event):
+    def leaveEvent(self, event) -> None:
         self._inside = False
         super().leaveEvent(event)
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            tx, ty = self._target()
-            x, y = self._stable
-            hit = math.dist((x, y), (tx, ty)) <= 30
-            if hit:
-                self._hits += 1
+            sx, sy = self._stable
+            target = self.target_manager.select(sx, sy, assisted=self.assisted)
+            if self.trial and not self.trial.complete:
+                hit = self.trial.record(target.id if target else None, sx, sy)
+                if hit:
+                    self._hits += 1
+                else:
+                    self._misses += 1
+                self.metrics_changed.emit(self._hits, self._misses)
+                self.trial_progress.emit(self.trial.summary(), self.trial.expected)
+                if self.trial.complete:
+                    self.results.append(self.trial)
+                    self.trial_completed.emit(self.trial)
             else:
-                self._misses += 1
-            self.metrics_changed.emit(self._hits, self._misses)
+                if target is not None:
+                    self._hits += 1
+                else:
+                    self._misses += 1
+                self.metrics_changed.emit(self._hits, self._misses)
         super().mousePressEvent(event)
 
-    def paintEvent(self, event):
+    def hideEvent(self, event) -> None:
+        self.timer.stop()
+        super().hideEvent(event)
+
+    def showEvent(self, event) -> None:
+        if not self.timer.isActive():
+            self.timer.start()
+        super().showEvent(event)
+
+    def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor('#F6F5FF'))
-        p.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 15, 15)
-        p.setPen(QPen(QColor('#E9E4FF'), 1))
-        for x in range(28, self.width(), 29):
-            for y in range(28, self.height(), 29):
-                p.drawPoint(x, y)
-        tx, ty = self._target()
-        p.setPen(QPen(QColor('#DED6FF'), 2))
-        p.setBrush(QColor('#EEE9FF'))
-        p.drawEllipse(int(tx - 38), int(ty - 38), 76, 76)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor('#674BE8'))
-        p.drawEllipse(int(tx - 23), int(ty - 23), 46, 46)
-        p.setPen(QColor('#FFFFFF'))
-        p.drawText(int(tx - 12), int(ty + 5), 'CLICK')
+        p.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 14, 14)
+        p.setPen(QPen(QColor('#E8E3FA'), 1))
+        for gx in range(25, self.width(), 30):
+            for gy in range(25, self.height(), 30):
+                p.drawPoint(gx, gy)
+
+        expected_id = self.trial.expected if (self.trial and not self.trial.complete) else None
+        sx, sy = self._stable
+        candidate = self.target_manager.select(sx, sy, assisted=self.assisted) if self._inside else None
+        pad = self.target_manager.padding
+
+        for t in self.target_manager.targets:
+            rect = QRectF(t.x, t.y, t.width, t.height)
+            if self.assisted and pad > 0:
+                p.setPen(QPen(QColor('#B9ACF7'), 1, Qt.PenStyle.DashLine))
+                p.setBrush(QColor('#ECE7FF'))
+                p.drawRoundedRect(rect.adjusted(-pad, -pad, pad, pad), 9, 9)
+            is_expected = t.id == expected_id
+            if is_expected:
+                p.setPen(QPen(QColor('#10B981'), 2))
+                p.setBrush(QColor('#E6F9F0'))
+            else:
+                p.setPen(QPen(QColor('#C8C0EE'), 1))
+                p.setBrush(QColor('#FFFFFF'))
+            p.drawRoundedRect(rect, 7, 7)
+            p.setPen(QColor('#065F46' if is_expected else '#312E5B'))
+            font = p.font()
+            font.setBold(is_expected)
+            font.setPointSize(10)
+            p.setFont(font)
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, t.label)
+            if candidate and candidate.id == t.id:
+                p.setPen(QPen(QColor('#F59E0B'), 2))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), 9, 9)
+
         if self._inside:
             rx, ry = self._raw
-            sx, sy = self._stable
-            p.setPen(QPen(QColor('#FB8F7B'), 2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(int(rx - 9), int(ry - 9), 18, 18)
+            if self._simulated or self.use_filter:
+                p.setPen(QPen(QColor('#FB8F7B'), 2))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawEllipse(QPointF(rx, ry), 9, 9)
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor('#4934C7'))
-            p.drawEllipse(int(sx - 6), int(sy - 6), 12, 12)
-        p.setPen(QColor('#7B739A'))
-        p.drawText(17, 24, 'PRACTICE  /  aim for the purple circle')
-        p.drawText(17, self.height() - 14, 'Coral = raw pointer   •   Purple = stabilized pointer')
+            p.setBrush(QColor('#674BE8'))
+            p.drawEllipse(QPointF(sx, sy), 5, 5)
+
+        p.setPen(QColor('#6B648C'))
+        font = p.font()
+        font.setPointSize(9)
+        font.setBold(False)
+        p.setFont(font)
+        status_text = f'EVALUATION PLAYGROUND  •  Mode: {self.MODES[self._mode_index]}'
+        if self.trial and not self.trial.complete:
+            status_text += f'  •  Target {self.trial.index + 1}/10: {LABELS.get(self.trial.expected, "")}'
+        p.drawText(16, 22, status_text)
+        p.drawText(
+            16,
+            self.height() - 12,
+            'Coral ring = Raw pointer with tremor   •   Purple dot = Stabilized / assisted pointer   •   Gold outline = Selected candidate',
+        )
         p.end()
 
 
@@ -566,33 +701,87 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _page_test(self):
-        page, lay = self._page('INTERACTIVE PROTOTYPES', 'Demo Lab & tests',
-                               'Preview SmartInterface on a fictional healthcare form and explore SteadyHand in-app.')
+        page, lay = self._page(
+            'INTERACTIVE PROTOTYPES',
+            'Demo Lab & tests',
+            'Preview SmartInterface on a fictional healthcare form and run SteadyHand accuracy trials.',
+        )
         test, tl = card()
-        tl.addWidget(label('SteadyHand • accuracy playground', 'sectionTitle'))
-        tl.addWidget(label('Move the cursor into the area and click the purple target. '
-                           'Compare the raw (coral) and smoothed (purple) indicators.', 'bodyText', True))
-        self.playground = TremorPlayground(self.steady)
+        tl.addWidget(label('SteadyHand • accuracy & benchmark suite', 'sectionTitle'))
+        tl.addWidget(label(
+            'Select a test mode and run a 10-step simulated healthcare booking trial. '
+            'Compare raw movement against One-Euro smoothing and target expansion.',
+            'bodyText',
+            True,
+        ))
+
+        ctrl_row = QHBoxLayout()
+        self.test_mode_combo = QComboBox()
+        for mode in TremorPlayground.MODES:
+            self.test_mode_combo.addItem(mode)
+        self.test_mode_combo.setCurrentIndex(3)
+        self.test_mode_combo.currentIndexChanged.connect(self._on_test_mode_changed)
+        ctrl_row.addWidget(self.test_mode_combo, 2)
+
+        self.btn_start_trial = button('Start trial', 'primaryButton')
+        self.btn_start_trial.clicked.connect(self._start_trial)
+        ctrl_row.addWidget(self.btn_start_trial)
+
+        self.btn_abort_trial = button('Abort trial', 'secondaryButton')
+        self.btn_abort_trial.setEnabled(False)
+        self.btn_abort_trial.clicked.connect(self._abort_trial)
+        ctrl_row.addWidget(self.btn_abort_trial)
+
+        self.btn_export_results = button('Export JSON', 'secondaryButton')
+        self.btn_export_results.clicked.connect(self._export_trial_results)
+        ctrl_row.addWidget(self.btn_export_results)
+
+        reset = button('Reset scores', 'secondaryButton')
+        reset.clicked.connect(self._reset_test_scores)
+        ctrl_row.addWidget(reset)
+        tl.addLayout(ctrl_row)
+
+        self.playground = TremorPlayground(
+            self.steady,
+            target_padding=16.0 * (self.prefs.target_size_pct / 100.0),
+        )
         tl.addWidget(self.playground)
-        bars = QHBoxLayout()
-        self.test_score = label('Hits: 0  •  Misses: 0  •  Accuracy: —', 'cardTitle')
-        bars.addWidget(self.test_score)
-        bars.addStretch()
-        reset = button('Reset test', 'secondaryButton')
-        reset.clicked.connect(self.playground.reset_scores)
-        bars.addWidget(reset)
-        tl.addLayout(bars)
+        self.test_score = label(
+            'Mode: Smoothing + Target assistance  •  Status: Ready for trial',
+            'cardTitle',
+        )
+        tl.addWidget(self.test_score)
         self.playground.metrics_changed.connect(self._update_test_score)
-        self.simulation_row = PreferenceRow('Simulate shaky movement', 'Adds repeatable artificial jitter inside the test only.')
+        self.playground.trial_progress.connect(self._on_trial_progress)
+        self.playground.trial_completed.connect(self._on_trial_completed)
+
+        self.simulation_row = PreferenceRow(
+            'Simulate shaky movement',
+            'Applies multi-frequency tremor inside this test only.',
+        )
         self.simulation_row.set_value(True)
         self.simulation_row.changed.connect(self.playground.set_simulation)
         tl.addWidget(self.simulation_row)
         lay.addWidget(test)
+
+        hist_card, hl = card()
+        hl.addWidget(label('Completed Trial Benchmarks', 'sectionTitle'))
+        self.trial_history_label = label(
+            'No completed trials yet. Choose a mode and click Start trial to benchmark accuracy.',
+            'bodyText',
+            True,
+        )
+        hl.addWidget(self.trial_history_label)
+        lay.addWidget(hist_card)
+
         info, il = card(name='innerCard')
-        il.addWidget(label('Current demo scope', 'cardTitle'))
-        il.addWidget(label('This is a controlled software prototype, not a clinical assessment. '
-                           'The SmartInterface demo is local-only. Live gaze navigation and OS-level pointer '
-                           'control depend on teammates’ integrations.', 'bodyText', True))
+        il.addWidget(label('Evaluation protocol', 'cardTitle'))
+        il.addWidget(label(
+            'Each trial walks a 10-step sequence (Doctor → Date → Time → Review → Book × 2). '
+            'Metrics record click latency, hits, misses, and accuracy for judging verification.',
+            'bodyText',
+            True,
+        ))
         lay.addWidget(info)
         lay.addStretch()
         return page
@@ -612,6 +801,9 @@ class MainWindow(QMainWindow):
         return widget, row
 
     def _navigate(self, key):
+        if hasattr(self, 'playground') and self.playground.trial and not self.playground.trial.complete and key != 'test':
+            self.playground.abort_trial()
+            self._abort_trial()
         self.stack.setCurrentWidget(self._pages[key])
         for k, btn in self._nav.items():
             btn.setChecked(k == key)
@@ -668,6 +860,8 @@ class MainWindow(QMainWindow):
         setattr(self.prefs, key, int(value) if isinstance(value, int) and not isinstance(value, bool) else value)
         if key == 'tremor_strength':
             self.steady.strength = self.prefs.tremor_strength / 100.0
+        if key == 'target_size_pct' and hasattr(self, 'playground'):
+            self.playground.set_target_padding(16.0 * (self.prefs.target_size_pct / 100.0))
         self._save()
         self._refresh()
 
@@ -738,7 +932,91 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, 'Speech unavailable', str(exc))
 
+    def _on_test_mode_changed(self, index: int) -> None:
+        self.playground.set_mode(index)
+        self.test_score.setText(f'Mode: {self.playground.MODES[index]}  •  Status: Ready for trial')
+
+    def _start_trial(self) -> None:
+        self.playground.start_trial()
+        self.test_mode_combo.setEnabled(False)
+        self.btn_start_trial.setEnabled(False)
+        self.btn_abort_trial.setEnabled(True)
+
+    def _abort_trial(self) -> None:
+        self.playground.abort_trial()
+        self.test_mode_combo.setEnabled(True)
+        self.btn_start_trial.setEnabled(True)
+        self.btn_abort_trial.setEnabled(False)
+        self.test_score.setText('Trial aborted. Ready to start again.')
+
+    def _reset_test_scores(self) -> None:
+        self.playground.reset_scores()
+        self.test_score.setText('Scores reset.')
+
+    def _on_trial_progress(self, summary: dict, expected: str | None) -> None:
+        if expected is None:
+            return
+        lbl = LABELS.get(expected, expected)
+        hits = summary['hits']
+        misses = summary['misses']
+        total = summary['interactions']
+        acc = f"{summary['accuracy']:.0%}" if total > 0 else '—'
+        elapsed = f"{summary['seconds']:.1f}s"
+        self.test_score.setText(
+            f'Target {hits + 1}/10: [{lbl}]  •  Hits: {hits}  •  Misses: {misses}  •  Accuracy: {acc}  •  Time: {elapsed}'
+        )
+
+    def _on_trial_completed(self, trial: Trial) -> None:
+        self.test_mode_combo.setEnabled(True)
+        self.btn_start_trial.setEnabled(True)
+        self.btn_abort_trial.setEnabled(False)
+        s = trial.summary()
+        self.test_score.setText(
+            f"Trial completed. Mode: {trial.mode}  •  Accuracy: {s['accuracy']:.0%}  •  Time: {s['seconds']:.1f}s"
+        )
+        self._refresh_trial_history()
+
+    def _refresh_trial_history(self) -> None:
+        if not self.playground.results:
+            self.trial_history_label.setText('No completed trials yet.')
+            return
+        lines = []
+        for i, t in enumerate(self.playground.results, 1):
+            s = t.summary()
+            lines.append(
+                f"Trial #{i}  •  {s['mode']}: {s['accuracy']:.0%} accuracy  |  "
+                f"{s['hits']} hits, {s['misses']} misses  |  {s['seconds']:.1f}s"
+            )
+        self.trial_history_label.setText('\n'.join(lines))
+
+    def _export_trial_results(self) -> None:
+        if not self.playground.results:
+            QMessageBox.information(
+                self,
+                'Export Results',
+                'No completed trials to export yet. Run at least one trial first.',
+            )
+            return
+        default_name = f'steadyhand-results-{int(time.time())}.json'
+        default_path = str(self.repo_root / default_name)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            'Export Trial Results JSON',
+            default_path,
+            'JSON Files (*.json)',
+        )
+        if file_path:
+            save_results(file_path, self.playground.results, extra=self.prefs.as_dict())
+            QMessageBox.information(
+                self,
+                'Export Successful',
+                f'Exported {len(self.playground.results)} trial records to:\n{file_path}',
+            )
+
     def _update_test_score(self, hits, misses):
         n = hits + misses
         accuracy = f'{hits / n:.0%}' if n else '—'
-        self.test_score.setText(f'Hits: {hits}  •  Misses: {misses}  •  Accuracy: {accuracy}')
+        if not (self.playground.trial and not self.playground.trial.complete):
+            self.test_score.setText(
+                f'Free practice  •  Hits: {hits}  •  Misses: {misses}  •  Accuracy: {accuracy}'
+            )
