@@ -12,7 +12,8 @@ import os
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QRect, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QRect, QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QPushButton, QWidget
 
 from accessshift.modules.gaze.controller import STATUS_NO_FACE, STATUS_TRACKING, GazeController
@@ -24,6 +25,7 @@ from accessshift.ui.gaze_overlay import GazeOverlay
 
 FINISH_BUTTON = "Book appointment"  # selecting this ends the timed booking task
 ALERT_MS = 3000  # how long one-off alerts (e.g. calibration cancelled) stay up
+FACE_ALERT_DELAY_MS = 1000  # turning toward an edge square can lose the face briefly
 
 
 def _is_problem(status: str) -> bool:
@@ -60,8 +62,9 @@ class GazeMode(QObject):
         self._camera_index = int(os.getenv("GAZE_CAMERA_INDEX", "0"))
         source = os.getenv("GAZE_INPUT", "head")
         self._window = parent if isinstance(parent, QWidget) else None  # gets the big-button style
-        self._window_state = None  # window state before gaze mode maximized it
+        self._window_geometry = None  # window size/position before gaze mode filled the screen
         self._calibrating = False  # only one calibration screen at a time
+        self._face_missing = False
         self.palette = None  # app colour palette for the style and calibration screen
         self.controller = GazeController(screen_rect=screen_rect, parent=self)
         if source in ("head", "eyes"):
@@ -95,16 +98,20 @@ class GazeMode(QObject):
             self.preview.hide()
             if self._window is not None:
                 gaze_style.restore(self._window)
-                if self._window_state is not None:
-                    self._window.setWindowState(self._window_state)
-                    self._window_state = None
+                if self._window_geometry is not None:
+                    self._window.setGeometry(self._window_geometry)
+                    self._window_geometry = None
             self.status.emit("Hands-free control is off.")
             return
         if self._window is not None:
             gaze_style.apply(self._window, self.palette)
-            if self._window.isVisible():  # fill the screen so the big buttons have room
-                self._window_state = self._window.windowState()
-                self._window.setWindowState(self._window_state | Qt.WindowMaximized)
+            if self._window.isVisible():
+                # Fill the visible screen so the big buttons have room. Set the size directly:
+                # maximize/full-screen window states can give the window its own macOS space,
+                # which is left behind empty and black when the window is hidden.
+                self._window_geometry = self._window.geometry()
+                screen = self._window.screen() or QGuiApplication.primaryScreen()
+                self._window.setGeometry(screen.availableGeometry())
         self.controller.start(self._camera_index, tracker_factory=self._tracker_factory, preview=True)
         self.overlay.show()
         self.preview.place_bottom_right()
@@ -168,12 +175,21 @@ class GazeMode(QObject):
         self.status.emit(text)
         if text.startswith(("Camera", "Gaze tracking stopped")):
             self.problem.emit(text)  # can't continue without a camera
+        elif text == STATUS_NO_FACE:
+            self._face_missing = True
+            QTimer.singleShot(FACE_ALERT_DELAY_MS, self._show_face_alert_if_still_missing)
         elif _is_problem(text):
             self.overlay.set_message(text)
             self.preview.show_error(text)
         elif text == STATUS_TRACKING:
+            self._face_missing = False
             self.overlay.set_message(None)
             self.preview.show_error(None)
+
+    def _show_face_alert_if_still_missing(self) -> None:
+        if self._face_missing:  # cleared as soon as tracking resumes
+            self.overlay.set_message(STATUS_NO_FACE)
+            self.preview.show_error(STATUS_NO_FACE)
 
     def _on_exit_progress(self, progress: float) -> None:
         if progress > 0:

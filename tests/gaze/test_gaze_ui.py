@@ -190,14 +190,41 @@ def test_head_calibration_ignores_eye_openness_when_tilting(qapp):
     assert t < 12_000  # no endless retries on the up/down steps
 
 
-def test_head_calibration_shows_face_not_found_prominently(qapp):
+def no_face(ctrl, t0, t1):
+    for t in range(t0, t1, 33):
+        ctrl.process({"camera_ok": True, "face": False, "ts_ms": t})
+
+
+def test_head_calibration_shows_face_not_found_after_a_second(qapp):
+    from accessshift.ui.gaze_calibration_dialog import NO_FACE
+
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
     dlg.begin()
-    ctrl.process({"camera_ok": True, "face": False, "ts_ms": 0})
-    assert dlg.problem() == "Face not found. Look at the camera."
-    ctrl.process(fake_sample(33, (0.5, 0.5)) | {"head": (0.0, 0.6)})
+    assert dlg.current_step() == "center"
+    no_face(ctrl, 0, 500)
+    assert dlg.problem() == ""  # a brief loss is not an error
+    no_face(ctrl, 500, 1300)
+    assert dlg.problem() == NO_FACE
+    ctrl.process(fake_sample(1400, (0.5, 0.5)) | {"head": (0.0, 0.6)})
     assert dlg.problem() == ""
+    dlg.reject()
+
+
+def test_turned_head_losing_the_face_gets_a_gentle_hint_not_an_error(qapp):
+    from accessshift.ui.gaze_calibration_dialog import NO_FACE, TURN_BACK
+
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    dlg.begin()
+    t = 0
+    while dlg.current_step() == "center":
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES["center"]})
+        t += 33
+    assert dlg.current_step() == "left"
+    no_face(ctrl, t, t + 1500)  # turned so far the camera lost the face
+    assert dlg.problem() == TURN_BACK and dlg.problem() != NO_FACE
+    assert "little" in dlg.current_instruction().lower()
     dlg.reject()
 
 

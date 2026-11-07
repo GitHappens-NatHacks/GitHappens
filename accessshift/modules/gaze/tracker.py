@@ -24,7 +24,7 @@ class GazeTracker:
             max_num_faces=1,
             refine_landmarks=True,  # adds the iris landmarks 468-477
             min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+            min_tracking_confidence=0.3,  # keep tracking a turned head a little longer
         )
 
     def open(self) -> bool:

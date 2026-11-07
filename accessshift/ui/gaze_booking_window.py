@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from accessshift.modules.smartinterface.visual_controller import PALETTES
@@ -109,13 +109,24 @@ class GazeBookingWindow(QWidget):
         self.gaze.set_enabled(True)
         self.grid.refresh()
 
+    LEAVE_FULL_SCREEN_MS = 900  # macOS animates leaving full screen; hide after it finishes
+
     def stop(self) -> None:
         self._stopping = True
         try:
             self.gaze.set_enabled(False)
-            self.hide()
+            if self.isFullScreen():
+                # Hiding a full-screen window leaves its macOS space behind, empty and black.
+                self.showNormal()
+                QTimer.singleShot(self.LEAVE_FULL_SCREEN_MS, self._hide_if_stopped)
+            else:
+                self.hide()
         finally:
             self._stopping = False
+
+    def _hide_if_stopped(self) -> None:
+        if not self.gaze.enabled:
+            self.hide()
 
     def recalibrate(self) -> None:
         self.gaze.request_recalibrate()

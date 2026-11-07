@@ -122,6 +122,13 @@ class MainWindow(ControlCenterWindow):
     def _exit_gaze(self) -> None:
         if self.prefs.gaze_control:
             self._change_module('gaze_control', False)  # updates the toggle, saves, stops gaze
+        self._bring_to_front()
+
+    def _bring_to_front(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _gaze_problem(self, message: str) -> None:
         """Hands-free stopped (e.g. Esc during calibration): back to the settings page, explained."""
@@ -131,9 +138,7 @@ class MainWindow(ControlCenterWindow):
         self._navigate('gaze')
         self.gaze_notice.setText(message)
         self.gaze_notice.show()
-        self.showNormal()
-        self.raise_()
-        self.activateWindow()
+        self._bring_to_front()
 
     def _request_calibration(self) -> None:
         """Replaces the control center's "integration pending" placeholder."""

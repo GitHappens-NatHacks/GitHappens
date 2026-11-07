@@ -38,13 +38,15 @@ HEAD_INSTRUCTION = "Follow the arrows with your head and hold each pose."
 HEAD_TARGETS = {"center": (0.5, 0.5), "left": (0.1, 0.5), "right": (0.9, 0.5), "up": (0.5, 0.1), "down": (0.5, 0.9)}
 HEAD_STEP_TEXT = {
     "center": "Face the screen straight ahead and hold still",
-    "left": "Turn your head LEFT as far as is comfortable, and hold",
-    "right": "Turn your head RIGHT as far as is comfortable, and hold",
-    "up": "Tilt your head UP as far as is comfortable, and hold",
-    "down": "Tilt your head DOWN as far as is comfortable, and hold",
+    "left": "Turn your head LEFT a little, and hold",
+    "right": "Turn your head RIGHT a little, and hold",
+    "up": "Tilt your head UP a little, and hold",
+    "down": "Tilt your head DOWN a little, and hold",
 }
 DEFAULT_EAR_THRESHOLD = 0.21
 NO_FACE = "Face not found. Look at the camera."
+TURN_BACK = "Turn back a little so the camera can still see your face."
+FACE_LOST_AFTER_MS = 1000  # brief losses are normal when the head is turned
 NO_CAMERA = "No camera picture. Check that the camera is connected and allowed for this app."
 NO_CAMERA_AFTER_MS = 2500
 
@@ -96,6 +98,7 @@ class GazeCalibrationDialog(QDialog):
         self._listening = False
         self._started_ms = 0
         self._last_sample_ms: int | None = None
+        self._face_lost_since: int | None = None
         self._camera_timer = QTimer(self)
         self._camera_timer.setInterval(500)
         self._camera_timer.timeout.connect(lambda: self.check_camera(_now_ms()))
@@ -121,6 +124,9 @@ class GazeCalibrationDialog(QDialog):
 
     def problem(self) -> str:
         return self._problem
+
+    def current_instruction(self) -> str:
+        return HEAD_STEP_TEXT[self.current_step()] if self._head else self.instruction
 
     def started_ms(self) -> int:
         return self._started_ms
@@ -191,7 +197,15 @@ class GazeCalibrationDialog(QDialog):
         self._ts = sample.get("ts_ms", self._ts)
         self._last_sample_ms = _now_ms()
         self._face = bool(sample.get("face"))
-        self._problem = "" if self._face else NO_FACE
+        if self._face:
+            self._face_lost_since = None
+            self._problem = ""
+        else:
+            if self._face_lost_since is None:
+                self._face_lost_since = self._ts
+            if self._ts - self._face_lost_since >= FACE_LOST_AFTER_MS:
+                turned = self._head and self.current_step() != "center"
+                self._problem = TURN_BACK if turned else NO_FACE
         # Head pointing works with narrowed eyes (tilting up/down), so only eyes mode checks openness.
         self._collector.update(sample, 0.0 if self._head else self._ear_threshold)
         if self._collector.done:

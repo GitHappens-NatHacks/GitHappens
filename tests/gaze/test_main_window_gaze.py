@@ -215,3 +215,31 @@ def test_problem_returns_to_head_page_with_message(window):
     assert window.gaze_notice.isVisibleTo(window) and "cancelled" in window.gaze_notice.text()
     window.gaze_toggle.click()  # starting again clears the message
     assert not window.gaze_notice.isVisibleTo(window)
+
+
+def wait(qapp, ms):
+    import time
+
+    end = time.monotonic() + ms / 1000
+    while time.monotonic() < end:
+        qapp.processEvents()
+        time.sleep(0.01)
+
+
+def test_exit_from_full_screen_leaves_full_screen_before_hiding(window, qapp):
+    window.gaze_toggle.click()
+    gw = window.gaze_window
+    gw.showFullScreen()  # e.g. macOS green button
+    qapp.processEvents()
+    gw.btn_exit.click()
+    assert not gw.isFullScreen()  # left full screen first...
+    wait(qapp, 1200)
+    assert not gw.isVisible()  # ...then hidden, so no empty full-screen space is left
+
+
+def test_exit_brings_control_center_to_front(window, monkeypatch):
+    raised = []
+    monkeypatch.setattr(window, "raise_", lambda: raised.append(1))
+    window.gaze_toggle.click()
+    window.gaze_window.btn_exit.click()
+    assert raised
