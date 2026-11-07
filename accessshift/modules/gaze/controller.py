@@ -192,7 +192,16 @@ class GazeController(QObject):
     def running(self) -> bool:
         return self._thread is not None
 
-    def start(self, camera_index: int = 0, tracker_factory: Callable[[], object] | None = None) -> None:
+    @property
+    def current_target(self) -> QAbstractButton | None:
+        return self._target
+
+    def start(
+        self,
+        camera_index: int = 0,
+        tracker_factory: Callable[[], object] | None = None,
+        preview: bool = False,
+    ) -> None:
         if self.running:
             return
         if tracker_factory is None:
@@ -202,7 +211,7 @@ class GazeController(QObject):
                 return GazeTracker(camera_index)
 
         self._thread = QThread()
-        self._worker = GazeWorker(tracker_factory)
+        self._worker = GazeWorker(tracker_factory, preview=preview)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.sample.connect(self.process)  # queued: process() runs on the UI thread

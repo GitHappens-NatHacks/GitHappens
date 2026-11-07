@@ -238,7 +238,7 @@ class PortalView(QWidget):
     @staticmethod
     def _big_btn_css() -> str:
         return (
-            "QPushButton { font-size:18px; font-weight:650; text-align:left; padding:12px; "
+            "QPushButton { color:#0B1F1A; font-size:18px; font-weight:650; text-align:left; padding:12px; "
             "border:2px solid #1f4d43; border-radius:12px; background:#e7f6f1; }"
             "QPushButton:hover { background:#d2efe7; }"
         )

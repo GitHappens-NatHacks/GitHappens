@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+PREVIEW_WIDTH = 320
+
 
 class GazeWorker(QObject):
     sample = Signal(dict)
@@ -38,8 +40,12 @@ class GazeWorker(QObject):
                 s = tracker.read()  # blocks until the next camera frame (~30 fps)
                 if s is None:
                     break
-                if not self.preview:
-                    s.pop("frame", None)
+                frame = s.pop("frame", None)
+                if self.preview and frame is not None:
+                    import cv2  # only needed for preview
+
+                    h, w = frame.shape[:2]
+                    s["frame"] = cv2.resize(frame, (PREVIEW_WIDTH, max(1, h * PREVIEW_WIDTH // w)))
                 self.sample.emit(s)
         except Exception as exc:  # camera/mediapipe failures must not kill the app silently
             self.error.emit(f"Gaze tracking stopped: {exc}")

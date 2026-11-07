@@ -6,7 +6,7 @@ Click-through: it never takes mouse input, focus, or gaze clicks.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QRectF, Qt, Slot
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 from accessshift.modules.gaze.controller import GAZE_IGNORE
@@ -35,6 +35,7 @@ class GazeOverlay(QWidget):
         self._point: QPoint | None = None
         self._dwell = 0.0
         self._target = QRect()  # targeted button, local coordinates
+        self._message = ""  # red alert banner at the top of the screen
 
     @Slot(QPoint)
     def set_point(self, global_point: QPoint) -> None:
@@ -51,15 +52,32 @@ class GazeOverlay(QWidget):
         self._target = global_rect.translated(-self.geometry().topLeft()) if not global_rect.isNull() else QRect()
         self.update()
 
+    def set_message(self, text: str | None) -> None:
+        self._message = text or ""
+        self.update()
+
+    def message(self) -> str:
+        return self._message
+
     def clear(self) -> None:
-        self._point, self._dwell, self._target = None, 0.0, QRect()
+        self._point, self._dwell, self._target, self._message = None, 0.0, QRect(), ""
         self.update()
 
     def paintEvent(self, _event) -> None:
-        if self._point is None and self._target.isNull():
+        if self._point is None and self._target.isNull() and not self._message:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+        if self._message:
+            font = QFont("Helvetica", 22, QFont.Bold)
+            p.setFont(font)
+            width = p.fontMetrics().horizontalAdvance(self._message) + 60
+            banner = QRect((self.width() - width) // 2, 24, width, 56)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(200, 40, 40, 235))
+            p.drawRoundedRect(banner, 14, 14)
+            p.setPen(QColor(255, 255, 255))
+            p.drawText(banner, Qt.AlignCenter, self._message)
         if not self._target.isNull():  # outline the button gaze will click
             p.setBrush(Qt.NoBrush)
             p.setPen(QPen(QColor(255, 170, 0), 4))
