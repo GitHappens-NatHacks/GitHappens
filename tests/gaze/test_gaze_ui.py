@@ -111,3 +111,65 @@ def test_speak_empty_does_nothing(qapp):
     kb = GazeKeyboard(speech)
     kb.key_buttons["Speak"].click()
     assert speech.spoken == []
+
+
+HEAD_POSES_FEATURES = {
+    "center": (0.0, 0.60),
+    "left": (-0.20, 0.60),
+    "right": (0.20, 0.60),
+    "up": (0.0, 0.45),
+    "down": (0.0, 0.75),
+}
+
+
+def run_head_dialog(ctrl, poses, max_ms=30_000):
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
+    dlg.begin()
+    t, seen = 0, []
+    while dlg.isVisible() and t < max_ms:
+        step = dlg.current_step()
+        if not seen or seen[-1] != step:
+            seen.append(step)
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": poses[step]})
+        t += 33
+    return dlg, seen, t
+
+
+def test_head_calibration_guides_center_left_right_up_down(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg, seen, t = run_head_dialog(ctrl, HEAD_POSES_FEATURES)
+    assert seen == ["center", "left", "right", "up", "down"]
+    assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
+    up_y = ctrl.calibration.map(HEAD_POSES_FEATURES["up"])[1]
+    right_x = ctrl.calibration.map(HEAD_POSES_FEATURES["right"])[0]
+    assert up_y < SCREEN.height() / 2 and right_x > SCREEN.width() / 2  # up is up, right is right
+    assert t < 12_000
+
+
+def test_head_calibration_prompts_name_each_direction(qapp):
+    from accessshift.ui.gaze_calibration_dialog import HEAD_STEP_TEXT
+
+    assert "LEFT" in HEAD_STEP_TEXT["left"] and "UP" in HEAD_STEP_TEXT["up"]
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    assert "head" in dlg.instruction.lower()
+
+
+def test_head_calibration_retries_when_user_barely_moves(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    tiny = dict(HEAD_POSES_FEATURES, up=(0.0, 0.598), down=(0.0, 0.602))
+    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=12_000)
+    assert dlg.isVisible() and not ctrl.calibration.is_fitted
+    assert seen[:6] == ["center", "left", "right", "up", "down", "center"]  # started again
+    assert "tilt" in dlg.message().lower()
+    dlg.reject()
+
+
+def test_eyes_calibration_keeps_nine_dots_and_check(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    ctrl.set_source("eyes")
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
+    assert "look" in dlg.instruction.lower()
+    dlg.begin()
+    assert len(dlg.current_points()) == 9
+    dlg.reject()

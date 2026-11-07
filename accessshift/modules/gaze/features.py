@@ -47,3 +47,20 @@ def gaze_feature(points: Sequence[Point]) -> Point:
     left = iris_ratio(points[LEFT_EYE[0]], points[LEFT_EYE[3]], _mean([points[i] for i in LEFT_IRIS]))
     right = iris_ratio(points[RIGHT_EYE[0]], points[RIGHT_EYE[3]], _mean([points[i] for i in RIGHT_IRIS]))
     return ((left[0] + right[0]) / 2.0, (left[1] + right[1]) / 2.0)
+
+
+# Head pointing: where the nose tip sits relative to the outer eye corners.
+NOSE_TIP = 1
+EYE_OUTER = (33, 263)  # left, right outer eye corners
+
+
+def head_feature(points: Sequence[Point]) -> Point:
+    """Head direction, independent of where the face is in the frame or how far away it is.
+
+    x: nose tip along the eye line, 0 when facing the camera (+ = turned toward the right eye).
+    y: nose tip below the eye line, in eye-widths (grows when tilting the head down).
+    Turning/tilting the head moves this a lot more than the iris moves, so it is
+    far steadier on a laptop webcam.
+    """
+    u, v = iris_ratio(points[EYE_OUTER[0]], points[EYE_OUTER[1]], points[NOSE_TIP])
+    return (u - 0.5, v)

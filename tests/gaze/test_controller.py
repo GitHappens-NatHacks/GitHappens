@@ -20,7 +20,7 @@ def identity_calibration():
 def sample(t, feature=(100, 100), blink=False, face=True):
     s = {"camera_ok": True, "face": face, "ts_ms": t}
     if face:
-        s.update({"feature": feature, "blink": blink, "ear": 0.3})
+        s.update({"feature": feature, "head": feature, "blink": blink, "ear": 0.3})
     return s
 
 
@@ -298,3 +298,54 @@ def test_natural_blink_pauses_dwell_without_restart_or_click(ctrl, button):
     assert button.clicks == 0  # the 150 ms with eyes shut didn't count
     feed(ctrl, 1150, 1300)
     assert button.clicks == 1  # ...but the earlier 600 ms did
+
+
+# --- head or eyes as the pointer -------------------------------------------------------
+
+def test_default_source_is_head(qapp):
+    assert GazeController(hit_test=lambda p: None, screen_rect=SCREEN).source == "head"
+
+
+def test_head_source_points_with_head_feature(ctrl):
+    ctrl.set_source("head")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    points, raw = [], []
+    ctrl.point.connect(points.append)
+    ctrl.raw_sample.connect(raw.append)
+    ctrl.process(sample(0, feature=(900, 700)) | {"head": (100, 120)})
+    assert (points[-1].x(), points[-1].y()) == (100, 120)
+    assert raw[-1]["feature"] == (100, 120)  # calibration sees the active source
+
+
+def test_eyes_source_points_with_eye_feature(ctrl):
+    ctrl.set_source("eyes")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    points = []
+    ctrl.point.connect(points.append)
+    ctrl.process(sample(0, feature=(300, 200)) | {"head": (100, 120)})
+    assert (points[-1].x(), points[-1].y()) == (300, 200)
+
+
+def test_switching_source_needs_new_calibration(ctrl):
+    ctrl.set_source("eyes")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    ctrl.set_source("head")
+    assert not ctrl.calibration.is_fitted
+    with pytest.raises(ValueError):
+        ctrl.set_source("nose")
+
+
+# --- head mode: rest zone in the middle, nothing selected while facing forward --------------
+
+def test_head_rest_zone_selects_nothing_until_you_turn(qapp, button):
+    from accessshift.modules.gaze.calibration import head_calibration
+
+    poses = {"center": (0.0, 0.6), "left": (-0.2, 0.6), "right": (0.2, 0.6), "up": (0.0, 0.45), "down": (0.0, 0.75)}
+    c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN)  # a button everywhere
+    c.set_calibration(head_calibration(poses, (SCREEN.width(), SCREEN.height())), error_px=150)
+    for t in range(0, 4000, 33):
+        c.process({"face": True, "ts_ms": t, "head": poses["center"], "feature": (0, 0), "ear": 0.3, "blink": False})
+    assert button.clicks == 0  # facing forward = resting
+    for t in range(4000, 7000, 33):
+        c.process({"face": True, "ts_ms": t, "head": (0.15, 0.6), "feature": (0, 0), "ear": 0.3, "blink": False})
+    assert button.clicks == 1

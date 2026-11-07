@@ -71,3 +71,40 @@ def test_noisy_real_calibration_stays_usable():
     c.fit([f for _, f in REAL_CAL], [(x * w, y * h) for (x, y), _ in REAL_CAL])
     err = c.error_px([f for _, f in REAL_VAL], [(x * w, y * h) for (x, y), _ in REAL_VAL])
     assert err < 600
+
+
+# --- head calibration from guided poses: straight, left, right, up, down -------------------
+
+from accessshift.modules.gaze.calibration import HEAD_REACH, head_calibration  # noqa: E402
+
+W, H = 1000, 800
+POSES = {
+    "center": (0.0, 0.60),
+    "left": (-0.20, 0.60),
+    "right": (0.20, 0.60),
+    "up": (0.0, 0.45),
+    "down": (0.0, 0.75),
+}
+
+
+def test_head_poses_map_to_matching_screen_sides():
+    c = head_calibration(POSES, (W, H))
+    cx, cy = c.map(POSES["center"])
+    assert (cx, cy) == pytest.approx((W / 2, H / 2))
+    assert c.map(POSES["right"])[0] == pytest.approx(W / 2 + HEAD_REACH * W / 2)
+    assert c.map(POSES["left"])[0] == pytest.approx(W / 2 - HEAD_REACH * W / 2)
+    assert c.map(POSES["up"])[1] == pytest.approx(H / 2 - HEAD_REACH * H / 2)  # up is up
+    assert c.map(POSES["down"])[1] == pytest.approx(H / 2 + HEAD_REACH * H / 2)
+
+
+def test_head_direction_follows_the_user_even_if_camera_signs_are_flipped():
+    flipped = {k: (-x, 1.2 - y) for k, (x, y) in POSES.items()}  # mirrored camera, inverted y
+    c = head_calibration(flipped, (W, H))
+    assert c.map(flipped["right"])[0] > W / 2 and c.map(flipped["left"])[0] < W / 2
+    assert c.map(flipped["up"])[1] < H / 2 and c.map(flipped["down"])[1] > H / 2
+
+
+def test_turning_only_slightly_is_rejected():
+    tiny = dict(POSES, up=(0.0, 0.595), down=(0.0, 0.605))
+    with pytest.raises(ValueError, match="up"):
+        head_calibration(tiny, (W, H))

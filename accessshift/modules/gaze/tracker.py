@@ -12,7 +12,7 @@ import cv2
 import mediapipe as mp
 
 from accessshift.modules.gaze.blink import BlinkDetector, eye_aspect_ratio
-from accessshift.modules.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature
+from accessshift.modules.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
 
 
 class GazeTracker:
@@ -38,7 +38,7 @@ class GazeTracker:
         self._mesh.close()
 
     def read(self) -> dict | None:
-        """One frame. Keys: camera_ok, face, ts_ms, frame; plus feature, ear, blink, closed_ms when face is True."""
+        """One frame. Keys: camera_ok, face, ts_ms, frame; plus feature (eyes), head, ear, blink, closed_ms when face is True."""
         if self.cap is None:
             return None
         ok, frame = self.cap.read()
@@ -63,6 +63,7 @@ class GazeTracker:
             {
                 "face": True,
                 "feature": gaze_feature(points),
+                "head": head_feature(points),
                 "ear": ear,
                 "blink": self.blink.update(ear, ts_ms),
             }

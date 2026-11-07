@@ -29,6 +29,11 @@ SNAP_HYSTERESIS_PX = 80
 # beta would switch smoothing off. Measured: 18 px -> 8 px jitter, 300 px move in ~0.26 s.
 SMOOTH_MIN_CUTOFF = 0.3
 SMOOTH_BETA = 0.0005
+HEAD_SMOOTH_MIN_CUTOFF = 0.15  # head mode: slower, calmer dot
+
+# Head mode: facing forward (dot near the screen centre) is "resting" and selects nothing,
+# so you only select by clearly turning toward a square. Radius as a fraction of screen size.
+HEAD_REST_FRACTION = 0.12
 
 DWELL_GRACE_MS = 300  # a glance away shorter than this keeps the dwell ring going
 
@@ -36,6 +41,10 @@ DWELL_GRACE_MS = 300  # a glance away shorter than this keeps the dwell ring goi
 # starts after a select-blink's maximum (1.5 s), so blinking never starts it.
 EXIT_CLOSE_MS = 3000
 EXIT_COUNTDOWN_FROM_MS = 1500
+
+# What moves the pointer. Head is the default: turning the head is a much bigger,
+# steadier webcam signal than iris movement. Eyes is for people who can't move their head.
+SOURCES = ("head", "eyes")
 
 # Windows with this property set (the gaze cursor overlay) are invisible to gaze clicks.
 GAZE_IGNORE = "gaze_ignore"
@@ -115,12 +124,12 @@ class GazeController(QObject):
             screen = QGuiApplication.primaryScreen()
             screen_rect = screen.geometry() if screen else QRect(0, 0, 1440, 900)
         self.screen_rect = screen_rect
+        self.source = "head"
         self.calibration = GazeCalibration()
         self.error_px: float | None = None
         self.paused = False  # True while calibrating: report samples, click nothing
         self._dwell = DwellSelector(grace_ms=DWELL_GRACE_MS)
-        self._fx = OneEuroFilter(min_cutoff=SMOOTH_MIN_CUTOFF, beta=SMOOTH_BETA)
-        self._fy = OneEuroFilter(min_cutoff=SMOOTH_MIN_CUTOFF, beta=SMOOTH_BETA)
+        self._new_filters()
         self._exit_shown = 0.0
         self._exit_fired = False
         self._closed_at: int | None = None  # when the eyes closed (dwell is paused meanwhile)
@@ -132,6 +141,30 @@ class GazeController(QObject):
     @property
     def dwell_ms(self) -> int:
         return self._dwell.dwell_ms
+
+    def set_source(self, source: str) -> None:
+        """Point with "head" or "eyes". Switching needs a new calibration."""
+        if source not in SOURCES:
+            raise ValueError(f"source must be one of {SOURCES}, got {source!r}")
+        if source == self.source:
+            return
+        self.source = source
+        self.calibration = GazeCalibration()
+        self.error_px = None
+        self._dwell.reset()
+        self._new_filters()
+
+    def _new_filters(self) -> None:
+        cutoff = HEAD_SMOOTH_MIN_CUTOFF if self.source == "head" else SMOOTH_MIN_CUTOFF
+        self._fx = OneEuroFilter(min_cutoff=cutoff, beta=SMOOTH_BETA)
+        self._fy = OneEuroFilter(min_cutoff=cutoff, beta=SMOOTH_BETA)
+
+    def _resting(self, pt: QPoint) -> bool:
+        if self.source != "head":
+            return False
+        r = self.screen_rect
+        radius = HEAD_REST_FRACTION * min(r.width(), r.height())
+        return math.hypot(pt.x() - r.center().x(), pt.y() - r.center().y()) < radius
 
     def set_calibration(self, calibration: GazeCalibration, error_px: float) -> None:
         self.calibration = calibration
@@ -182,6 +215,8 @@ class GazeController(QObject):
             self.status.emit(text)
 
     def process(self, sample: dict) -> None:
+        if self.source == "head" and "head" in sample:
+            sample = {**sample, "feature": sample["head"]}  # calibration and mapping use the active source
         self.raw_sample.emit(sample)
         if self.paused:
             return
@@ -213,12 +248,13 @@ class GazeController(QObject):
         x, y = self._fx.filter(x, ts / 1000.0), self._fy.filter(y, ts / 1000.0)
         r = self.screen_rect
         pt = QPoint(
-            int(min(max(x, r.left()), r.right())),
-            int(min(max(y, r.top()), r.bottom())),
+            round(min(max(x, r.left()), r.right())),
+            round(min(max(y, r.top()), r.bottom())),
         )
         self.point.emit(pt)
 
-        state = self._dwell.update(self._pick_button(pt), ts)
+        picked = None if self._resting(pt) else self._pick_button(pt)
+        state = self._dwell.update(picked, ts)
         button = state.target  # may stay on the previous button during a brief glance away
         self._set_target(button)
         self.dwell.emit(state.progress)
