@@ -1,23 +1,10 @@
-# --- React / Frontend (Node) ---
-node_modules/
-build/
-dist/
-.next/
-coverage/
-.eslintcache
-.stylelintcache
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# --- Python / Backend ---
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 .Python
-venv/
 .venv/
+venv/
 env/
 ENV/
 *.egg-info/
@@ -28,22 +15,33 @@ ENV/
 *.sqlite3
 *.db
 
-# --- Environment Variables & Secrets (never commit these) ---
+# Secrets
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 credentials.json
-serviceAccountKey.json
 
-# --- Logs ---
+# Logs / OS / IDE
 *.log
 logs/
-
-# --- IDEs and System Files ---
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Packaging
+dist/
+build/
+*.spec
+accessshift.spec
+
+# Models (keep placeholders, ignore large binaries)
+assets/models/*.onnx
+assets/models/*.pt
+!assets/models/.gitkeep
+
+# Node leftovers (if any)
+node_modules/

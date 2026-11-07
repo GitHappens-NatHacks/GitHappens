@@ -1,111 +1,181 @@
-# GitHappens
+# AccessShift AI (GitHappens)
 
-# AccessShift AI — Adaptive Digital Accessibility
+> Adaptive digital accessibility for healthcare workflows: webcam gaze/blink navigation, AI interface simplification, and tremor-stabilized mouse control in one cross-platform desktop app.
 
-> An AI-powered digital accessibility platform that dynamically reconstructs complex web interfaces and adapts interaction modes (webcam gaze, blink-to-speech, and tremor-stabilized mouse control) to individual physical abilities.
-
+**Event:** natHacks 2026 · **Division:** Standard · **Theme:** Healthcare & Accessibility  
 **Demo:** _link_ · **Slides:** _link_ · **Video:** _link_ · **Devpost:** _link_
 
 ---
 
 ## The Problem
 
-Millions of people with motor disabilities, neurological conditions, and cognitive impairments face severe barriers when using standard digital interfaces. Essential tasks, such as booking medical appointments, managing prescriptions, and accessing records, are often built with dense forms, visual clutter, and tiny interactive targets.
-
-Traditional accessibility tools typically rely on prohibitively expensive dedicated hardware (such as proprietary eye-trackers), complex manual configurations, or isolated single-purpose applications that fail to address diverse or overlapping motor and cognitive impairments.
-
----
+Essential healthcare tasks (booking appointments, managing prescriptions, accessing records) often use dense forms, visual clutter, and tiny targets. People with motor disabilities, neurological conditions, or cognitive impairments hit hard barriers. Traditional tools need expensive hardware or one-off apps that do not cover overlapping needs.
 
 ## Our Solution
 
-AccessShift AI transforms existing web applications into personalized, accessible experiences using standard consumer computer hardware. 
+**AccessShift AI** is a Python desktop application that adapts interaction and interface to each user through an **Adaptive Interaction Engine**:
 
-At the center of our solution is the **Adaptive Interaction Engine**. Instead of offering disconnected tools, AccessShift AI identifies a user's physical profile and activates an optimized combination of interface reorganization, alternative inputs, and real-time cursor assistance:
+| Profile | Active modules |
+| :--- | :--- |
+| ALS / severe motor impairment | GazeControl + blink select + predictive speech + SmartInterface |
+| Parkinson's / essential tremor | SteadyHand + target enlargement + click assistance |
+| Cognitive accessibility | SmartInterface + step-by-step guidance + reduced complexity |
+| Combined needs | Profile-selected mix of the above |
 
-- **User with ALS / Quadriplegia:** Eye tracking + blink confirmation + predictive speech + simplified task interface.
-- **User with Parkinson's / Essential Tremor:** Real-time tremor filtering + magnetic target enlargement + adaptive click assistance.
-- **User with Cognitive Impairments:** Task-focused interface reconstruction + step-by-step guidance + reduced visual complexity.
-- **User with Multi-Modal Needs:** Dynamic combinations of gaze navigation, simplified layouts, and assisted pointer controls.
+### Modules
 
----
-
-## Three Integrated Accessibility Systems
-
-### 1. GazeControl: Eye and Blink Navigation
-- Uses a standard laptop webcam to track eye movements and intentional blinks.
-- Enables hands-free web navigation without touching a mouse or keyboard.
-- Features an eye-driven predictive keyboard with dynamic dwell times.
-- Integrates AI text expansion and the Web Speech API (Text-to-Speech) for vocalization.
-- Adjusts target button hitboxes based on gaze calibration stability.
-- **Technologies:** Python, MediaPipe Face Mesh, OpenCV, JavaScript, Web Speech API, Local/Cloud LLM.
-
-### 2. SmartInterface: AI Website Transformation
-- Analyzes existing DOM trees and complex layouts.
-- Reconstructs complicated workflows into simplified, task-focused screens.
-- Enlarges interactive targets, clarifies instructions, and eliminates distracting sidebars.
-- Exposes direct state hooks for hands-free gaze navigation and tremor-stabilized pointers.
-- **Technologies:** React, Next.js, JavaScript, DOM analysis, Tailwind CSS, Accessibility heuristics.
-
-### 3. SteadyHand: AI Tremor Stabilization
-- Filters out high-frequency involuntary hand tremors in real time.
-- Implements 1-Euro and adaptive exponential smoothing filters on raw cursor coordinates.
-- Employs intelligent target snapping (bubble cursor logic) that dynamically enlarges clickable bounds as the pointer approaches.
-- Minimizes false clicks and accidental double triggers.
-- **Technologies:** JavaScript, 1-Euro filter algorithms, cursor trajectory modeling, proximity bounding box math.
+1. **GazeControl** — Webcam eye/blink navigation (OpenCV + MediaPipe Face Mesh)
+2. **SmartInterface** — Complicated healthcare booking UI ↔ simplified task layout
+3. **SteadyHand** — 1-Euro / adaptive smoothing via `pynput` (in-app first, OS pointer next)
+4. **Speech & prediction** — Offline TTS (`pyttsx3`) + optional local/ONNX text prediction
 
 ---
-## Tech Stack
+
+## Tech stack
 
 | Component | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Language** | Python 3.11+ | Single codebase for logic, vision, UI, and DSP |
-| **Desktop UI Framework** | PySide6 (Qt) | Cross-platform desktop interface for macOS and Windows |
-| **Computer Vision** | OpenCV + MediaPipe Face Mesh | Real-time iris tracking, gaze estimation, and blink detection |
-| **Mouse Control** | pynput + OS Input APIs | Tremor filtering, cursor smoothing, and target proximity snapping |
-| **Signal Processing** | 1-Euro Filter + NumPy | Real-time mathematical cancellation of involuntary hand tremors |
-| **Speech & Audio** | pyttsx3 | Fast, offline, low-latency text-to-speech synthesis |
-| **AI & Text Prediction** | ONNX Runtime / Lightweight Local Models | Next-word completion and message simplification |
-| **Distribution** | PyInstaller | Standalone executable generation for Windows and macOS |
----
+| Programming language | Python 3.11+ | Main application logic and algorithms |
+| Desktop framework | PySide6 (Qt) | Cross-platform graphical interface (macOS + Windows) |
+| Computer vision | OpenCV + MediaPipe | Webcam tracking, gaze estimation, blink detection |
+| AI | ONNX Runtime or local models | Text prediction and adaptive algorithms |
+| Text-to-speech | pyttsx3 | Offline speech output |
+| Mouse control | pynput + OS-specific APIs | Tremor filtering and mouse interactions |
+| Packaging | PyInstaller | Distribute Windows and macOS applications |
 
-## Hackathon Demonstration Scenarios
-
-We evaluate and demonstrate AccessShift AI on an intentionally cluttered healthcare appointment booking portal through three reproducible benchmarks:
-
-1. **Scenario 1 (Gaze & Blink Control):** A user navigates the booking portal and completes an appointment entirely hands-free using webcam gaze tracking and deliberate blink confirmations.
-2. **Scenario 2 (SmartInterface Transformation):** The original complex portal is transformed with a single toggle into a clear, high-contrast, linear step-by-step interface.
-3. **Scenario 3 (SteadyHand Tremor Test):** A user navigates small appointment buttons while generating hand tremors (simulated via phone vibration). Turning on SteadyHand stabilizes the cursor and magnetically locks onto the target button, demonstrating clear before-and-after accuracy improvements.
-
-### Measurable Verification Metrics
-- Click accuracy (hits vs. misses) before and after SteadyHand activation.
-- Accidental click reduction percentage.
-- Task completion time across complex vs. simplified interface modes.
-- Total interaction steps required to book an appointment.
-- Gaze dwell and blink selection accuracy.
+**Why this stack:** one language for vision, DSP, UI, and speech; system-level pointer control that a browser extension cannot match; the same codebase on Mac and Windows; offline-friendly demos when the network is unreliable.
 
 ---
 
-## Team & Responsibilities
+## Repository layout
 
-| Team Member | Academic Level | Role | Core Responsibilities & Deliverables |
-| :--- | :--- | :--- | :--- |
-| **Adnan** | Last-year student | Technical Lead (Architecture & GazeControl) | Lead system architecture, MediaPipe Face Mesh gaze tracking, blink detection, and WebSocket integration between Python vision and the React frontend. |
-| **Pragati Puri** | Third-year student | Technical Lead (Adaptive Engine & Dashboard) | Build the Adaptive Interaction Engine logic, user profile management (ALS, Parkinson's, Cognitive), and coordinate unified system state across modules. |
-| **Yee** | Second-year student | Algorithm Developer (SteadyHand Core) | Research and implement 1-Euro filtering and adaptive smoothing algorithms to cancel cursor tremor jitter in JavaScript. |
-| **Dipta** | Second-year student | Algorithm Developer (SteadyHand UX & Targets) | Implement magnetic cursor proximity snapping, adjustable stabilization sliders, and build the jitter benchmark testing suite. |
-| **Elizabeth** | Second-year student | Frontend Lead (SmartInterface Portal) | Design and develop the complex healthcare booking portal mock, the simplified accessible layout, and DOM restructuring toggles. |
-| **Avneet Kaur** | Second-year student | AI & Frontend Engineer (SmartInterface AI) | Implement accessible layout styling, Web Speech API integration, predictive text assistance, and LLM prompt design for text simplification. |
+```
+GitHappens/
+├── accessshift/                 # PySide6 application package
+│   ├── __main__.py              # python -m accessshift
+│   ├── app.py                   # QApplication bootstrap
+│   ├── ui/                      # Main window, dashboard, portal views
+│   ├── engine/                  # Profiles + Adaptive Interaction Engine
+│   └── modules/
+│       ├── gaze/                # MediaPipe gaze + blink
+│       ├── steadyhand/          # 1-Euro filter + pynput controller
+│       ├── speech/              # pyttsx3 + text prediction hooks
+│       └── smartinterface/      # Complex ↔ accessible portal modes
+├── assets/portal/               # Local healthcare booking demo pages
+├── docs/                        # Architecture, milestones, demo script
+├── scripts/                     # Setup + PyInstaller helpers
+├── requirements.txt
+└── .env.example
+```
+
+| Area | Owner (team plan) |
+| :--- | :--- |
+| Architecture, GazeControl, packaging | Adnan |
+| Adaptive Engine + dashboard UI | Pragati |
+| SteadyHand filters | Yee |
+| SteadyHand targets / metrics | Dipta |
+| Healthcare portal / SmartInterface UI | Elizabeth |
+| Speech, prediction, ONNX/LLM assist | Avneet |
 
 ---
 
-## Getting Started
+## Demo scenarios (judging)
 
-### Prerequisites
-- Node.js 18+ and npm
-- Python 3.10+
+Built around an intentionally cluttered healthcare appointment-booking flow inside the desktop app:
+
+1. **Gaze & blink:** Complete booking hands-free with webcam gaze + blink confirm.
+2. **SmartInterface:** Toggle complex layout → simplified step-by-step flow.
+3. **SteadyHand:** Before/after click accuracy with simulated tremor, then live smoothing.
+
+**Metrics:** click accuracy, accidental clicks, task time, interaction count, gaze selection accuracy.
+
+---
+
+## Prerequisites
+
+- Python 3.11+
 - Built-in or USB webcam
+- macOS: grant **Camera** and **Accessibility** permissions when prompted (SteadyHand / gaze)
+- Windows: run once so OS permission prompts can appear
 
-### 1. Clone the Repository
+### Optional
+- ONNX model files under `assets/models/` when text prediction is enabled
+- PyInstaller (for packaging builds)
+
+## Setup
+
 ```bash
-git clone <repo-url>
-cd AccessShift-AI
+git clone https://github.com/GitHappens-NatHacks/GitHappens.git
+cd GitHappens
+cp .env.example .env
+
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Or run `bash scripts/setup.sh`.
+
+## Run
+
+```bash
+source .venv/bin/activate
+python -m accessshift
+```
+
+### Package (later)
+
+```bash
+bash scripts/build_app.sh
+```
+
+Builds a platform binary with PyInstaller (run on each OS you ship).
+
+---
+
+## Priority for the weekend
+
+1. PySide6 shell + profile dashboard  
+2. Healthcare portal (complex + accessible) inside the app  
+3. SteadyHand smoothing + click metrics  
+4. GazeControl dwell / blink select  
+5. pyttsx3 + predictive text if time remains  
+6. PyInstaller pass for the demo machine  
+
+Three working demos beat six half-finished features.
+
+---
+
+## Submission notes (natHacks)
+
+- Code developed during the Nov 6–9, 2026 window  
+- Submit by **Nov 9, 11:00 AM MDT**  
+- README must explain how to run the demo  
+- 5-minute pitch + demo, then 5-minute Q&A  
+
+---
+
+## Team
+
+| Member | Role |
+| :--- | :--- |
+| Adnan | Architecture & GazeControl |
+| Pragati Puri | Adaptive Engine & Dashboard |
+| Yee | SteadyHand core filters |
+| Dipta | SteadyHand targets & metrics |
+| Elizabeth | Healthcare portal / SmartInterface UI |
+| Avneet Kaur | Speech, predictive text, ONNX assist |
+
+## Credits
+
+- MediaPipe Face Mesh (Google)
+- 1-Euro filter (Casiez et al.)
+- Qt / PySide6, OpenCV, pyttsx3, pynput, ONNX Runtime
+
+## Known limitations
+
+- Gaze accuracy depends on lighting, camera angle, and calibration.
+- macOS Accessibility permission is required for system-wide pointer control; in-app smoothing works without it.
+- SmartInterface targets the bundled healthcare demo first; arbitrary third-party sites are out of scope for the weekend.
+- ONNX text prediction is optional; core demos run offline with rule-based suggestions + pyttsx3.
+- PyInstaller builds must be produced on the target OS (Mac build on Mac, Windows build on Windows).
