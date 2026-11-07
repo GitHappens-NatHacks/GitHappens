@@ -17,6 +17,7 @@ class GazeWorker(QObject):
         self._tracker_factory = tracker_factory
         self.preview = preview  # keep the camera frame in samples (large; off by default)
         self._stop = False
+        self.tracker = None  # set once run() has created it
 
     def stop(self) -> None:
         # Called from the UI thread; run() checks it every frame.
@@ -26,7 +27,7 @@ class GazeWorker(QObject):
     def run(self) -> None:
         tracker = None
         try:
-            tracker = self._tracker_factory()
+            tracker = self.tracker = self._tracker_factory()
             if not tracker.open():
                 self.error.emit(
                     "Camera could not be opened. On macOS allow camera access in "

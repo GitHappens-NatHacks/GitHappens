@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 import json
 import time
-from statistics import median, pstdev
+from statistics import median
 
 import cv2
 import numpy as np
@@ -23,14 +23,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from accessshift.modules.gaze import GazeTracker  # noqa: E402
-from accessshift.modules.gaze.calibration import CALIBRATION_POINTS, GazeCalibration  # noqa: E402
+from accessshift.modules.gaze.calibration import CALIBRATION_POINTS, DotCollector, GazeCalibration  # noqa: E402
 from accessshift.modules.gaze.dwell import DwellSelector, adaptive_dwell_ms  # noqa: E402
 from accessshift.modules.steadyhand.filter import OneEuroFilter  # noqa: E402
 
 WINDOW = "AccessShift GazeControl"
 VALIDATION_POINTS = [(0.3, 0.3), (0.7, 0.3), (0.3, 0.7), (0.7, 0.7)]
-SETTLE_MS, COLLECT_MS, MIN_SAMPLES = 500, 1000, 5
-MAX_SPREAD = 0.01  # eye-feature std above this means the eyes moved: redo the dot
 BG, FG, ACCENT, OK, WARN = (24, 24, 28), (235, 235, 235), (0, 200, 255), (90, 210, 120), (60, 60, 230)
 
 
@@ -56,62 +54,15 @@ def text(img, msg, org, scale=0.8, color=FG, thick=2):
     cv2.putText(img, msg, org, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thick, cv2.LINE_AA)
 
 
-class PointCollector:
-    """Shows one dot, waits SETTLE_MS, then gathers COLLECT_MS of open-eye samples."""
-
-    def __init__(self, points, size):
-        self.points, self.size = points, size
-        self.index, self.started, self.samples = 0, None, []
-        self.features: list = []
-        self.ears: list = []
-        self.debug: list = []  # per-dot sample count, spread, retries (for logs/)
-        self.retries = 0
-
-    @property
-    def done(self) -> bool:
-        return self.index >= len(self.points)
-
-    def target_px(self, i=None):
-        x, y = self.points[self.index if i is None else i]
-        return (x * self.size[0], y * self.size[1])
-
-    def update(self, sample, ear_threshold) -> None:
-        ts = sample["ts_ms"]
-        if self.started is None:
-            self.started = ts
-        elapsed = ts - self.started
-        if elapsed >= SETTLE_MS and sample.get("face") and sample["ear"] >= ear_threshold:
-            self.samples.append(sample["feature"])
-            self.ears.append(sample["ear"])
-        if elapsed >= SETTLE_MS + COLLECT_MS:
-            steady = len(self.samples) >= MIN_SAMPLES and max(
-                pstdev(s[0] for s in self.samples), pstdev(s[1] for s in self.samples)) <= MAX_SPREAD
-            if steady:
-                self.features.append((median(s[0] for s in self.samples), median(s[1] for s in self.samples)))
-                self.debug.append({
-                    "target_norm": self.points[self.index],
-                    "samples": len(self.samples),
-                    "std_u": pstdev(s[0] for s in self.samples),
-                    "std_v": pstdev(s[1] for s in self.samples),
-                    "retries": self.retries,
-                })
-                self.index += 1
-                self.retries = 0
-            else:
-                self.retries += 1
-            self.started, self.samples = None, []  # too few or unsteady samples: repeat this dot
-
-    def draw(self, img, title, ts_ms):
-        elapsed = 0 if self.started is None else max(0, ts_ms - self.started)
-        x, y = map(int, self.target_px())
-        shrink = 1.0 - min(1.0, max(0.0, (elapsed - SETTLE_MS) / COLLECT_MS))
-        cv2.circle(img, (x, y), int(10 + 20 * shrink), ACCENT, 2, cv2.LINE_AA)
-        cv2.circle(img, (x, y), 8, ACCENT, -1, cv2.LINE_AA)
-        text(img, f"{title}: dot {self.index + 1} of {len(self.points)} - look at the dot, keep your head still",
-             (40, 50))
-        if self.retries:
-            text(img, "Hold your eyes still on the dot - trying again", (40, 90), 0.8, WARN)
-
+def draw_dot(img, collector, title, ts_ms):
+    x, y = map(int, collector.target_px())
+    shrink = 1.0 - collector.progress(ts_ms)
+    cv2.circle(img, (x, y), int(10 + 20 * shrink), ACCENT, 2, cv2.LINE_AA)
+    cv2.circle(img, (x, y), 8, ACCENT, -1, cv2.LINE_AA)
+    text(img, f"{title}: dot {collector.index + 1} of {len(collector.points)} - look at the dot, keep your head still",
+         (40, 50))
+    if collector.retries:
+        text(img, "Hold your eyes still on the dot - trying again", (40, 90), 0.8, WARN)
 
 
 def save_debug(calib_c, valid_c, calib, error_px, ear_threshold, size) -> Path:
@@ -175,7 +126,7 @@ def main() -> int:
                     targets = [collector.target_px(i) for i in range(len(CALIBRATION_POINTS))]
                     calib.fit(collector.features, targets)
                     calib_collector = collector
-                    phase, collector = "validate", PointCollector(VALIDATION_POINTS, (W, H))
+                    phase, collector = "validate", DotCollector(VALIDATION_POINTS, (W, H))
                 elif collector.done and phase == "validate":
                     targets = [collector.target_px(i) for i in range(len(VALIDATION_POINTS))]
                     error_px = calib.error_px(collector.features, targets)
@@ -184,7 +135,7 @@ def main() -> int:
                     dwell = DwellSelector(adaptive_dwell_ms(error_px))
                     phase = "live"
                 else:
-                    collector.draw(img, "Calibrating" if phase == "calibrate" else "Checking accuracy", sample["ts_ms"])
+                    draw_dot(img, collector, "Calibrating" if phase == "calibrate" else "Checking accuracy", sample["ts_ms"])
 
             if phase == "live":
                 cols, rows = 3, 3
@@ -241,7 +192,7 @@ def main() -> int:
             if key in (ord("q"), 27):
                 break
             if (key == ord(" ") and phase == "intro") or key == ord("r"):
-                phase, collector = "calibrate", PointCollector(CALIBRATION_POINTS, (W, H))
+                phase, collector = "calibrate", DotCollector(CALIBRATION_POINTS, (W, H))
                 calib, error_px, blinks, box_hits = GazeCalibration(), None, 0, [0] * 9
                 last_how = "-"
     finally:

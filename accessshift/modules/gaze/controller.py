@@ -6,6 +6,7 @@ hit-test the widget under the point -> dwell timer / deliberate blink -> click()
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QPoint, QRect, QThread, Signal
@@ -21,6 +22,28 @@ STATUS_NO_FACE = "Face not found — look at the camera"
 STATUS_UNCALIBRATED = "Calibrate first"
 STATUS_TRACKING = "Gaze tracking"
 
+# Keep the current target unless another button is at least this much nearer (stops flicker).
+SNAP_HYSTERESIS_PX = 40
+
+# Windows with this property set (the gaze cursor overlay) are invisible to gaze clicks.
+GAZE_IGNORE = "gaze_ignore"
+
+
+def widget_under(pt: QPoint) -> QWidget | None:
+    """Widget at a global screen point, skipping gaze-ignored windows like the overlay."""
+    w = QApplication.widgetAt(pt)
+    if w is not None and not w.window().property(GAZE_IGNORE):
+        return w
+    candidates = [
+        t for t in QApplication.topLevelWidgets()
+        if t.isVisible() and not t.property(GAZE_IGNORE) and t.frameGeometry().contains(pt)
+    ]
+    if not candidates:
+        return None
+    active = QApplication.activeWindow()
+    top = active if active in candidates else candidates[-1]
+    return top.childAt(top.mapFromGlobal(pt)) or top
+
 
 def _button_at(widget: QWidget | None) -> QAbstractButton | None:
     """The enabled, visible button under the gaze (or containing the widget there)."""
@@ -31,21 +54,49 @@ def _button_at(widget: QWidget | None) -> QAbstractButton | None:
     return None
 
 
+def visible_buttons() -> list[QAbstractButton]:
+    """Every enabled, visible button in the app's windows (gaze-ignored windows excluded)."""
+    out: list[QAbstractButton] = []
+    for top in QApplication.topLevelWidgets():
+        if not top.isVisible() or top.property(GAZE_IGNORE):
+            continue
+        found = top.findChildren(QAbstractButton)
+        if isinstance(top, QAbstractButton):
+            found.append(top)
+        out += [b for b in found if b.isVisible() and b.isEnabled()]
+    return out
+
+
+def _global_rect(w: QWidget) -> QRect:
+    return QRect(w.mapToGlobal(QPoint(0, 0)), w.size())
+
+
+def _distance(pt: QPoint, r: QRect) -> float:
+    dx = max(r.left() - pt.x(), 0, pt.x() - r.right())
+    dy = max(r.top() - pt.y(), 0, pt.y() - r.bottom())
+    return math.hypot(dx, dy)
+
+
 class GazeController(QObject):
     point = Signal(QPoint)  # smoothed gaze point, global screen coordinates
     dwell = Signal(float)  # 0..1 progress on the current button
     selected = Signal(QWidget)  # a button was clicked by gaze
     status = Signal(str)
     raw_sample = Signal(dict)  # every tracker sample (used by the calibration dialog)
+    target = Signal(QRect)  # global rect of the targeted button, or an empty QRect
 
     def __init__(
         self,
         hit_test: Callable[[QPoint], QWidget | None] | None = None,
         screen_rect: QRect | None = None,
         parent: QObject | None = None,
+        buttons: Callable[[], list[QAbstractButton]] | None = None,
     ):
         super().__init__(parent)
-        self._hit_test = hit_test or QApplication.widgetAt
+        self._hit_test = hit_test or widget_under
+        self._buttons = buttons or visible_buttons
+        self._snap_px = 0.0  # 0 = only exact hits; set to gaze accuracy by set_calibration()
+        self._target: QAbstractButton | None = None
         if screen_rect is None:
             screen = QGuiApplication.primaryScreen()
             screen_rect = screen.geometry() if screen else QRect(0, 0, 1440, 900)
@@ -68,9 +119,35 @@ class GazeController(QObject):
     def set_calibration(self, calibration: GazeCalibration, error_px: float) -> None:
         self.calibration = calibration
         self.error_px = error_px
+        self._snap_px = error_px
         self._dwell = DwellSelector(adaptive_dwell_ms(error_px))
 
+    def calibrate_blink(self, ears: list[float]) -> None:
+        """Tune the blink threshold to this user's open-eye EAR (from calibration)."""
+        tracker = getattr(self._worker, "tracker", None)
+        if tracker is not None:
+            tracker.blink.calibrate_open(ears)
+
     # --- per-sample logic (testable without a camera) ------------------------------
+    def _pick_button(self, pt: QPoint) -> QAbstractButton | None:
+        """Button exactly under the gaze, else the nearest one within gaze accuracy."""
+        exact = _button_at(self._hit_test(pt))
+        if exact is not None or self._snap_px <= 0:
+            return exact
+        dist = {b: _distance(pt, _global_rect(b)) for b in self._buttons()}
+        if not dist:
+            return None
+        nearest = min(dist, key=dist.get)
+        current = self._target
+        if current in dist and dist[current] <= self._snap_px and dist[current] <= dist[nearest] + SNAP_HYSTERESIS_PX:
+            return current
+        return nearest if dist[nearest] <= self._snap_px else None
+
+    def _set_target(self, button: QAbstractButton | None) -> None:
+        if button is not self._target:
+            self._target = button
+            self.target.emit(_global_rect(button) if button is not None else QRect())
+
     def _set_status(self, text: str) -> None:
         if text != self._last_status:
             self._last_status = text
@@ -87,6 +164,7 @@ class GazeController(QObject):
             self._set_status(STATUS_NO_FACE)
             self._dwell.update(None, sample.get("ts_ms", 0))
             self.dwell.emit(0.0)
+            self._set_target(None)
             return
         self._set_status(STATUS_TRACKING)
 
@@ -100,7 +178,8 @@ class GazeController(QObject):
         )
         self.point.emit(pt)
 
-        button = _button_at(self._hit_test(pt))
+        button = self._pick_button(pt)
+        self._set_target(button)
         state = self._dwell.update(button, ts)
         self.dwell.emit(state.progress)
         if button is not None and (state.fired or sample.get("blink")):

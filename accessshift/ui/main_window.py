@@ -24,6 +24,7 @@ from accessshift.engine.adaptive_engine import AdaptiveEngine
 from accessshift.engine.profiles import PROFILES
 from accessshift.modules.speech.tts import SpeechEngine
 from accessshift.modules.steadyhand.controller import SteadyHandController
+from accessshift.ui.gaze_mode import GazeMode
 from accessshift.ui.portal_view import PortalView
 
 
@@ -91,9 +92,16 @@ class MainWindow(QMainWindow):
         self.btn_system_mouse.clicked.connect(self._enable_system_mouse)
         side.addWidget(self.btn_system_mouse)
 
+        self.btn_recalibrate_gaze = QPushButton("Recalibrate gaze")
+        side.addWidget(self.btn_recalibrate_gaze)
+
         self.status = QLabel("Ready")
         self.status.setWordWrap(True)
         side.addWidget(self.status)
+
+        self.gaze = GazeMode(self)  # GazeControl: camera, gaze cursor, calibration, metrics
+        self.gaze.status.connect(self.status.setText)
+        self.btn_recalibrate_gaze.clicked.connect(self.gaze.recalibrate)
         side.addStretch(1)
 
         self.portal = PortalView(repo_root / "assets" / "portal")
@@ -131,6 +139,7 @@ class MainWindow(QMainWindow):
             chk.setChecked(value)
             chk.blockSignals(False)
         self.steady.enabled = modules.steady_hand
+        self.gaze.set_enabled(modules.gaze_control)
         if modules.smart_interface:
             self.portal.set_accessible(True)
         else:
@@ -161,3 +170,7 @@ class MainWindow(QMainWindow):
                 "Could not enable system mouse control. On macOS, grant Accessibility "
                 "permission to your terminal or the AccessShift app, then try again.",
             )
+
+    def closeEvent(self, event) -> None:
+        self.gaze.set_enabled(False)  # release the camera
+        super().closeEvent(event)

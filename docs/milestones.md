@@ -8,13 +8,13 @@
 
 ## Phase 2 — Independent prototypes
 - [ ] SteadyHand live pointer path + tremor sim metrics
-- [ ] Gaze preview + blink detection in UI
+- [x] Gaze preview + blink detection in UI
 - [ ] pyttsx3 confirmations from portal actions
 - [ ] Optional ONNX suggestion path
 
 ## Phase 3 — Integration
 - [ ] Profiles flip the right modules live
-- [ ] Gaze dwell/blink drives portal selection
+- [x] Gaze dwell/blink drives portal selection
 - [ ] SteadyHand assists tiny slot buttons
 - [ ] End-to-end booking per profile
 
