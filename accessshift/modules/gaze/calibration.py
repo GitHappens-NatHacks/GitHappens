@@ -54,6 +54,32 @@ class GazeCalibration:
         return float(np.mean(np.linalg.norm(predicted - np.asarray(targets, dtype=float), axis=1)))
 
 
+# --- head pointing: guided poses instead of dots ---------------------------------------
+# The user faces forward, then turns left/right and tilts up/down as far as is comfortable.
+# Direction comes from what they actually did, so "up" is always up whatever the camera's
+# mirroring; their comfortable range spans HEAD_REACH of the screen (small wobbles barely move).
+HEAD_POSES = ("center", "left", "right", "up", "down")
+HEAD_REACH = 0.8
+HEAD_MIN_RANGE = 0.04  # head-feature units; less than this means the user barely moved
+
+
+def head_calibration(poses: dict[str, Point], size: tuple[float, float]) -> GazeCalibration:
+    """Axis-aligned map from head poses: centre -> screen centre, comfortable range -> HEAD_REACH."""
+    w, h = size
+    nx, ny = poses["center"]
+    span_x = poses["right"][0] - poses["left"][0]
+    span_y = poses["down"][1] - poses["up"][1]
+    if abs(span_x) < HEAD_MIN_RANGE:
+        raise ValueError("Turn your head further left and right")
+    if abs(span_y) < HEAD_MIN_RANGE:
+        raise ValueError("Tilt your head further up and down")
+    gx = HEAD_REACH * w / span_x  # sign follows the user's movement, so left/right never flip
+    gy = HEAD_REACH * h / span_y
+    c = GazeCalibration()
+    c._coef = np.array([[w / 2 - nx * gx, h / 2 - ny * gy], [gx, 0.0], [0.0, gy]])
+    return c
+
+
 class DotCollector:
     """Collects one steady gaze feature per calibration dot.
 

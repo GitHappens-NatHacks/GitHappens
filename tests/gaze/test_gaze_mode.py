@@ -62,3 +62,26 @@ def test_controller_status_is_forwarded(qapp):
         time.sleep(0.01)
     gm.set_enabled(False)
     assert messages and messages[0].startswith("Gaze: ")
+
+
+def test_recalibrate_uses_head_steps_and_switching_to_eyes_asks_for_eye_calibration(qapp, monkeypatch):
+    from accessshift.ui import gaze_calibration_dialog as dialog_mod
+
+    runs = []
+
+    def fake_run(self):
+        runs.append(len(self._points))  # 5 head poses or 9 eye dots
+        return False
+
+    monkeypatch.setattr(dialog_mod.GazeCalibrationDialog, "run", fake_run)
+    gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), tracker_factory=FakeTracker, calibrate_on_start=True)
+    gm.set_enabled(True)
+    gm.recalibrate()
+    gm.toggle_source()  # -> eyes: should prompt eye calibration
+    end = time.monotonic() + 2
+    while len(runs) < 3 and time.monotonic() < end:  # first run is the automatic one on enable
+        QCoreApplication.processEvents()
+        time.sleep(0.01)
+    gm.set_enabled(False)
+    assert gm.controller.source == "eyes"
+    assert 5 in runs and runs[-1] == 9  # head recalibration, then eye calibration after the switch

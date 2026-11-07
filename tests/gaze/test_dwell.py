@@ -63,3 +63,25 @@ def test_consume_after_blink_blocks_dwell_on_same_target():
     d.update("b", 2100)
     d.update("a", 2200)
     assert d.update("a", 3200).fired
+
+
+# --- grace period: a short glance away must not restart the ring ---
+
+def test_brief_glance_away_keeps_progress():
+    d = DwellSelector(1000, grace_ms=300)
+    for t in range(0, 601, 50):
+        d.update("a", t)
+    state = d.update("b", 650)  # one jittery frame on a neighbour
+    assert state.target == "a"  # still counting for "a"
+    d.update(None, 700)
+    fired = [d.update("a", t).fired for t in range(750, 1101, 50)]
+    assert any(fired)
+
+
+def test_long_look_away_switches_target():
+    d = DwellSelector(1000, grace_ms=300)
+    d.update("a", 0)
+    d.update("a", 500)
+    d.update("b", 600)
+    state = d.update("b", 950)  # 350 ms on b: past the grace period
+    assert state.target == "b" and state.progress == pytest.approx(0.0)

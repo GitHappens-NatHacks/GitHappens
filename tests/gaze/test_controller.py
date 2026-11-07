@@ -20,7 +20,7 @@ def identity_calibration():
 def sample(t, feature=(100, 100), blink=False, face=True):
     s = {"camera_ok": True, "face": face, "ts_ms": t}
     if face:
-        s.update({"feature": feature, "blink": blink, "ear": 0.3})
+        s.update({"feature": feature, "head": feature, "blink": blink, "ear": 0.3})
     return s
 
 
@@ -214,10 +214,10 @@ def test_target_is_sticky_against_small_jitter(two_buttons):
     c = snapping_ctrl(two_buttons, error_px=200)
     targets = []
     c.target.connect(targets.append)
-    c.process(sample(0, feature=(250, 250)))  # nearer A (distance 86 vs 150)
-    c.process(sample(50, feature=(250, 285)))  # now nearer B by 2 px (121 vs 115): keep A
+    feed(c, 0, 500, feature=(250, 250))  # nearer A (distance 86 vs 150)
+    feed(c, 550, 1500, feature=(250, 285))  # now nearer B by 6 px (121 vs 115): keep A
     assert targets[-1] == QRect(a.mapToGlobal(QPoint(0, 0)), a.size())
-    c.process(sample(100, feature=(250, 380)))  # clearly nearer B: switch
+    feed(c, 1550, 3000, feature=(250, 380))  # clearly nearer B, held: switch
     assert targets[-1] == QRect(b.mapToGlobal(QPoint(0, 0)), b.size())
 
 
@@ -236,8 +236,116 @@ def test_target_cleared_when_gaze_moves_away_or_face_lost(two_buttons):
     c.target.connect(targets.append)
     c.process(sample(0, feature=(250, 130)))  # on A
     assert not targets[-1].isNull()
-    c.process(sample(50, feature=(900, 700)))  # far from everything
+    feed(c, 50, 2000, feature=(900, 700))  # far from everything, held past the grace period
     assert targets[-1] == QRect()
-    c.process(sample(100, feature=(250, 130)))
-    c.process(sample(150, face=False))
+    feed(c, 2050, 3000, feature=(250, 130))
+    c.process(sample(3050, face=False))
     assert targets[-1] == QRect()
+
+
+# --- steadier gaze -------------------------------------------------------------------
+
+def test_jittery_gaze_is_smoothed(ctrl):
+    import random
+    import statistics
+
+    random.seed(1)
+    points = []
+    ctrl.point.connect(points.append)
+    for t in range(0, 3000, 33):  # 30 fps, +/-60 px webcam jitter around (500, 400)
+        ctrl.process(sample(t, feature=(500 + random.uniform(-60, 60), 400 + random.uniform(-60, 60))))
+    settled = points[30:]
+    assert statistics.pstdev(p.x() for p in settled) < 12
+    assert statistics.pstdev(p.y() for p in settled) < 12
+
+
+def test_eyes_closed_freezes_point_and_dwell(ctrl, button):
+    points = []
+    ctrl.point.connect(points.append)
+    feed(ctrl, 0, 500)
+    n = len(points)
+    for t in range(550, 1600, 50):  # eyes closed: garbage features, no movement, no click
+        ctrl.process(sample(t, feature=(900, 700)) | {"closed_ms": t - 500})
+    assert len(points) == n and button.clicks == 0
+
+
+def test_eyes_closed_three_seconds_requests_exit(ctrl, button):
+    exits, progress = [], []
+    ctrl.exit_requested.connect(lambda: exits.append(1))
+    ctrl.exit_progress.connect(progress.append)
+    for t in range(0, 3600, 100):
+        ctrl.process(sample(t) | {"closed_ms": t})
+    assert exits == [1]  # once per closure
+    assert progress and max(progress) == 1.0
+    ctrl.process(sample(3700))  # eyes open again
+    assert progress[-1] == 0.0 and button.clicks == 0
+
+
+def test_short_closure_does_not_exit(ctrl):
+    exits = []
+    ctrl.exit_requested.connect(lambda: exits.append(1))
+    for t in range(0, 1400, 100):
+        ctrl.process(sample(t) | {"closed_ms": t})
+    ctrl.process(sample(1500))
+    assert exits == []
+
+
+def test_natural_blink_pauses_dwell_without_restart_or_click(ctrl, button):
+    feed(ctrl, 0, 600)
+    for t in (650, 700, 750):  # 150 ms natural blink
+        ctrl.process(sample(t) | {"closed_ms": t - 650 + 1})
+    feed(ctrl, 800, 1100)
+    assert button.clicks == 0  # the 150 ms with eyes shut didn't count
+    feed(ctrl, 1150, 1300)
+    assert button.clicks == 1  # ...but the earlier 600 ms did
+
+
+# --- head or eyes as the pointer -------------------------------------------------------
+
+def test_default_source_is_head(qapp):
+    assert GazeController(hit_test=lambda p: None, screen_rect=SCREEN).source == "head"
+
+
+def test_head_source_points_with_head_feature(ctrl):
+    ctrl.set_source("head")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    points, raw = [], []
+    ctrl.point.connect(points.append)
+    ctrl.raw_sample.connect(raw.append)
+    ctrl.process(sample(0, feature=(900, 700)) | {"head": (100, 120)})
+    assert (points[-1].x(), points[-1].y()) == (100, 120)
+    assert raw[-1]["feature"] == (100, 120)  # calibration sees the active source
+
+
+def test_eyes_source_points_with_eye_feature(ctrl):
+    ctrl.set_source("eyes")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    points = []
+    ctrl.point.connect(points.append)
+    ctrl.process(sample(0, feature=(300, 200)) | {"head": (100, 120)})
+    assert (points[-1].x(), points[-1].y()) == (300, 200)
+
+
+def test_switching_source_needs_new_calibration(ctrl):
+    ctrl.set_source("eyes")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    ctrl.set_source("head")
+    assert not ctrl.calibration.is_fitted
+    with pytest.raises(ValueError):
+        ctrl.set_source("nose")
+
+
+# --- head mode: rest zone in the middle, nothing selected while facing forward --------------
+
+def test_head_rest_zone_selects_nothing_until_you_turn(qapp, button):
+    from accessshift.modules.gaze.calibration import head_calibration
+
+    poses = {"center": (0.0, 0.6), "left": (-0.2, 0.6), "right": (0.2, 0.6), "up": (0.0, 0.45), "down": (0.0, 0.75)}
+    c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN)  # a button everywhere
+    c.set_calibration(head_calibration(poses, (SCREEN.width(), SCREEN.height())), error_px=150)
+    for t in range(0, 4000, 33):
+        c.process({"face": True, "ts_ms": t, "head": poses["center"], "feature": (0, 0), "ear": 0.3, "blink": False})
+    assert button.clicks == 0  # facing forward = resting
+    for t in range(4000, 7000, 33):
+        c.process({"face": True, "ts_ms": t, "head": (0.15, 0.6), "feature": (0, 0), "ear": 0.3, "blink": False})
+    assert button.clicks == 1

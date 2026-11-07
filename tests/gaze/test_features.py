@@ -40,3 +40,31 @@ def test_gaze_feature_averages_both_eyes():
     for i in RIGHT_IRIS:
         points[i] = (26.0, 1.0)
     assert gaze_feature(points) == pytest.approx((0.4, 0.1))
+
+
+# --- head pointing: nose tip relative to the eyes -------------------------------------
+
+from accessshift.modules.gaze.features import EYE_OUTER, NOSE_TIP, head_feature  # noqa: E402
+
+
+def face(nose, left=(0.0, 0.0), right=(10.0, 0.0)):
+    points = [(0.0, 0.0)] * 478
+    points[EYE_OUTER[0]], points[EYE_OUTER[1]] = left, right
+    points[NOSE_TIP] = nose
+    return points
+
+
+def test_head_facing_forward():
+    assert head_feature(face(nose=(5.0, 6.0))) == pytest.approx((0.0, 0.6))
+
+
+def test_head_turn_moves_x_and_tilt_moves_y():
+    hx, hy = head_feature(face(nose=(7.0, 4.0)))
+    assert hx == pytest.approx(0.2) and hy == pytest.approx(0.4)
+
+
+def test_head_feature_ignores_sliding_and_distance():
+    near = head_feature(face(nose=(7.0, 4.0)))
+    moved = head_feature(face(nose=(107.0, 54.0), left=(100.0, 50.0), right=(110.0, 50.0)))
+    closer = head_feature(face(nose=(14.0, 8.0), right=(20.0, 0.0)))  # twice as big on camera
+    assert moved == pytest.approx(near) and closer == pytest.approx(near)

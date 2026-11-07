@@ -108,6 +108,7 @@ from accessshift.engine.adaptive_engine import AdaptiveEngine
 from accessshift.engine.profiles import PROFILES
 from accessshift.modules.speech.tts import SpeechEngine
 from accessshift.modules.steadyhand.controller import SteadyHandController
+from accessshift.ui.gaze_grid import GazeGridPanel
 from accessshift.ui.gaze_mode import GazeMode
 from accessshift.ui.portal_view import PortalView
 
@@ -189,25 +190,34 @@ class MainWindow(QMainWindow):
         bar = QHBoxLayout(self.gaze_bar)
         bar.setContentsMargins(0, 0, 0, 0)
         self.btn_recalibrate_gaze = QPushButton("Recalibrate gaze")
+        self.btn_gaze_source = QPushButton()
         self.gaze_status = QLabel()
         self.gaze_status.setWordWrap(True)
-        self.btn_exit_gaze = QPushButton("✕  Exit gaze control")
+        self.btn_exit_gaze = QPushButton("✕  Exit gaze control\n(or close your eyes for 3 s)")
         self.btn_exit_gaze.clicked.connect(lambda: self.chk_gaze.setChecked(False))
-        bar.addWidget(self.btn_recalibrate_gaze)
+        bar.addWidget(self.btn_recalibrate_gaze, 1)
+        bar.addWidget(self.btn_gaze_source, 1)
         bar.addWidget(self.gaze_status, 1)
-        bar.addWidget(self.btn_exit_gaze)
+        bar.addWidget(self.btn_exit_gaze, 2)  # wide target: easy to hit with gaze
         self.gaze_bar.hide()
 
         self.portal = PortalView(repo_root / "assets" / "portal")
+        self.gaze_grid = GazeGridPanel(self.portal)  # 2x2 squares mirroring the portal, gaze mode only
+        self.gaze_grid.hide()
         main = QVBoxLayout()
         main.addWidget(self.gaze_bar)
         main.addWidget(self.portal, 1)
+        main.addWidget(self.gaze_grid, 1)
         layout.addLayout(main, 3)
 
         self.gaze = GazeMode(self)  # GazeControl: camera, gaze cursor, calibration, metrics
         self.gaze.status.connect(self.status.setText)
         self.gaze.status.connect(self.gaze_status.setText)
-        self.btn_recalibrate_gaze.clicked.connect(self.gaze.recalibrate)
+        self.gaze.exit_requested.connect(lambda: self.chk_gaze.setChecked(False))
+        self.btn_recalibrate_gaze.clicked.connect(self.gaze.request_recalibrate)
+        self.btn_gaze_source.clicked.connect(self.gaze.toggle_source)
+        self.gaze.source_changed.connect(self._show_gaze_source)
+        self._show_gaze_source(self.gaze.controller.source)
 
         self.engine.modules_changed.connect(self._sync_module_checks)
         self.engine.set_profile("parkinsons")
@@ -245,7 +255,13 @@ class MainWindow(QMainWindow):
         self.sidebar.setVisible(not modules.gaze_control)
         self.gaze_bar.setVisible(modules.gaze_control)
         self.portal.set_accessible(modules.smart_interface or modules.gaze_control)
+        self.portal.setVisible(not modules.gaze_control)
+        self.gaze_grid.setVisible(modules.gaze_control)
         self.gaze.set_enabled(modules.gaze_control)
+
+    def _show_gaze_source(self, source: str) -> None:
+        other = "Eyes" if source == "head" else "Head"
+        self.btn_gaze_source.setText(f"Pointing with: {source.capitalize()}\n(switch to {other})")
 
     def _on_steady_toggled(self, enabled: bool) -> None:
         self.engine.set_module("steady_hand", enabled)

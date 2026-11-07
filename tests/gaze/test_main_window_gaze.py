@@ -48,3 +48,45 @@ def test_gaze_focus_mode_hides_sidebar_and_exit_button_turns_gaze_off(qapp, monk
     assert w.sidebar.isVisible() and not w.gaze_bar.isVisible()
     assert w.portal.mode.value == "complex"
     w.close()
+
+
+def test_exit_by_closing_eyes_and_wide_exit_button(qapp, monkeypatch):
+    real_init = gaze_mode.GazeMode.__init__
+
+    def fake_camera_init(self, parent=None, **kw):
+        real_init(self, parent, tracker_factory=FakeTracker, calibrate_on_start=False)
+
+    monkeypatch.setattr(gaze_mode.GazeMode, "__init__", fake_camera_init)
+    w = MainWindow(ROOT)
+    w.resize(1200, 800)
+    w.show()
+    w.chk_gaze.setChecked(True)
+    qapp.processEvents()
+    assert w.btn_exit_gaze.width() >= 0.35 * w.gaze_bar.width()
+    assert w.btn_exit_gaze.height() >= 96
+
+    w.gaze.controller.exit_requested.emit()  # eyes held closed for 3 s
+    assert not w.gaze.enabled and not w.chk_gaze.isChecked() and w.sidebar.isVisible()
+    w.close()
+
+
+def test_gaze_mode_shows_grid_and_head_eyes_switch(qapp, monkeypatch):
+    real_init = gaze_mode.GazeMode.__init__
+
+    def fake_camera_init(self, parent=None, **kw):
+        real_init(self, parent, tracker_factory=FakeTracker, calibrate_on_start=False)
+
+    monkeypatch.setattr(gaze_mode.GazeMode, "__init__", fake_camera_init)
+    w = MainWindow(ROOT)
+    w.show()
+    w.chk_gaze.setChecked(True)
+    assert w.gaze_grid.isVisible() and not w.portal.isVisible()
+    assert [b.text() for b in w.gaze_grid.visible_squares()] == ["Myself", "Someone I care for"]
+
+    assert w.gaze.controller.source == "head" and "Head" in w.btn_gaze_source.text()
+    w.btn_gaze_source.click()
+    assert w.gaze.controller.source == "eyes" and "Eyes" in w.btn_gaze_source.text()
+
+    w.chk_gaze.setChecked(False)
+    assert w.portal.isVisible() and not w.gaze_grid.isVisible()
+    w.close()
