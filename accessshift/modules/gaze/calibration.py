@@ -52,3 +52,80 @@ class GazeCalibration:
             raise RuntimeError("GazeCalibration.error_px called before fit")
         predicted = _terms(features) @ self._coef
         return float(np.mean(np.linalg.norm(predicted - np.asarray(targets, dtype=float), axis=1)))
+
+
+class DotCollector:
+    """Collects one steady gaze feature per calibration dot.
+
+    For each dot: wait settle_ms for the eyes to land, then gather collect_ms of
+    open-eye samples. Too few samples, or samples that spread more than max_spread
+    (eyes still moving), and the same dot is repeated.
+    """
+
+    def __init__(
+        self,
+        points: list[Point],
+        size: tuple[float, float],
+        settle_ms: int = 500,
+        collect_ms: int = 1000,
+        min_samples: int = 5,
+        max_spread: float = 0.01,
+    ):
+        self.points, self.size = points, size
+        self.settle_ms, self.collect_ms = settle_ms, collect_ms
+        self.min_samples, self.max_spread = min_samples, max_spread
+        self.index = 0
+        self.retries = 0
+        self.features: list[Point] = []
+        self.ears: list[float] = []  # open-eye EAR samples, for BlinkDetector.calibrate_open
+        self.debug: list[dict] = []  # per-dot sample count, spread, retries
+        self._started: int | None = None
+        self._samples: list[Point] = []
+
+    @property
+    def done(self) -> bool:
+        return self.index >= len(self.points)
+
+    def target_px(self, i: int | None = None) -> Point:
+        x, y = self.points[self.index if i is None else i]
+        return (x * self.size[0], y * self.size[1])
+
+    def targets_px(self) -> list[Point]:
+        return [self.target_px(i) for i in range(len(self.points))]
+
+    def progress(self, ts_ms: int) -> float:
+        """0..1 through the collecting part of the current dot (for drawing)."""
+        if self._started is None:
+            return 0.0
+        return min(1.0, max(0.0, (ts_ms - self._started - self.settle_ms) / self.collect_ms))
+
+    def update(self, sample: dict, ear_threshold: float) -> None:
+        if self.done:
+            return
+        ts = sample["ts_ms"]
+        if self._started is None:
+            self._started = ts
+        elapsed = ts - self._started
+        if elapsed >= self.settle_ms and sample.get("face") and sample["ear"] >= ear_threshold:
+            self._samples.append(tuple(sample["feature"]))
+            self.ears.append(sample["ear"])
+        if elapsed < self.settle_ms + self.collect_ms:
+            return
+
+        us = [p[0] for p in self._samples]
+        vs = [p[1] for p in self._samples]
+        steady = len(self._samples) >= self.min_samples and max(np.std(us), np.std(vs)) <= self.max_spread
+        if steady:
+            self.features.append((float(np.median(us)), float(np.median(vs))))
+            self.debug.append({
+                "target_norm": self.points[self.index],
+                "samples": len(self._samples),
+                "std_u": float(np.std(us)),
+                "std_v": float(np.std(vs)),
+                "retries": self.retries,
+            })
+            self.index += 1
+            self.retries = 0
+        else:
+            self.retries += 1
+        self._started, self._samples = None, []
