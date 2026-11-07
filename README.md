@@ -1,112 +1,110 @@
 # GitHappens
 
-> _One-line pitch: what we built and who it helps._
+# AccessShift AI — Adaptive Digital Accessibility
 
-<!-- Badges / links: replace or delete -->
+> An AI-powered digital accessibility platform that dynamically reconstructs complex web interfaces and adapts interaction modes (webcam gaze, blink-to-speech, and tremor-stabilized mouse control) to individual physical abilities.
+
 **Demo:** _link_ · **Slides:** _link_ · **Video:** _link_ · **Devpost:** _link_
 
 ---
 
 ## The Problem
 
-_What pain point are we solving? Who has it? Why does it matter? (2–3 sentences)_
+Millions of people with motor disabilities, neurological conditions, and cognitive impairments face severe barriers when using standard digital interfaces. Essential tasks, such as booking medical appointments, managing prescriptions, and accessing records, are often built with dense forms, visual clutter, and tiny interactive targets.
+
+Traditional accessibility tools typically rely on prohibitively expensive dedicated hardware (such as proprietary eye-trackers), complex manual configurations, or isolated single-purpose applications that fail to address diverse or overlapping motor and cognitive impairments.
+
+---
 
 ## Our Solution
 
-_What does GitHappens do, and how does it solve the problem? (2–3 sentences)_
+AccessShift AI transforms existing web applications into personalized, accessible experiences using standard consumer computer hardware. 
 
-### Key Features
+At the center of our solution is the **Adaptive Interaction Engine**. Instead of offering disconnected tools, AccessShift AI identifies a user's physical profile and activates an optimized combination of interface reorganization, alternative inputs, and real-time cursor assistance:
 
-- **Feature 1**: _short description_
-- **Feature 2**: _short description_
-- **Feature 3**: _short description_
+- **User with ALS / Quadriplegia:** Eye tracking + blink confirmation + predictive speech + simplified task interface.
+- **User with Parkinson's / Essential Tremor:** Real-time tremor filtering + magnetic target enlargement + adaptive click assistance.
+- **User with Cognitive Impairments:** Task-focused interface reconstruction + step-by-step guidance + reduced visual complexity.
+- **User with Multi-Modal Needs:** Dynamic combinations of gaze navigation, simplified layouts, and assisted pointer controls.
 
-<!-- Add a screenshot or GIF: ![screenshot](docs/screenshot.png) -->
+---
+
+## Three Integrated Accessibility Systems
+
+### 1. GazeControl: Eye and Blink Navigation
+- Uses a standard laptop webcam to track eye movements and intentional blinks.
+- Enables hands-free web navigation without touching a mouse or keyboard.
+- Features an eye-driven predictive keyboard with dynamic dwell times.
+- Integrates AI text expansion and the Web Speech API (Text-to-Speech) for vocalization.
+- Adjusts target button hitboxes based on gaze calibration stability.
+- **Technologies:** Python, MediaPipe Face Mesh, OpenCV, JavaScript, Web Speech API, Local/Cloud LLM.
+
+### 2. SmartInterface: AI Website Transformation
+- Analyzes existing DOM trees and complex layouts.
+- Reconstructs complicated workflows into simplified, task-focused screens.
+- Enlarges interactive targets, clarifies instructions, and eliminates distracting sidebars.
+- Exposes direct state hooks for hands-free gaze navigation and tremor-stabilized pointers.
+- **Technologies:** React, Next.js, JavaScript, DOM analysis, Tailwind CSS, Accessibility heuristics.
+
+### 3. SteadyHand: AI Tremor Stabilization
+- Filters out high-frequency involuntary hand tremors in real time.
+- Implements 1-Euro and adaptive exponential smoothing filters on raw cursor coordinates.
+- Employs intelligent target snapping (bubble cursor logic) that dynamically enlarges clickable bounds as the pointer approaches.
+- Minimizes false clicks and accidental double triggers.
+- **Technologies:** JavaScript, 1-Euro filter algorithms, cursor trajectory modeling, proximity bounding box math.
+
+---
 
 ## Tech Stack
 
-| Layer    | Tools                  |
-| -------- | ---------------------- |
-| Frontend | React                  |
-| Backend  | Python (_framework_)   |
-| Database | _TBD_                  |
-| APIs/AI  | _TBD_                  |
-| Hosting  | _TBD_                  |
+| Layer | Technologies & Tools |
+| :--- | :--- |
+| **Frontend & UI** | React, Next.js, HTML5, CSS3, Tailwind CSS |
+| **Computer Vision & Tracking** | Python, OpenCV, MediaPipe Face Mesh, NumPy |
+| **Signal Processing & Math** | 1-Euro Filter, Exponential Moving Average (EMA), Bounding-Box Distance Snapping |
+| **AI, Voice & Synthesis** | Web Speech API (`speechSynthesis`), Contextual LLM Completion |
+| **Communication Layer** | WebSockets (`ws` in Node.js / `websockets` in Python) for real-time IPC |
+
+---
+
+## Hackathon Demonstration Scenarios
+
+We evaluate and demonstrate AccessShift AI on an intentionally cluttered healthcare appointment booking portal through three reproducible benchmarks:
+
+1. **Scenario 1 (Gaze & Blink Control):** A user navigates the booking portal and completes an appointment entirely hands-free using webcam gaze tracking and deliberate blink confirmations.
+2. **Scenario 2 (SmartInterface Transformation):** The original complex portal is transformed with a single toggle into a clear, high-contrast, linear step-by-step interface.
+3. **Scenario 3 (SteadyHand Tremor Test):** A user navigates small appointment buttons while generating hand tremors (simulated via phone vibration). Turning on SteadyHand stabilizes the cursor and magnetically locks onto the target button, demonstrating clear before-and-after accuracy improvements.
+
+### Measurable Verification Metrics
+- Click accuracy (hits vs. misses) before and after SteadyHand activation.
+- Accidental click reduction percentage.
+- Task completion time across complex vs. simplified interface modes.
+- Total interaction steps required to book an appointment.
+- Gaze dwell and blink selection accuracy.
+
+---
+
+## Team & Responsibilities
+
+| Team Member | Academic Level | Role | Core Responsibilities & Deliverables |
+| :--- | :--- | :--- | :--- |
+| **Adnan** | Last-year student | Technical Lead (Architecture & GazeControl) | Lead system architecture, MediaPipe Face Mesh gaze tracking, blink detection, and WebSocket integration between Python vision and the React frontend. |
+| **Pragati Puri** | Third-year student | Technical Lead (Adaptive Engine & Dashboard) | Build the Adaptive Interaction Engine logic, user profile management (ALS, Parkinson's, Cognitive), and coordinate unified system state across modules. |
+| **Yee** | Second-year student | Algorithm Developer (SteadyHand Core) | Research and implement 1-Euro filtering and adaptive smoothing algorithms to cancel cursor tremor jitter in JavaScript. |
+| **Dipta** | Second-year student | Algorithm Developer (SteadyHand UX & Targets) | Implement magnetic cursor proximity snapping, adjustable stabilization sliders, and build the jitter benchmark testing suite. |
+| **Elizabeth** | Second-year student | Frontend Lead (SmartInterface Portal) | Design and develop the complex healthcare booking portal mock, the simplified accessible layout, and DOM restructuring toggles. |
+| **Avneet Kaur** | Second-year student | AI & Frontend Engineer (SmartInterface AI) | Implement accessible layout styling, Web Speech API integration, predictive text assistance, and LLM prompt design for text simplification. |
+
+---
 
 ## Getting Started
 
 ### Prerequisites
-
 - Node.js 18+ and npm
 - Python 3.10+
+- Built-in or USB webcam
 
-### 1. Clone
-
+### 1. Clone the Repository
 ```bash
 git clone <repo-url>
-cd GitHappens
-```
-
-### 2. Environment variables
-
-```bash
-cp .env.example .env
-# then fill in the values in .env (never commit this file)
-```
-
-### 3. Backend
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-# run command, e.g. python app.py
-```
-
-### 4. Frontend
-
-```bash
-cd frontend
-npm install
-npm start                       # or: npm run dev
-```
-
-## Project Structure
-
-```
-GitHappens/
-├── frontend/      # React app
-├── backend/       # Python API
-├── docs/          # screenshots, diagrams, pitch assets
-├── .env.example   # template for environment variables
-└── README.md
-```
-
-## Team Workflow
-
-- `main` is always demo-ready. Don't push broken code to it.
-- Create a branch per feature: `git checkout -b feature/<name>`
-- Pull often (`git pull origin main`) to avoid big merge conflicts.
-- Open a PR and get one teammate to review before merging.
-- Never commit secrets. Put keys in `.env` and add the variable name to `.env.example`.
-
-## Team
-
-| Name         | Role   |
-| ------------ | ------ |
-| Adnan        | _role_ |
-| Avneet Kaur  | _role_ | 
-| Dipta        | _role_ | 
-| Elizabeth    | _role_ | 
-| Pragati Puri | _role_ |
-| Yee          | _role_ | 
-
-## What's Next
-
-- _What we'd build with more time_
-- _Known limitations_
-
-## Acknowledgments
-
-_Hackathon name, sponsors, mentors, libraries, or APIs we used._
+cd AccessShift-AI
