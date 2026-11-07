@@ -54,17 +54,18 @@ At the center of our solution is the **Adaptive Interaction Engine**. Instead of
 - **Technologies:** JavaScript, 1-Euro filter algorithms, cursor trajectory modeling, proximity bounding box math.
 
 ---
-
 ## Tech Stack
 
-| Layer | Technologies & Tools |
-| :--- | :--- |
-| **Frontend & UI** | React, Next.js, HTML5, CSS3, Tailwind CSS |
-| **Computer Vision & Tracking** | Python, OpenCV, MediaPipe Face Mesh, NumPy |
-| **Signal Processing & Math** | 1-Euro Filter, Exponential Moving Average (EMA), Bounding-Box Distance Snapping |
-| **AI, Voice & Synthesis** | Web Speech API (`speechSynthesis`), Contextual LLM Completion |
-| **Communication Layer** | WebSockets (`ws` in Node.js / `websockets` in Python) for real-time IPC |
-
+| Component | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Language** | Python 3.11+ | Single codebase for logic, vision, UI, and DSP |
+| **Desktop UI Framework** | PySide6 (Qt) | Cross-platform desktop interface for macOS and Windows |
+| **Computer Vision** | OpenCV + MediaPipe Face Mesh | Real-time iris tracking, gaze estimation, and blink detection |
+| **Mouse Control** | pynput + OS Input APIs | Tremor filtering, cursor smoothing, and target proximity snapping |
+| **Signal Processing** | 1-Euro Filter + NumPy | Real-time mathematical cancellation of involuntary hand tremors |
+| **Speech & Audio** | pyttsx3 | Fast, offline, low-latency text-to-speech synthesis |
+| **AI & Text Prediction** | ONNX Runtime / Lightweight Local Models | Next-word completion and message simplification |
+| **Distribution** | PyInstaller | Standalone executable generation for Windows and macOS |
 ---
 
 ## Hackathon Demonstration Scenarios
