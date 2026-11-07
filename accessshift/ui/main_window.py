@@ -46,8 +46,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         layout = QHBoxLayout(root)
 
-        side = QVBoxLayout()
-        layout.addLayout(side, 1)
+        self.sidebar = QWidget()  # hidden while GazeControl is on (focus mode)
+        side = QVBoxLayout(self.sidebar)
+        side.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.sidebar, 1)
 
         side.addWidget(QLabel("AccessShift AI"))
         side.addWidget(QLabel("Adaptive Interaction Engine"))
@@ -95,20 +97,36 @@ class MainWindow(QMainWindow):
         self.btn_system_mouse.clicked.connect(self._enable_system_mouse)
         side.addWidget(self.btn_system_mouse)
 
-        self.btn_recalibrate_gaze = QPushButton("Recalibrate gaze")
-        side.addWidget(self.btn_recalibrate_gaze)
-
         self.status = QLabel("Ready")
         self.status.setWordWrap(True)
         side.addWidget(self.status)
 
-        self.gaze = GazeMode(self)  # GazeControl: camera, gaze cursor, calibration, metrics
-        self.gaze.status.connect(self.status.setText)
-        self.btn_recalibrate_gaze.clicked.connect(self.gaze.recalibrate)
         side.addStretch(1)
 
+        # Gaze bar: only shown in gaze focus mode; every control here is gaze-clickable.
+        self.gaze_bar = QWidget()
+        bar = QHBoxLayout(self.gaze_bar)
+        bar.setContentsMargins(0, 0, 0, 0)
+        self.btn_recalibrate_gaze = QPushButton("Recalibrate gaze")
+        self.gaze_status = QLabel()
+        self.gaze_status.setWordWrap(True)
+        self.btn_exit_gaze = QPushButton("✕  Exit gaze control")
+        self.btn_exit_gaze.clicked.connect(lambda: self.chk_gaze.setChecked(False))
+        bar.addWidget(self.btn_recalibrate_gaze)
+        bar.addWidget(self.gaze_status, 1)
+        bar.addWidget(self.btn_exit_gaze)
+        self.gaze_bar.hide()
+
         self.portal = PortalView(repo_root / "assets" / "portal")
-        layout.addWidget(self.portal, 3)
+        main = QVBoxLayout()
+        main.addWidget(self.gaze_bar)
+        main.addWidget(self.portal, 1)
+        layout.addLayout(main, 3)
+
+        self.gaze = GazeMode(self)  # GazeControl: camera, gaze cursor, calibration, metrics
+        self.gaze.status.connect(self.status.setText)
+        self.gaze.status.connect(self.gaze_status.setText)
+        self.btn_recalibrate_gaze.clicked.connect(self.gaze.recalibrate)
 
         self.engine.modules_changed.connect(self._sync_module_checks)
         self.engine.set_profile("parkinsons")
@@ -142,11 +160,11 @@ class MainWindow(QMainWindow):
             chk.setChecked(value)
             chk.blockSignals(False)
         self.steady.enabled = modules.steady_hand
+        # Gaze focus mode: no sidebar, simple booking flow, gaze bar with Exit.
+        self.sidebar.setVisible(not modules.gaze_control)
+        self.gaze_bar.setVisible(modules.gaze_control)
+        self.portal.set_accessible(modules.smart_interface or modules.gaze_control)
         self.gaze.set_enabled(modules.gaze_control)
-        if modules.smart_interface:
-            self.portal.set_accessible(True)
-        else:
-            self.portal.set_accessible(False)
 
     def _on_steady_toggled(self, enabled: bool) -> None:
         self.engine.set_module("steady_hand", enabled)
