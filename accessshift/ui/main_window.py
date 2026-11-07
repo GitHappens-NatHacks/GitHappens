@@ -76,7 +76,7 @@ class MainWindow(QMainWindow):
 
         side.addWidget(QLabel("SteadyHand strength"))
         self.strength = QSlider(Qt.Horizontal)
-        self.strength.setRange(0, 100)
+        self.strength.setRange(0, 200)
         self.strength.setValue(int(self.steady.strength * 100))
         self.strength.valueChanged.connect(self._on_strength)
         side.addWidget(self.strength)

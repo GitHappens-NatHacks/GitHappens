@@ -1,8 +1,4 @@
-"""One Euro filtering for a single coordinate.
-
-This module contains only smoothing math.
-It does not capture mouse input or move the system cursor.
-"""
+"""One Euro filter for smoothing a single coordinate."""
 
 from __future__ import annotations
 
@@ -10,84 +6,49 @@ import math
 import time
 
 
-class _LowPass:
-    def __init__(self):
-        self.value: float | None = None
-
-    def reset(self) -> None:
-        self.value = None
-
-    def filter(self, value: float, alpha: float) -> float:
-        if self.value is None:
-            self.value = value
-        else:
-            self.value += alpha * (value - self.value)
-
-        return self.value
-
-
-def _alpha(cutoff: float, dt: float) -> float:
-    """Calculate smoothing weight from cutoff in Hz and time in seconds."""
-    tau = 1.0 / (2.0 * math.pi * cutoff)
-    return dt / (dt + tau)
-
-
 class OneEuroFilter:
     def __init__(
         self,
-        min_cutoff: float = 1.0,
-        beta: float = 0.007,
+        min_cutoff: float = 0.65,
+        beta: float = 0.004,
         d_cutoff: float = 1.0,
     ):
-        self.min_cutoff = float(min_cutoff)
-        self.beta = float(beta)
-        self.d_cutoff = float(d_cutoff)
+        self.configure(min_cutoff, beta, d_cutoff)
+        self.reset()
 
-        self._validate_parameters()
+    def configure(
+        self,
+        min_cutoff: float,
+        beta: float,
+        d_cutoff: float = 1.0,
+    ) -> None:
+        values = tuple(map(float, (min_cutoff, beta, d_cutoff)))
 
-        self.x_filter = _LowPass()
-        self.dx_filter = _LowPass()
-
-        self.last_time: float | None = None
-        self.last_raw: float | None = None
-
-    def _validate_parameters(self) -> None:
-        parameters = (
-            self.min_cutoff,
-            self.beta,
-            self.d_cutoff,
-        )
-
-        if not all(math.isfinite(value) for value in parameters):
+        if not all(math.isfinite(v) for v in values):
             raise ValueError("Filter parameters must be finite.")
 
-        if self.min_cutoff <= 0:
-            raise ValueError("min_cutoff must be greater than zero.")
+        if values[0] <= 0 or values[2] <= 0 or values[1] < 0:
+            raise ValueError(
+                "Cutoffs must be positive and beta cannot be negative."
+            )
 
-        if self.d_cutoff <= 0:
-            raise ValueError("d_cutoff must be greater than zero.")
-
-        if self.beta < 0:
-            raise ValueError("beta cannot be negative.")
+        self.min_cutoff, self.beta, self.d_cutoff = values
 
     def reset(self) -> None:
-        """Discard history. The next sample passes through unchanged."""
-        self.x_filter.reset()
-        self.dx_filter.reset()
+        self.last_time: float | None = None
+        self.last_raw: float | None = None
+        self.filtered: float | None = None
+        self.filtered_velocity = 0.0
 
-        self.last_time = None
-        self.last_raw = None
+    @staticmethod
+    def _alpha(cutoff: float, dt: float) -> float:
+        return dt / (dt + 1.0 / (2.0 * math.pi * cutoff))
 
     def filter(
         self,
         x: float,
         timestamp: float | None = None,
     ) -> float:
-        """Filter one sample.
-
-        timestamp must use a monotonic clock and be measured in seconds.
-        Duplicate or backward timestamps leave the filter unchanged.
-        """
         x = float(x)
         now = (
             time.perf_counter()
@@ -98,37 +59,35 @@ class OneEuroFilter:
         if not math.isfinite(x) or not math.isfinite(now):
             raise ValueError("Sample and timestamp must be finite.")
 
-        self._validate_parameters()
-
-        # Initialize directly at the first position.
+        # Start directly at the first position.
         if self.last_time is None:
             self.last_time = now
             self.last_raw = x
-            self.dx_filter.filter(0.0, 1.0)
-            return self.x_filter.filter(x, 1.0)
+            self.filtered = x
+            return x
 
         dt = now - self.last_time
 
+        # Ignore duplicate or backward timestamps.
         if dt <= 0:
-            return self.x_filter.value
+            return self.filtered
 
-        # Estimate velocity from successive raw samples.
         velocity = (x - self.last_raw) / dt
 
-        filtered_velocity = self.dx_filter.filter(
-            velocity,
-            _alpha(self.d_cutoff, dt),
+        derivative_alpha = self._alpha(self.d_cutoff, dt)
+        self.filtered_velocity += derivative_alpha * (
+            velocity - self.filtered_velocity
         )
 
-        # Faster motion raises the cutoff, reducing smoothing and lag.
-        cutoff = self.min_cutoff + self.beta * abs(filtered_velocity)
-
-        result = self.x_filter.filter(
-            x,
-            _alpha(cutoff, dt),
+        cutoff = (
+            self.min_cutoff
+            + self.beta * abs(self.filtered_velocity)
         )
+
+        position_alpha = self._alpha(cutoff, dt)
+        self.filtered += position_alpha * (x - self.filtered)
 
         self.last_time = now
         self.last_raw = x
 
-        return result
+        return self.filtered
