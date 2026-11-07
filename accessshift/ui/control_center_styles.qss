@@ -61,3 +61,10 @@ QPushButton:focus { outline: 2px solid #7D68EF; }
 QPushButton:disabled { color: #A6ADC0; background: #F2F3F7; border-color: #E5E8F0; }
 QPushButton#navButton:focus, QPushButton#presetButton:focus { border: 2px solid #9C8BEF; }
 QFrame#card:hover { border-color: #DADDF0; }
+
+/* Accessible options for the SmartInterface configuration panel. */
+QComboBox { background: #FFFFFF; color: #26314A; border: 1px solid #DCE1ED;
+            border-radius: 10px; padding: 10px 14px; min-height: 22px; font-size: 13px; }
+QComboBox:focus { border: 2px solid #785EEC; }
+QComboBox QAbstractItemView { background: #FFFFFF; color: #27324B;
+                              selection-background-color: #EEE9FF; }

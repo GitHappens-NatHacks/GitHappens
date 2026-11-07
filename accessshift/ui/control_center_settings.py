@@ -24,6 +24,10 @@ class AccessibilitySettings:
     gaze_dwell_ms: int = 1100
     target_size_pct: int = 140
     font_size_pct: int = 110
+    color_profile: str = "standard"
+    letter_spacing_px: int = 0
+    tint_color: str = "warm"
+    tint_opacity: int = 15
     speech_rate: int = 160
     initial_setup_complete: bool = False
     assistance_enabled: bool = True
@@ -74,6 +78,12 @@ def load_settings(store: QSettings | None = None) -> AccessibilitySettings:
         candidate.target_size_pct = max(100, min(200, int(candidate.target_size_pct)))
         candidate.font_size_pct = max(90, min(160, int(candidate.font_size_pct)))
         candidate.speech_rate = max(100, min(220, int(candidate.speech_rate)))
+        candidate.letter_spacing_px = max(0, min(4, int(candidate.letter_spacing_px)))
+        candidate.tint_opacity = max(5, min(28, int(candidate.tint_opacity)))
+        if candidate.color_profile not in ("standard", "high_contrast", "warm", "cool"):
+            candidate.color_profile = "standard"
+        if candidate.tint_color not in ("warm", "cool", "rose"):
+            candidate.tint_color = "warm"
         return candidate
     except (ValueError, TypeError, KeyError):
         return AccessibilitySettings()
