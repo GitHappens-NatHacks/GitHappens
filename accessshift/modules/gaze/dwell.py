@@ -76,8 +76,11 @@ class DwellSelector:
 
 
 def adaptive_dwell_ms(error_px: float) -> int:
-    """Longer dwell when tracking is less accurate, within 600..2000 ms."""
-    return max(600, min(2000, round(800 + 4 * error_px)))
+    """Longer dwell when tracking is less accurate.
+
+    Floor is 2000 ms so accidental selections are harder when the cursor jitters.
+    """
+    return max(2000, min(3500, round(2000 + 3 * max(0.0, float(error_px)))))
 
 
 def min_target_px(error_px: float) -> int:

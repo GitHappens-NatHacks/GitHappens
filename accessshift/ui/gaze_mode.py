@@ -98,7 +98,19 @@ class GazeMode(QObject):
             if self._window.isVisible():  # fill the screen so the big buttons have room
                 self._window_state = self._window.windowState()
                 self._window.setWindowState(self._window_state | Qt.WindowMaximized)
-        self.controller.start(self._camera_index, tracker_factory=self._tracker_factory, preview=True)
+        started = self.controller.start(
+            self._camera_index,
+            tracker_factory=self._tracker_factory,
+            preview=True,
+        )
+        if not started:
+            if self._window is not None:
+                gaze_style.restore(self._window)
+                if self._window_state is not None:
+                    self._window.setWindowState(self._window_state)
+                    self._window_state = None
+            self.status.emit("Gaze: camera could not start. Check Camera privacy settings.")
+            return
         self.overlay.show()
         self.preview.place_bottom_right()
         self.preview.show()
@@ -134,7 +146,7 @@ class GazeMode(QObject):
         self.metrics.start_task(_now_ms())
         self.status.emit(
             f"Gaze ready: accuracy ±{self.controller.error_px:.0f} px, dwell {self.controller.dwell_ms} ms. "
-            "Look at a button until the ring fills, or slow-blink."
+            "Look at a button until the ring fills (about 2 seconds). Slow-blink only after the ring has started."
         )
 
     def _alert(self, text: str) -> None:

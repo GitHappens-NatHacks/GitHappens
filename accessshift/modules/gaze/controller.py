@@ -277,11 +277,19 @@ class GazeController(QObject):
         camera_index: int = 0,
         tracker_factory: Callable[[], object] | None = None,
         preview: bool = False,
-    ) -> None:
+    ) -> bool:
         if self.running:
-            return
+            return True
+
         if tracker_factory is None:
+            # macOS: authorize on this UI thread before the worker opens the camera.
+            from accessshift.modules.gaze.camera_auth import prepare_camera_for_worker
             from accessshift.modules.gaze.tracker import GazeTracker  # heavy import: camera + mediapipe
+
+            ok, message = prepare_camera_for_worker(camera_index)
+            if not ok:
+                self._set_status(message)
+                return False
 
             def tracker_factory():
                 return GazeTracker(camera_index)
@@ -293,13 +301,22 @@ class GazeController(QObject):
         self._worker.sample.connect(self.process)  # queued: process() runs on the UI thread
         self._worker.error.connect(self._set_status)
         self._worker.finished.connect(self._thread.quit)
+        self._thread.finished.connect(self._clear_worker)
         self._thread.start()
+        return True
+
+    def _clear_worker(self) -> None:
+        self._thread = None
+        self._worker = None
 
     def stop(self) -> None:
         if not self.running:
             return
-        self._worker.stop()
-        self._thread.quit()
-        self._thread.wait(3000)
-        self._thread = None
-        self._worker = None
+        worker = self._worker
+        thread = self._thread
+        if worker is not None:
+            worker.stop()
+        if thread is not None:
+            thread.quit()
+            thread.wait(3000)
+        self._clear_worker()

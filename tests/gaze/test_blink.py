@@ -9,7 +9,7 @@ def feed(det, samples):
 
 def test_deliberate_blink_fires_on_reopen():
     d = BlinkDetector()
-    out = feed(d, [(0.3, 0), (0.1, 100), (0.1, 300), (0.1, 500), (0.3, 520)])
+    out = feed(d, [(0.3, 0), (0.1, 100), (0.1, 300), (0.1, 550), (0.3, 570)])
     assert out == [False, False, False, False, True]
 
 

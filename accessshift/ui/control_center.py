@@ -391,7 +391,7 @@ class MainWindow(QMainWindow):
         gb.addWidget(self.blink_row)
         gb.addWidget(label('Dwell time', 'cardTitle'))
         gb.addWidget(label('How long to look at a target before it becomes selected.', 'bodyText'))
-        self.dwell_slider, dwell_row = self._slider(600, 2000, 100, 'gaze_dwell_ms', 'ms')
+        self.dwell_slider, dwell_row = self._slider(2000, 3500, 100, 'gaze_dwell_ms', 'ms')
         gb.addLayout(dwell_row)
         lay.addWidget(gaze_box)
         cal, cl = card(name='innerCard')

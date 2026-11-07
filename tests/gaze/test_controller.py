@@ -41,7 +41,7 @@ def button(qapp):
 def ctrl(qapp, button):
     target = {"widget": button}
     c = GazeController(hit_test=lambda pt: target["widget"], screen_rect=SCREEN)
-    c.set_calibration(identity_calibration(), error_px=50)  # dwell = 1000 ms
+    c.set_calibration(identity_calibration(), error_px=50)  # dwell = 2150 ms
     c.hit = target
     return c
 
@@ -52,11 +52,11 @@ def feed(ctrl, start, end, step=50, **kw):
 
 
 def test_dwell_ms_follows_accuracy(ctrl):
-    assert ctrl.dwell_ms == 1000
+    assert ctrl.dwell_ms == 2150
 
 
 def test_dwell_clicks_button(ctrl, button):
-    feed(ctrl, 0, 1000)
+    feed(ctrl, 0, 2200)
     assert button.clicks == 1
 
 
@@ -89,7 +89,7 @@ def test_only_enabled_buttons_clicked(ctrl, button, qapp):
 def test_child_of_button_resolves_to_button(ctrl, button):
     child = QWidget(button)
     ctrl.hit["widget"] = child
-    feed(ctrl, 0, 1000)
+    feed(ctrl, 0, 2200)
     assert button.clicks == 1
 
 
@@ -198,14 +198,15 @@ def snapping_ctrl(buttons, error_px=150):
 def test_snaps_to_nearest_button_within_accuracy(two_buttons):
     a, b = two_buttons
     c = snapping_ctrl(two_buttons)
-    feed(c, 0, 2000, feature=(250, 230))  # 66 px below A, 170 px above B
+    # error 150 -> dwell 2450 ms
+    feed(c, 0, 2600, feature=(250, 230))  # 66 px below A, 170 px above B
     assert a.clicks == 1 and b.clicks == 0
 
 
 def test_no_snap_beyond_accuracy(two_buttons):
     a, b = two_buttons
     c = snapping_ctrl(two_buttons, error_px=100)
-    feed(c, 0, 2000, feature=(900, 700))
+    feed(c, 0, 2600, feature=(900, 700))
     assert a.clicks == 0 and b.clicks == 0
 
 
@@ -224,8 +225,8 @@ def test_target_is_sticky_against_small_jitter(two_buttons):
 def test_exact_hit_still_wins(qapp, button):
     other = make_button(qapp, 0, 0, text="other")
     c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN, buttons=lambda: [other])
-    c.set_calibration(identity_calibration(), error_px=500)
-    feed(c, 0, 2000, feature=(5, 5))
+    c.set_calibration(identity_calibration(), error_px=500)  # dwell 3500 ms
+    feed(c, 0, 3600, feature=(5, 5))
     assert button.clicks == 1 and other.clicks == 0
     other.close()
 
@@ -294,10 +295,11 @@ def test_natural_blink_pauses_dwell_without_restart_or_click(ctrl, button):
     feed(ctrl, 0, 600)
     for t in (650, 700, 750):  # 150 ms natural blink
         ctrl.process(sample(t) | {"closed_ms": t - 650 + 1})
-    feed(ctrl, 800, 1100)
+    feed(ctrl, 800, 2000)
     assert button.clicks == 0  # the 150 ms with eyes shut didn't count
-    feed(ctrl, 1150, 1300)
-    assert button.clicks == 1  # ...but the earlier 600 ms did
+    feed(ctrl, 2050, 2400)
+    assert button.clicks == 1  # earlier open time plus later stare reaches dwell
+
 
 
 # --- head or eyes as the pointer -------------------------------------------------------

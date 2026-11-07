@@ -23,8 +23,8 @@ class GazeTracker:
         self._mesh = mp.solutions.face_mesh.FaceMesh(
             max_num_faces=1,
             refine_landmarks=True,  # adds the iris landmarks 468-477
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+            min_detection_confidence=0.6,
+            min_tracking_confidence=0.6,
         )
 
     def open(self) -> bool:

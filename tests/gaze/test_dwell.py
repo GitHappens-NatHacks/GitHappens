@@ -47,9 +47,10 @@ def test_reset_rearms_same_target():
 
 
 def test_adaptive_values():
-    assert adaptive_dwell_ms(0) == 800 and adaptive_dwell_ms(500) == 2000
-    assert adaptive_dwell_ms(-100) == 600
-    assert adaptive_dwell_ms(100) == 1200
+    assert adaptive_dwell_ms(0) == 2000
+    assert adaptive_dwell_ms(100) == 2300
+    assert adaptive_dwell_ms(500) == 3500
+    assert adaptive_dwell_ms(-100) == 2000
     assert min_target_px(10) == 64 and min_target_px(50) == 100
     assert min_target_px(50.2) == 101
 
