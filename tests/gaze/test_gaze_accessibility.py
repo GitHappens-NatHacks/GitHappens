@@ -151,3 +151,45 @@ def test_portal_big_buttons_set_dark_text_on_light_background():
     css = PortalView._big_btn_css()
     assert "color:#0B1F1A" in css.replace(" ", "")
     assert contrast_ratio("#0B1F1A", "#E7F6F1") >= 7
+
+
+def test_buttons_stretch_to_fill_height_and_restore(qapp):
+    from PySide6.QtWidgets import QSizePolicy
+
+    w = QWidget()
+    layout = QVBoxLayout(w)
+    layout.addWidget(QLabel("Pick a time"))
+    buttons = [QPushButton(t) for t in ("Tomorrow 10:00", "Tomorrow 14:00", "Friday 11:30")]
+    for b in buttons:
+        b.setMinimumHeight(64)
+        layout.addWidget(b)
+    layout.addStretch(1)
+    w.resize(800, 900)
+    w.show()
+    qapp.processEvents()
+    normal = buttons[0].height()
+
+    gaze_style.apply(w)
+    w.resize(800, 900)
+    qapp.processEvents()
+    assert all(b.height() > 180 for b in buttons), [b.height() for b in buttons]
+    assert buttons[0].sizePolicy().verticalPolicy() == QSizePolicy.Expanding
+
+    gaze_style.restore(w)
+    qapp.processEvents()
+    assert buttons[0].height() == normal
+    assert layout.stretch(layout.count() - 1) == 1  # the trailing stretch is back
+    w.close()
+
+
+def test_gaze_mode_maximizes_window_and_restores_state(qapp):
+    from PySide6.QtCore import Qt
+
+    w, _, _ = make_window()
+    w.show()
+    gm = GazeMode(w, screen_rect=QRect(0, 0, 1000, 800), tracker_factory=FakeTracker, calibrate_on_start=False)
+    gm.set_enabled(True)
+    assert w.windowState() & Qt.WindowMaximized
+    gm.set_enabled(False)
+    assert not (w.windowState() & Qt.WindowMaximized)
+    w.close()
