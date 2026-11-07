@@ -62,7 +62,7 @@ class PortalView(QWidget):
             "Gift shop hours",
         ):
             left.addWidget(QLabel(f"• {text}"))
-        notice = QLabel("Seasonal flu clinic — register separately")
+        notice = QLabel("Seasonal flu clinic: register separately")
         notice.setStyleSheet("background:#fff4cc; padding:6px; border:1px dashed #c9a227;")
         left.addWidget(notice)
         left.addStretch(1)

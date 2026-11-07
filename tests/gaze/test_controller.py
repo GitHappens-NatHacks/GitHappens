@@ -260,6 +260,8 @@ def test_jittery_gaze_is_smoothed(ctrl):
 
 
 def test_eyes_closed_freezes_point_and_dwell(ctrl, button):
+    ctrl.set_source("eyes")  # eye features are garbage while closed
+    ctrl.set_calibration(identity_calibration(), error_px=50)
     points = []
     ctrl.point.connect(points.append)
     feed(ctrl, 0, 500)
@@ -291,6 +293,8 @@ def test_short_closure_does_not_exit(ctrl):
 
 
 def test_natural_blink_pauses_dwell_without_restart_or_click(ctrl, button):
+    ctrl.set_source("eyes")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
     feed(ctrl, 0, 600)
     for t in (650, 700, 750):  # 150 ms natural blink
         ctrl.process(sample(t) | {"closed_ms": t - 650 + 1})
@@ -348,4 +352,36 @@ def test_head_rest_zone_selects_nothing_until_you_turn(qapp, button):
     assert button.clicks == 0  # facing forward = resting
     for t in range(4000, 7000, 33):
         c.process({"face": True, "ts_ms": t, "head": (0.15, 0.6), "feature": (0, 0), "ear": 0.3, "blink": False})
+    assert button.clicks == 1
+
+
+def test_blink_select_can_be_turned_off(ctrl, button):
+    ctrl.blink_select = False
+    ctrl.process(sample(0, blink=True))
+    assert button.clicks == 0
+
+
+def test_user_dwell_time_overrides_automatic(ctrl, button):
+    ctrl.set_dwell_ms(1500)
+    ctrl.set_calibration(identity_calibration(), error_px=0)  # would be 800 ms automatically
+    assert ctrl.dwell_ms == 1500
+    feed(ctrl, 0, 1400)
+    assert button.clicks == 0
+    feed(ctrl, 1450, 1600)
+    assert button.clicks == 1
+
+
+
+def test_head_mode_keeps_pointing_but_pauses_dwell_while_eyes_closed(ctrl, button):
+    # Head pointing stays valid with closed eyes, but closing your eyes (e.g. to exit)
+    # must never click the option you happen to be pointing at.
+    ctrl.set_source("head")
+    ctrl.set_calibration(identity_calibration(), error_px=50)
+    points = []
+    ctrl.point.connect(points.append)
+    for t in range(0, 2000, 50):
+        ctrl.process(sample(t, feature=(100 + t // 10, 100)) | {"closed_ms": t + 1})
+    assert len(points) > 30 and points[-1].x() > points[0].x()  # dot kept moving
+    assert button.clicks == 0
+    feed(ctrl, 2050, 3200, feature=(300, 100))  # eyes open again: dwell works
     assert button.clicks == 1

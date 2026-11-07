@@ -173,3 +173,51 @@ def test_eyes_calibration_keeps_nine_dots_and_check(qapp):
     dlg.begin()
     assert len(dlg.current_points()) == 9
     dlg.reject()
+
+
+def test_head_calibration_ignores_eye_openness_when_tilting(qapp):
+    # Tilting the head up/down makes the eyelids look narrower to the webcam.
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
+    dlg.begin()
+    t = 0
+    while dlg.isVisible() and t < 20_000:
+        step = dlg.current_step()
+        ear = 0.15 if step in ("up", "down") else 0.3
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[step], "ear": ear})
+        t += 33
+    assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
+    assert t < 12_000  # no endless retries on the up/down steps
+
+
+def test_head_calibration_shows_face_not_found_prominently(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    dlg.begin()
+    ctrl.process({"camera_ok": True, "face": False, "ts_ms": 0})
+    assert dlg.problem() == "Face not found. Look at the camera."
+    ctrl.process(fake_sample(33, (0.5, 0.5)) | {"head": (0.0, 0.6)})
+    assert dlg.problem() == ""
+    dlg.reject()
+
+
+def test_calibration_says_when_camera_sends_nothing(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    dlg.begin()
+    dlg.check_camera(now_ms=dlg.started_ms() + 3000)  # 3 s with no samples at all
+    assert "camera" in dlg.problem().lower()
+    dlg.reject()
+
+
+def test_head_calibration_tunes_closed_eyes_to_the_narrowest_pose(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
+    dlg.begin()
+    t = 0
+    while dlg.isVisible() and t < 20_000:
+        step = dlg.current_step()
+        ear = 0.18 if step == "down" else 0.3
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[step], "ear": ear})
+        t += 33
+    assert ctrl.last_blink_ears == [0.18]  # threshold = 0.75 x the tilted-down eye openness

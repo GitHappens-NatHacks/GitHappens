@@ -47,7 +47,7 @@ def test_booking_reports_selections_and_time(qapp):
     gm.controller.selected.emit(QPushButton("Myself"))
     gm.controller.selected.emit(QPushButton("Check-up"))
     gm.controller.selected.emit(QPushButton("Book appointment"))
-    assert "3 gaze selections" in messages[-1]
+    assert "3 selections" in messages[-1]
     assert gm.metrics.summary()["selections"] == 3 and gm.metrics.summary()["task_ms"] is not None
 
 
@@ -61,7 +61,7 @@ def test_controller_status_is_forwarded(qapp):
         QCoreApplication.processEvents()
         time.sleep(0.01)
     gm.set_enabled(False)
-    assert messages and messages[0].startswith("Gaze: ")
+    assert messages and messages[0] == "Calibrate first"  # forwarded as-is, no "Gaze:" prefix
 
 
 def test_recalibrate_uses_head_steps_and_switching_to_eyes_asks_for_eye_calibration(qapp, monkeypatch):
@@ -85,3 +85,42 @@ def test_recalibrate_uses_head_steps_and_switching_to_eyes_asks_for_eye_calibrat
     gm.set_enabled(False)
     assert gm.controller.source == "eyes"
     assert 5 in runs and runs[-1] == 9  # head recalibration, then eye calibration after the switch
+
+
+def test_calibration_never_opens_twice_at_once(qapp, monkeypatch):
+    from accessshift.ui import gaze_calibration_dialog as dialog_mod
+
+    gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), tracker_factory=FakeTracker, calibrate_on_start=False)
+    runs = []
+
+    def fake_run(self):
+        runs.append(1)
+        gm.recalibrate()  # e.g. the automatic calibration firing while this one is open
+        return False
+
+    monkeypatch.setattr(dialog_mod.GazeCalibrationDialog, "run", fake_run)
+    gm.set_enabled(True)
+    gm.recalibrate()
+    gm.set_enabled(False)
+    assert runs == [1]
+
+
+def test_cancelled_calibration_reports_a_problem(qapp, monkeypatch):
+    from accessshift.ui import gaze_calibration_dialog as dialog_mod
+
+    monkeypatch.setattr(dialog_mod.GazeCalibrationDialog, "run", lambda self: False)  # Esc
+    gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), tracker_factory=FakeTracker, calibrate_on_start=False)
+    problems = []
+    gm.problem.connect(problems.append)
+    gm.set_enabled(True)
+    gm.recalibrate()
+    gm.set_enabled(False)
+    assert problems and "cancelled" in problems[0].lower() and "—" not in problems[0]
+
+
+def test_camera_failure_reports_a_problem(qapp):
+    gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), calibrate_on_start=False)
+    problems = []
+    gm.problem.connect(problems.append)
+    gm.controller.status.emit("Camera could not be opened. On macOS allow camera access.")
+    assert problems and problems[0].startswith("Camera")

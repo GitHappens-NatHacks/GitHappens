@@ -205,3 +205,12 @@ def test_eyes_closed_exit_shows_countdown_then_requests_exit(qapp):
     assert gm.overlay.message() == ""
     gm.controller.exit_requested.emit()
     assert exits == [1]
+
+
+def test_every_app_theme_keeps_large_text_readable():
+    # 30 px bold square text is "large text": WCAG AAA needs 4.5:1.
+    from accessshift.modules.smartinterface.visual_controller import PALETTES
+
+    for name, p in PALETTES.items():
+        assert contrast_ratio(p.foreground, p.panel) >= 4.5, name
+        assert contrast_ratio(p.accent_text, p.accent) >= 4.5, name

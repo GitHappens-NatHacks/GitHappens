@@ -104,9 +104,11 @@ class DotCollector:
         self.retries = 0
         self.features: list[Point] = []
         self.ears: list[float] = []  # open-eye EAR samples, for BlinkDetector.calibrate_open
+        self.dot_ears: list[list[float]] = []  # EAR samples of each accepted dot
         self.debug: list[dict] = []  # per-dot sample count, spread, retries
         self._started: int | None = None
         self._samples: list[Point] = []
+        self._sample_ears: list[float] = []
 
     @property
     def done(self) -> bool:
@@ -134,7 +136,7 @@ class DotCollector:
         elapsed = ts - self._started
         if elapsed >= self.settle_ms and sample.get("face") and sample["ear"] >= ear_threshold:
             self._samples.append(tuple(sample["feature"]))
-            self.ears.append(sample["ear"])
+            self._sample_ears.append(sample["ear"])
         if elapsed < self.settle_ms + self.collect_ms:
             return
 
@@ -143,6 +145,8 @@ class DotCollector:
         steady = len(self._samples) >= self.min_samples and max(np.std(us), np.std(vs)) <= self.max_spread
         if steady:
             self.features.append((float(np.median(us)), float(np.median(vs))))
+            self.ears += self._sample_ears
+            self.dot_ears.append(list(self._sample_ears))
             self.debug.append({
                 "target_norm": self.points[self.index],
                 "samples": len(self._samples),
@@ -154,4 +158,4 @@ class DotCollector:
             self.retries = 0
         else:
             self.retries += 1
-        self._started, self._samples = None, []
+        self._started, self._samples, self._sample_ears = None, [], []

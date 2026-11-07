@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QSizePolicy, QVB
 
 from accessshift.ui import gaze_style
 
-SQUARE_QSS = gaze_style.BUTTON_QSS + "QPushButton { font-size: 30px; }"
+SQUARE_FONT_PX = 30
 
 
 class GazeGridPanel(QWidget):
@@ -23,6 +23,7 @@ class GazeGridPanel(QWidget):
         self._source = source
         self._targets: list[QPushButton] = []  # portal buttons behind the visible squares
         self._squares: list[QPushButton] = []  # reused, so a clicked square is never deleted mid-click
+        self._palette = None  # app colour palette (None = high-contrast default)
 
         self._heading = QLabel()
         self._heading.setWordWrap(True)
@@ -33,6 +34,18 @@ class GazeGridPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self._heading)
         layout.addLayout(self._grid, 1)
+
+    def set_palette(self, palette) -> None:
+        self._palette = palette
+        qss = gaze_style.button_qss(palette, SQUARE_FONT_PX)
+        for square in self._squares:
+            square.setStyleSheet(qss)
+        fg = palette.foreground if palette is not None else gaze_style.TEXT
+        self._heading.setStyleSheet(f"font-size: 26px; font-weight: 700; color: {fg};")
+
+    def set_source(self, source: QWidget) -> None:
+        self._source = source
+        self.refresh()
 
     # --- read back -------------------------------------------------------------------
     def heading(self) -> str:
@@ -75,7 +88,8 @@ class GazeGridPanel(QWidget):
 
     def _make_square(self, index: int) -> QPushButton:
         square = QPushButton()
-        square.setStyleSheet(SQUARE_QSS)
+        square.setProperty(gaze_style.OWN_STYLE, True)
+        square.setStyleSheet(gaze_style.button_qss(self._palette, SQUARE_FONT_PX))
         square.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         square.setMinimumHeight(gaze_style.BUTTON_HEIGHT)
         square.clicked.connect(lambda _=False, i=index: self._choose(i))

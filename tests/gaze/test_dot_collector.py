@@ -46,3 +46,11 @@ def test_target_px_and_progress():
     assert c.target_px() == (100, 720)
     c.update(s(0), 0.2)
     assert c.progress(0) == 0.0 and c.progress(1000) == pytest.approx(0.5) and c.progress(5000) == 1.0
+
+
+def test_ears_are_kept_per_dot():
+    c = DotCollector([(0.5, 0.5), (0.5, 0.9)], SIZE)
+    t = run(c, 0, 1600, ear=0.3)
+    run(c, t, t + 1600, ear=0.2)
+    assert c.done
+    assert min(c.dot_ears[0]) == 0.3 and max(c.dot_ears[1]) == 0.2

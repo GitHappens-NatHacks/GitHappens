@@ -34,13 +34,18 @@ def _now_ms() -> int:
     return int(time.monotonic() * 1000)
 
 
-EXIT_HINT = "Keep your eyes closed to exit gaze control"
+EXIT_HINT = "Keep your eyes closed to exit hands-free control"
+CALIBRATION_CANCELLED = (
+    "Calibration was cancelled, so head movement control is off. "
+    "Choose Start head control to try again."
+)
 
 
 class GazeMode(QObject):
     status = Signal(str)
     exit_requested = Signal()  # user held their eyes closed: the window should turn gaze off
     source_changed = Signal(str)  # "head" or "eyes"
+    problem = Signal(str)  # hands-free can't continue (calibration cancelled, camera failed)
 
     def __init__(
         self,
@@ -56,6 +61,8 @@ class GazeMode(QObject):
         source = os.getenv("GAZE_INPUT", "head")
         self._window = parent if isinstance(parent, QWidget) else None  # gets the big-button style
         self._window_state = None  # window state before gaze mode maximized it
+        self._calibrating = False  # only one calibration screen at a time
+        self.palette = None  # app colour palette for the style and calibration screen
         self.controller = GazeController(screen_rect=screen_rect, parent=self)
         if source in ("head", "eyes"):
             self.controller.set_source(source)
@@ -91,10 +98,10 @@ class GazeMode(QObject):
                 if self._window_state is not None:
                     self._window.setWindowState(self._window_state)
                     self._window_state = None
-            self.status.emit("Gaze: off")
+            self.status.emit("Hands-free control is off.")
             return
         if self._window is not None:
-            gaze_style.apply(self._window)
+            gaze_style.apply(self._window, self.palette)
             if self._window.isVisible():  # fill the screen so the big buttons have room
                 self._window_state = self._window.windowState()
                 self._window.setWindowState(self._window_state | Qt.WindowMaximized)
@@ -110,7 +117,7 @@ class GazeMode(QObject):
         new = "eyes" if self.controller.source == "head" else "head"
         self.controller.set_source(new)
         self.source_changed.emit(new)
-        self.status.emit(f"Gaze: pointing with your {new}. Calibrate to start.")
+        self.status.emit(f"Now pointing with your {new}. Calibrate to start.")
         if self.enabled and self._calibrate_on_start:
             self.request_recalibrate()
 
@@ -120,22 +127,32 @@ class GazeMode(QObject):
 
     def recalibrate(self) -> None:
         if not self.enabled:
-            self.status.emit("Gaze: turn on GazeControl first")
+            self.status.emit("Turn on head movement control first.")
             return
+        if self._calibrating:
+            return  # one is already open (e.g. the automatic one plus a button press)
+        self._calibrating = True
         self.overlay.hide()  # keep the cursor and camera window off the calibration screen
         self.preview.hide()
-        ok = GazeCalibrationDialog.for_controller(self.controller).run()
+        try:
+            ok = GazeCalibrationDialog.for_controller(self.controller, palette=self.palette).run()
+        finally:
+            self._calibrating = False
+        if not self.enabled:
+            return  # gaze was switched off while calibrating
         self.overlay.show()
         self.preview.show()
         if not ok:
-            self.status.emit("Gaze: calibration cancelled")
-            self._alert("Calibration cancelled. Press Recalibrate gaze to try again")
+            self.problem.emit(CALIBRATION_CANCELLED)  # back to the settings page with a message
             return
         self.metrics.start_task(_now_ms())
-        self.status.emit(
-            f"Gaze ready: accuracy ±{self.controller.error_px:.0f} px, dwell {self.controller.dwell_ms} ms. "
-            "Look at a button until the ring fills, or slow-blink."
-        )
+        if self.controller.source == "head":
+            self.status.emit("Ready. Turn your head toward an option and hold still, or slow-blink to choose.")
+        else:
+            self.status.emit(
+                f"Ready (accuracy about {self.controller.error_px:.0f} px). "
+                "Look at an option until the ring fills, or slow-blink to choose."
+            )
 
     def _alert(self, text: str) -> None:
         self.overlay.set_message(text)
@@ -148,8 +165,10 @@ class GazeMode(QObject):
             self.preview.show_error(None)
 
     def _on_status(self, text: str) -> None:
-        self.status.emit(f"Gaze: {text}")
-        if _is_problem(text):
+        self.status.emit(text)
+        if text.startswith(("Camera", "Gaze tracking stopped")):
+            self.problem.emit(text)  # can't continue without a camera
+        elif _is_problem(text):
             self.overlay.set_message(text)
             self.preview.show_error(text)
         elif text == STATUS_TRACKING:
@@ -175,4 +194,4 @@ class GazeMode(QObject):
             self.metrics.end_task(_now_ms())
             s = self.metrics.summary()
             seconds = (s["task_ms"] or 0) / 1000
-            self.status.emit(f"Gaze: booked in {seconds:.0f} s using {s['selections']} gaze selections")
+            self.status.emit(f"Booked in {seconds:.0f} s using {s['selections']} selections.")

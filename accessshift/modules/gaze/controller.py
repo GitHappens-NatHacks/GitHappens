@@ -18,9 +18,9 @@ from accessshift.modules.gaze.dwell import DwellSelector, adaptive_dwell_ms
 from accessshift.modules.gaze.worker import GazeWorker
 from accessshift.modules.steadyhand.filter import OneEuroFilter
 
-STATUS_NO_FACE = "Face not found — look at the camera"
+STATUS_NO_FACE = "Face not found. Look at the camera."
 STATUS_UNCALIBRATED = "Calibrate first"
-STATUS_TRACKING = "Gaze tracking"
+STATUS_TRACKING = "Tracking"
 
 # Keep the current target unless another button is at least this much nearer (stops flicker).
 SNAP_HYSTERESIS_PX = 80
@@ -127,6 +127,9 @@ class GazeController(QObject):
         self.source = "head"
         self.calibration = GazeCalibration()
         self.error_px: float | None = None
+        self.last_blink_ears: list[float] = []
+        self.blink_select = True  # a slow blink confirms (user setting)
+        self._user_dwell_ms: int | None = None  # user setting; None = automatic from accuracy
         self.paused = False  # True while calibrating: report samples, click nothing
         self._dwell = DwellSelector(grace_ms=DWELL_GRACE_MS)
         self._new_filters()
@@ -166,14 +169,24 @@ class GazeController(QObject):
         radius = HEAD_REST_FRACTION * min(r.width(), r.height())
         return math.hypot(pt.x() - r.center().x(), pt.y() - r.center().y()) < radius
 
+    def set_dwell_ms(self, ms: int | None) -> None:
+        """Use the person's chosen dwell time (None = automatic from calibration accuracy)."""
+        self._user_dwell_ms = ms
+        if ms is not None:
+            self._dwell.dwell_ms = ms
+        elif self.error_px is not None:
+            self._dwell.dwell_ms = adaptive_dwell_ms(self.error_px)
+
     def set_calibration(self, calibration: GazeCalibration, error_px: float) -> None:
         self.calibration = calibration
         self.error_px = error_px
         self._snap_px = error_px
-        self._dwell = DwellSelector(adaptive_dwell_ms(error_px), grace_ms=DWELL_GRACE_MS)
+        dwell_ms = self._user_dwell_ms if self._user_dwell_ms is not None else adaptive_dwell_ms(error_px)
+        self._dwell = DwellSelector(dwell_ms, grace_ms=DWELL_GRACE_MS)
 
     def calibrate_blink(self, ears: list[float]) -> None:
         """Tune the blink threshold to this user's open-eye EAR (from calibration)."""
+        self.last_blink_ears = list(ears)
         tracker = getattr(self._worker, "tracker", None)
         if tracker is not None:
             tracker.blink.calibrate_open(ears)
@@ -235,11 +248,16 @@ class GazeController(QObject):
 
         closed_ms = sample.get("closed_ms", 0)
         self._update_exit(closed_ms)
-        if closed_ms > 0:
+        # While the eyes are shut the dwell pauses, so closing your eyes (a blink, or to exit)
+        # never clicks anything. Eye features are garbage then, so eyes mode also freezes the
+        # dot; head pointing stays valid, so in head mode the dot keeps following your head.
+        eyes_closed = closed_ms > 0
+        if eyes_closed:
             if self._closed_at is None:
                 self._closed_at = sample["ts_ms"]
-            return  # eyes shut: features are garbage, so freeze the dot and the dwell
-        if self._closed_at is not None:
+            if self.source == "eyes":
+                return
+        elif self._closed_at is not None:
             self._dwell.hold(sample["ts_ms"] - self._closed_at)  # closed time doesn't count
             self._closed_at = None
 
@@ -254,11 +272,14 @@ class GazeController(QObject):
         self.point.emit(pt)
 
         picked = None if self._resting(pt) else self._pick_button(pt)
+        if eyes_closed:  # head mode: move the dot, keep the highlight, but don't count or click
+            return
         state = self._dwell.update(picked, ts)
         button = state.target  # may stay on the previous button during a brief glance away
         self._set_target(button)
         self.dwell.emit(state.progress)
-        if button is not None and (state.fired or sample.get("blink")):
+        blinked = self.blink_select and sample.get("blink")
+        if button is not None and (state.fired or blinked):
             self._dwell.consume()  # not reset(): staring after a click must not click again
             button.click()
             self.selected.emit(button)
