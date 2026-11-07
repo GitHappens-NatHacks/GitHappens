@@ -44,3 +44,13 @@ def test_calibrate_open_ignores_empty():
 def test_eye_aspect_ratio_unchanged():
     eye = [(0, 0), (3, -1), (7, -1), (10, 0), (7, 1), (3, 1)]
     assert eye_aspect_ratio(eye) == pytest.approx(0.2)
+
+
+def test_closed_ms_reports_current_closure():
+    d = BlinkDetector()
+    d.update(0.3, 0)
+    assert d.closed_ms(0) == 0
+    d.update(0.1, 100)
+    assert d.closed_ms(2600) == 2500
+    d.update(0.3, 2700)
+    assert d.closed_ms(2700) == 0

@@ -34,8 +34,12 @@ def _now_ms() -> int:
     return int(time.monotonic() * 1000)
 
 
+EXIT_HINT = "Keep your eyes closed to exit gaze control"
+
+
 class GazeMode(QObject):
     status = Signal(str)
+    exit_requested = Signal()  # user held their eyes closed: the window should turn gaze off
 
     def __init__(
         self,
@@ -63,6 +67,8 @@ class GazeMode(QObject):
         self.controller.raw_sample.connect(self.preview.on_sample)
         self.controller.status.connect(self._on_status)
         self.controller.selected.connect(self._on_selected)
+        self.controller.exit_progress.connect(self._on_exit_progress)
+        self.controller.exit_requested.connect(self.exit_requested)
 
     @property
     def enabled(self) -> bool:
@@ -132,6 +138,13 @@ class GazeMode(QObject):
         elif text == STATUS_TRACKING:
             self.overlay.set_message(None)
             self.preview.show_error(None)
+
+    def _on_exit_progress(self, progress: float) -> None:
+        if progress > 0:
+            seconds_left = max(1, round(1.5 * (1 - progress) + 0.49))
+            self.overlay.set_message(f"{EXIT_HINT}… {seconds_left}")
+        elif self.overlay.message().startswith(EXIT_HINT):
+            self.overlay.set_message(None)
 
     def _on_target(self, _rect) -> None:
         button = self.controller.current_target

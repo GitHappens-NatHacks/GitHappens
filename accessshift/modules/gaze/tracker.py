@@ -38,7 +38,7 @@ class GazeTracker:
         self._mesh.close()
 
     def read(self) -> dict | None:
-        """One frame. Keys: camera_ok, face, ts_ms, frame; plus feature, ear, blink when face is True."""
+        """One frame. Keys: camera_ok, face, ts_ms, frame; plus feature, ear, blink, closed_ms when face is True."""
         if self.cap is None:
             return None
         ok, frame = self.cap.read()
@@ -67,4 +67,5 @@ class GazeTracker:
                 "blink": self.blink.update(ear, ts_ms),
             }
         )
+        payload["closed_ms"] = self.blink.closed_ms(ts_ms)  # >0 while eyes are shut
         return payload

@@ -107,11 +107,11 @@ class MainWindow(QMainWindow):
         self.btn_recalibrate_gaze = QPushButton("Recalibrate gaze")
         self.gaze_status = QLabel()
         self.gaze_status.setWordWrap(True)
-        self.btn_exit_gaze = QPushButton("✕  Exit gaze control")
+        self.btn_exit_gaze = QPushButton("✕  Exit gaze control\n(or close your eyes for 3 s)")
         self.btn_exit_gaze.clicked.connect(lambda: self.chk_gaze.setChecked(False))
-        bar.addWidget(self.btn_recalibrate_gaze)
+        bar.addWidget(self.btn_recalibrate_gaze, 1)
         bar.addWidget(self.gaze_status, 1)
-        bar.addWidget(self.btn_exit_gaze)
+        bar.addWidget(self.btn_exit_gaze, 2)  # wide target: easy to hit with gaze
         self.gaze_bar.hide()
 
         self.portal = PortalView(repo_root / "assets" / "portal")
@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         self.gaze = GazeMode(self)  # GazeControl: camera, gaze cursor, calibration, metrics
         self.gaze.status.connect(self.status.setText)
         self.gaze.status.connect(self.gaze_status.setText)
+        self.gaze.exit_requested.connect(lambda: self.chk_gaze.setChecked(False))
         self.btn_recalibrate_gaze.clicked.connect(self.gaze.recalibrate)
 
         self.engine.modules_changed.connect(self._sync_module_checks)

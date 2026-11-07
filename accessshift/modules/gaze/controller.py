@@ -23,7 +23,19 @@ STATUS_UNCALIBRATED = "Calibrate first"
 STATUS_TRACKING = "Gaze tracking"
 
 # Keep the current target unless another button is at least this much nearer (stops flicker).
-SNAP_HYSTERESIS_PX = 40
+SNAP_HYSTERESIS_PX = 80
+
+# Gaze smoothing (One-Euro). Low beta: webcam jitter looks like fast motion, so a high
+# beta would switch smoothing off. Measured: 18 px -> 8 px jitter, 300 px move in ~0.26 s.
+SMOOTH_MIN_CUTOFF = 0.3
+SMOOTH_BETA = 0.0005
+
+DWELL_GRACE_MS = 300  # a glance away shorter than this keeps the dwell ring going
+
+# Close your eyes this long to exit gaze control (no aiming needed). The countdown
+# starts after a select-blink's maximum (1.5 s), so blinking never starts it.
+EXIT_CLOSE_MS = 3000
+EXIT_COUNTDOWN_FROM_MS = 1500
 
 # Windows with this property set (the gaze cursor overlay) are invisible to gaze clicks.
 GAZE_IGNORE = "gaze_ignore"
@@ -84,6 +96,8 @@ class GazeController(QObject):
     status = Signal(str)
     raw_sample = Signal(dict)  # every tracker sample (used by the calibration dialog)
     target = Signal(QRect)  # global rect of the targeted button, or an empty QRect
+    exit_progress = Signal(float)  # 0..1 while eyes are held closed to exit
+    exit_requested = Signal()  # eyes held closed for EXIT_CLOSE_MS
 
     def __init__(
         self,
@@ -104,9 +118,12 @@ class GazeController(QObject):
         self.calibration = GazeCalibration()
         self.error_px: float | None = None
         self.paused = False  # True while calibrating: report samples, click nothing
-        self._dwell = DwellSelector()
-        self._fx = OneEuroFilter(min_cutoff=1.0, beta=0.01)
-        self._fy = OneEuroFilter(min_cutoff=1.0, beta=0.01)
+        self._dwell = DwellSelector(grace_ms=DWELL_GRACE_MS)
+        self._fx = OneEuroFilter(min_cutoff=SMOOTH_MIN_CUTOFF, beta=SMOOTH_BETA)
+        self._fy = OneEuroFilter(min_cutoff=SMOOTH_MIN_CUTOFF, beta=SMOOTH_BETA)
+        self._exit_shown = 0.0
+        self._exit_fired = False
+        self._closed_at: int | None = None  # when the eyes closed (dwell is paused meanwhile)
         self._last_status: str | None = None
         self._thread: QThread | None = None
         self._worker: GazeWorker | None = None
@@ -120,7 +137,7 @@ class GazeController(QObject):
         self.calibration = calibration
         self.error_px = error_px
         self._snap_px = error_px
-        self._dwell = DwellSelector(adaptive_dwell_ms(error_px))
+        self._dwell = DwellSelector(adaptive_dwell_ms(error_px), grace_ms=DWELL_GRACE_MS)
 
     def calibrate_blink(self, ears: list[float]) -> None:
         """Tune the blink threshold to this user's open-eye EAR (from calibration)."""
@@ -148,6 +165,17 @@ class GazeController(QObject):
             self._target = button
             self.target.emit(_global_rect(button) if button is not None else QRect())
 
+    def _update_exit(self, closed_ms: int) -> None:
+        if closed_ms == 0:
+            self._exit_fired = False
+        progress = min(1.0, max(0.0, (closed_ms - EXIT_COUNTDOWN_FROM_MS) / (EXIT_CLOSE_MS - EXIT_COUNTDOWN_FROM_MS)))
+        if progress != self._exit_shown:
+            self._exit_shown = progress
+            self.exit_progress.emit(progress)
+        if closed_ms >= EXIT_CLOSE_MS and not self._exit_fired:
+            self._exit_fired = True
+            self.exit_requested.emit()
+
     def _set_status(self, text: str) -> None:
         if text != self._last_status:
             self._last_status = text
@@ -162,11 +190,23 @@ class GazeController(QObject):
             return
         if not sample.get("face"):
             self._set_status(STATUS_NO_FACE)
-            self._dwell.update(None, sample.get("ts_ms", 0))
+            self._dwell.reset()
             self.dwell.emit(0.0)
             self._set_target(None)
+            self._update_exit(0)
+            self._closed_at = None
             return
         self._set_status(STATUS_TRACKING)
+
+        closed_ms = sample.get("closed_ms", 0)
+        self._update_exit(closed_ms)
+        if closed_ms > 0:
+            if self._closed_at is None:
+                self._closed_at = sample["ts_ms"]
+            return  # eyes shut: features are garbage, so freeze the dot and the dwell
+        if self._closed_at is not None:
+            self._dwell.hold(sample["ts_ms"] - self._closed_at)  # closed time doesn't count
+            self._closed_at = None
 
         ts = sample["ts_ms"]
         x, y = self.calibration.map(sample["feature"])
@@ -178,9 +218,9 @@ class GazeController(QObject):
         )
         self.point.emit(pt)
 
-        button = self._pick_button(pt)
+        state = self._dwell.update(self._pick_button(pt), ts)
+        button = state.target  # may stay on the previous button during a brief glance away
         self._set_target(button)
-        state = self._dwell.update(button, ts)
         self.dwell.emit(state.progress)
         if button is not None and (state.fired or sample.get("blink")):
             self._dwell.consume()  # not reset(): staring after a click must not click again

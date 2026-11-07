@@ -193,3 +193,15 @@ def test_gaze_mode_maximizes_window_and_restores_state(qapp):
     gm.set_enabled(False)
     assert not (w.windowState() & Qt.WindowMaximized)
     w.close()
+
+
+def test_eyes_closed_exit_shows_countdown_then_requests_exit(qapp):
+    gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), calibrate_on_start=False)
+    exits = []
+    gm.exit_requested.connect(lambda: exits.append(1))
+    gm.controller.exit_progress.emit(0.4)
+    assert "eyes closed to exit" in gm.overlay.message().lower()
+    gm.controller.exit_progress.emit(0.0)
+    assert gm.overlay.message() == ""
+    gm.controller.exit_requested.emit()
+    assert exits == [1]

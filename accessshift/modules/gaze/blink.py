@@ -38,6 +38,10 @@ class BlinkDetector:
         if ears:
             self.ear_threshold = 0.75 * median(ears)
 
+    def closed_ms(self, ts_ms: int) -> int:
+        """How long the eyes have been closed right now (0 if open)."""
+        return 0 if self._closed_since is None else max(0, ts_ms - self._closed_since)
+
     def update(self, ear: float, ts_ms: int) -> bool:
         """Return True on the frame the eyes reopen after a deliberate blink."""
         if ear < self.ear_threshold:
