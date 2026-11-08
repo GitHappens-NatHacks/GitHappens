@@ -75,12 +75,14 @@ class DwellSelector:
         return DwellState(target, progress, False)
 
 
-def adaptive_dwell_ms(error_px: float) -> int:
-    """Longer dwell when tracking is less accurate.
+# Same dwell for every button. Accuracy still drives snap radius, not click timing.
+UNIFORM_DWELL_MS = 3000
 
-    Floor is 2000 ms so accidental selections are harder when the cursor jitters.
-    """
-    return max(2000, min(3500, round(2000 + 3 * max(0.0, float(error_px)))))
+
+def adaptive_dwell_ms(error_px: float) -> int:
+    """Return the uniform dwell. error_px kept for call-site compatibility."""
+    del error_px
+    return UNIFORM_DWELL_MS
 
 
 def min_target_px(error_px: float) -> int:

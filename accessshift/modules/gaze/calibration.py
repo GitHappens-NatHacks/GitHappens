@@ -121,11 +121,11 @@ class DotCollector:
         self,
         points: list[Point],
         size: tuple[float, float],
-        settle_ms: int = 450,
-        collect_ms: int = 1000,
+        settle_ms: int = 800,
+        collect_ms: int = 1600,
         min_samples: int = 5,
         max_spread: float = 0.04,
-        max_retries: int = 2,
+        max_retries: int = 3,
         force_min_samples: int = 3,
     ):
         self.points, self.size = points, size

@@ -24,8 +24,9 @@ LEFT_LID_MID = (159, 145)  # top, bottom
 RIGHT_LID_MID = (386, 374)
 
 # Stretch vertical so calibration can map top/bottom dots instead of parking on mid-row.
-_VERTICAL_GAIN = 2.5
-_LID_BLEND = 0.45
+# Webcam iris travel up/down is tiny; gain must be high or top/bottom UI stays unreachable.
+_VERTICAL_GAIN = 4.0
+_LID_BLEND = 0.6
 
 
 def axis_ratio(a: Point, b: Point, p: Point) -> float:

@@ -68,20 +68,29 @@ def test_recalibrate_uses_head_steps_and_switching_to_eyes_asks_for_eye_calibrat
     from accessshift.ui import gaze_calibration_dialog as dialog_mod
 
     runs = []
+    choices = iter(["head", "eyes", "eyes"])
+
+    def fake_choose(current="head", parent=None):
+        return next(choices)
 
     def fake_run(self):
         runs.append(len(self._points))  # 5 head poses or 9 eye dots
         return False
 
+    monkeypatch.setattr(dialog_mod.GazeCalibrationDialog, "choose_source", staticmethod(fake_choose))
     monkeypatch.setattr(dialog_mod.GazeCalibrationDialog, "run", fake_run)
     gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), tracker_factory=FakeTracker, calibrate_on_start=True)
     gm.set_enabled(True)
-    gm.recalibrate()
-    gm.toggle_source()  # -> eyes: should prompt eye calibration
     end = time.monotonic() + 2
-    while len(runs) < 3 and time.monotonic() < end:  # first run is the automatic one on enable
+    while len(runs) < 1 and time.monotonic() < end:  # auto-calibrate on enable
+        QCoreApplication.processEvents()
+        time.sleep(0.01)
+    gm.recalibrate()
+    gm.toggle_source()  # -> eyes, then chooser + eye calibration
+    end = time.monotonic() + 2
+    while len(runs) < 3 and time.monotonic() < end:
         QCoreApplication.processEvents()
         time.sleep(0.01)
     gm.set_enabled(False)
     assert gm.controller.source == "eyes"
-    assert 5 in runs and runs[-1] == 9  # head recalibration, then eye calibration after the switch
+    assert 5 in runs and 9 in runs

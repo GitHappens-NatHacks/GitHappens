@@ -30,7 +30,7 @@ def test_calibration_dialog_fits_and_unpauses(qapp):
     assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
     assert ctrl.calibration.is_fitted and not ctrl.paused
     assert ctrl.error_px < 5
-    assert t < 25_000  # 13 dots x 1.5 s, no retries for steady eyes
+    assert t < 45_000  # 13 dots x ~2.4 s, no retries for steady eyes
 
 
 def test_calibration_dialog_escape_cancels(qapp):
@@ -122,7 +122,7 @@ HEAD_POSES_FEATURES = {
 }
 
 
-def run_head_dialog(ctrl, poses, max_ms=30_000):
+def run_head_dialog(ctrl, poses, max_ms=60_000):
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
     dlg.begin()
     t, seen = 0, []
@@ -143,7 +143,10 @@ def test_head_calibration_guides_center_left_right_up_down(qapp):
     up_y = ctrl.calibration.map(HEAD_POSES_FEATURES["up"])[1]
     right_x = ctrl.calibration.map(HEAD_POSES_FEATURES["right"])[0]
     assert up_y < SCREEN.height() / 2 and right_x > SCREEN.width() / 2  # up is up, right is right
-    assert t < 12_000
+    # 5 poses x ~2.7 s settle+collect
+    assert t < 20_000
+    # Accuracy is measured from the fitted map, not a fixed ±200 px placeholder.
+    assert ctrl.error_px is not None and ctrl.error_px < 5
 
 
 def test_head_calibration_prompts_name_each_direction(qapp):
@@ -158,10 +161,10 @@ def test_head_calibration_prompts_name_each_direction(qapp):
 def test_head_calibration_retries_when_user_barely_moves(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     tiny = dict(HEAD_POSES_FEATURES, up=(0.0, 0.598), down=(0.0, 0.602))
-    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=12_000)
+    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=25_000)
     assert dlg.isVisible() and not ctrl.calibration.is_fitted
     assert seen[:6] == ["center", "left", "right", "up", "down", "center"]  # started again
-    assert "tilt" in dlg.message().lower()
+    assert "up" in dlg.message().lower() or "down" in dlg.message().lower()
     dlg.reject()
 
 
@@ -169,7 +172,26 @@ def test_eyes_calibration_keeps_nine_dots_and_check(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     ctrl.set_source("eyes")
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
-    assert "look" in dlg.instruction.lower()
+    assert "eyes" in dlg.instruction.lower() and "orange" in dlg.instruction.lower()
+    assert dlg._max_spread >= 0.05  # eyes must tolerate normal webcam jitter
     dlg.begin()
     assert len(dlg.current_points()) == 9
     dlg.reject()
+
+
+def test_choose_source_head_and_eyes_buttons(qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog, QPushButton
+
+    seen = []
+
+    def tracking_exec(self):
+        for btn in self.findChildren(QPushButton):
+            if btn.text() == "Eye pointing":
+                seen.append(btn.text())
+                btn.click()
+                return QDialog.DialogCode.Accepted
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", tracking_exec)
+    assert GazeCalibrationDialog.choose_source("head") == "eyes"
+    assert seen == ["Eye pointing"]

@@ -1,11 +1,13 @@
-"""Webcam gaze tracking with MediaPipe Face Mesh.
+"""Webcam gaze tracking.
 
-read() returns raw eye-relative features; mapping them to screen pixels is done
-by GazeCalibration (calibration.py), not here.
+Default backend is MediaPipe Face Mesh. Optional EyeTrax is used for eye
+features only (hybrid). Head pointing always uses the original MediaPipe
+nose-to-eye-corner signal.
 """
 
 from __future__ import annotations
 
+import os
 import time
 
 import cv2
@@ -14,8 +16,14 @@ import mediapipe as mp
 from accessshift.modules.gaze.blink import BlinkDetector, eye_aspect_ratio
 from accessshift.modules.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
 
+BACKENDS = ("auto", "mediapipe", "eyetrax", "hybrid")
+
 
 class GazeTracker:
+    """MediaPipe Face Mesh tracker (reliable fallback). Head and eyes."""
+
+    backend_name = "mediapipe"
+
     def __init__(self, camera_index: int = 0):
         self.camera_index = camera_index
         self.cap = None
@@ -44,12 +52,18 @@ class GazeTracker:
         ok, frame = self.cap.read()
         ts_ms = int(time.monotonic() * 1000)
         if not ok:
-            return {"camera_ok": False, "face": False, "ts_ms": ts_ms}
+            return {"camera_ok": False, "face": False, "ts_ms": ts_ms, "backend": self.backend_name}
 
         frame = cv2.flip(frame, 1)
         h, w = frame.shape[:2]
         result = self._mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        payload = {"camera_ok": True, "face": False, "ts_ms": ts_ms, "frame": frame}
+        payload = {
+            "camera_ok": True,
+            "face": False,
+            "ts_ms": ts_ms,
+            "frame": frame,
+            "backend": self.backend_name,
+        }
 
         if not result.multi_face_landmarks:
             return payload
@@ -70,3 +84,36 @@ class GazeTracker:
         )
         payload["closed_ms"] = self.blink.closed_ms(ts_ms)  # >0 while eyes are shut
         return payload
+
+
+def resolve_backend(name: str | None = None) -> str:
+    raw = (name or os.getenv("GAZE_BACKEND", "auto")).strip().lower()
+    if raw not in BACKENDS:
+        raise ValueError(f"GAZE_BACKEND must be one of {BACKENDS}, got {raw!r}")
+    return raw
+
+
+def create_tracker(camera_index: int = 0, backend: str | None = None):
+    """Build a tracker.
+
+    Head pointing always uses MediaPipe (original method).
+    auto / eyetrax / hybrid: MediaPipe head + EyeTrax eye features when available.
+    mediapipe: MediaPipe for both.
+    """
+    choice = resolve_backend(backend)
+
+    if choice == "mediapipe":
+        return GazeTracker(camera_index)
+
+    # auto, eyetrax, and hybrid all keep MediaPipe head; EyeTrax only upgrades eyes.
+    try:
+        from accessshift.modules.gaze.hybrid_tracker import HybridGazeTracker
+
+        return HybridGazeTracker(camera_index)
+    except Exception as exc:
+        if choice == "eyetrax":
+            raise RuntimeError(
+                "EyeTrax eye tracking requested but could not start "
+                f"({exc}). Install eyetrax or set GAZE_BACKEND=mediapipe."
+            ) from exc
+        return GazeTracker(camera_index)

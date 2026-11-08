@@ -8,15 +8,23 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_als_profile_turns_gaze_on_and_close_turns_it_off(qapp, monkeypatch):
+    from accessshift.ui.control_center_settings import AccessibilitySettings
+
     real_init = gaze_mode.GazeMode.__init__
 
     def fake_camera_init(self, parent=None, **kw):
         real_init(self, parent, tracker_factory=FakeTracker, calibrate_on_start=False)
 
     monkeypatch.setattr(gaze_mode.GazeMode, "__init__", fake_camera_init)
+    # Ignore leftover QSettings from prior app runs (gaze may already be on).
+    monkeypatch.setattr(
+        "accessshift.ui.control_center.load_settings",
+        lambda store=None: AccessibilitySettings(profile="parkinsons"),
+    )
     w = MainWindow(ROOT)
-    assert not w.gaze.enabled  # starts on the Parkinson's profile
-    w.engine.set_profile("als")
+    w._apply_profile("parkinsons")
+    assert not w.gaze.enabled
+    w._apply_profile("als")
     assert w.gaze.enabled and w.chk_gaze.isChecked()
     w.chk_gaze.setChecked(False)
     assert not w.gaze.enabled
@@ -88,5 +96,7 @@ def test_gaze_mode_shows_grid_and_head_eyes_switch(qapp, monkeypatch):
     assert w.gaze.controller.source == "eyes" and "Eyes" in w.btn_gaze_source.text()
 
     w.chk_gaze.setChecked(False)
-    assert w.portal.isVisible() and not w.gaze_grid.isVisible()
+    # Back to purple Control Center: focus host (portal/grid) is hidden.
+    assert w.sidebar.isVisible() and w.workspace.isVisible()
+    assert not w.gaze_grid.isVisible() and not w.gaze_bar.isVisible()
     w.close()

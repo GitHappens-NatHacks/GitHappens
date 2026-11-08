@@ -314,6 +314,7 @@ class MainWindow(QMainWindow):
         side = QFrame()
         side.setObjectName('sidebar')
         side.setFixedWidth(246)
+        self.sidebar = side
         side_l = QVBoxLayout(side)
         side_l.setContentsMargins(18, 28, 18, 20)
         side_l.setSpacing(5)
@@ -361,6 +362,7 @@ class MainWindow(QMainWindow):
         outer.addWidget(side)
 
         right = QWidget()
+        self.workspace = right
         right_l = QVBoxLayout(right)
         right_l.setContentsMargins(0, 0, 0, 0)
         right_l.setSpacing(0)
@@ -450,7 +452,7 @@ class MainWindow(QMainWindow):
         grid.setSpacing(13)
         self.overview_module_labels = {}
         for i, (key, title, desc) in enumerate([
-            ('gaze_control', 'Eye & blink control', 'Gaze tracking · integration pending'),
+            ('gaze_control', 'Eye & blink control', 'Head or eye pointing · webcam ready'),
             ('steady_hand', 'SteadyHand', 'Mouse smoothing · in-app test ready'),
             ('smart_interface', 'SmartInterface', 'Visual adaptation in the healthcare demo'),
             ('predictive_speech', 'Communication', 'Text-to-speech · backend dependent'),
@@ -513,27 +515,33 @@ class MainWindow(QMainWindow):
         return page
 
     def _page_gaze(self):
-        page, lay = self._page('HANDS-FREE NAVIGATION', 'Eye & blink control',
-                               'Prepare gaze and blink preferences. Live webcam calibration connects through Adnan’s module.')
-        row = PreferenceRow('Use eye navigation', 'Allow gaze tracking as an interaction method.')
+        page, lay = self._page(
+            'HANDS-FREE NAVIGATION',
+            'Eye & blink control',
+            'Turn on head or eye pointing, then calibrate with the webcam. Default pointing source is head.',
+        )
+        row = PreferenceRow('Use eye / head navigation', 'Start webcam pointing and open the hands-free booking focus layout.')
         row.changed.connect(lambda v: self._change_module('gaze_control', v))
         self.gaze_toggle = row
         lay.addWidget(row)
         gaze_box, gb = card()
         gb.addWidget(label('How should selection work?', 'sectionTitle'))
-        self.blink_row = PreferenceRow('Blink to select', 'Use a deliberate blink as confirmation.')
+        self.blink_row = PreferenceRow('Blink to select', 'Use a deliberate blink as confirmation after dwell has started.')
         self.blink_row.changed.connect(lambda v: self._change_option('blink_select', v))
         gb.addWidget(self.blink_row)
         gb.addWidget(label('Dwell time', 'cardTitle'))
         gb.addWidget(label('How long to look at a target before it becomes selected.', 'bodyText'))
-        self.dwell_slider, dwell_row = self._slider(2000, 3500, 100, 'gaze_dwell_ms', 'ms')
+        self.dwell_slider, dwell_row = self._slider(2800, 4200, 100, 'gaze_dwell_ms', 'ms')
         gb.addLayout(dwell_row)
         lay.addWidget(gaze_box)
         cal, cl = card(name='innerCard')
         cl.addWidget(label('Camera calibration', 'sectionTitle'))
-        cl.addWidget(label('A future gaze worker will provide webcam preview, calibration points, '
-                           'and gaze accuracy. The settings here are ready for that integration.', 'bodyText', True))
-        cal_btn = button('Open gaze calibration (integration pending)', 'secondaryButton')
+        cl.addWidget(label(
+            'Enable navigation above, then calibrate. Head mode shows guided poses; eyes mode uses on-screen dots.',
+            'bodyText',
+            True,
+        ))
+        cal_btn = button('Open gaze calibration', 'primaryButton')
         cal_btn.clicked.connect(self._request_calibration)
         cl.addWidget(cal_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         lay.addWidget(cal)

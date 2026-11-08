@@ -17,10 +17,10 @@ def identity_calibration():
     return c
 
 
-def sample(t, feature=(100, 100), blink=False, face=True):
+def sample(t, feature=(100, 100), blink=False, face=True, ear=0.3):
     s = {"camera_ok": True, "face": face, "ts_ms": t}
     if face:
-        s.update({"feature": feature, "head": feature, "blink": blink, "ear": 0.3})
+        s.update({"feature": feature, "head": feature, "blink": blink, "ear": ear})
     return s
 
 
@@ -41,7 +41,8 @@ def button(qapp):
 def ctrl(qapp, button):
     target = {"widget": button}
     c = GazeController(hit_test=lambda pt: target["widget"], screen_rect=SCREEN)
-    c.set_calibration(identity_calibration(), error_px=50)  # dwell = 2150 ms
+    c.set_source("eyes")
+    c.set_calibration(identity_calibration(), error_px=50)  # uniform 3000 ms dwell
     c.hit = target
     return c
 
@@ -51,23 +52,32 @@ def feed(ctrl, start, end, step=50, **kw):
         ctrl.process(sample(t, **kw))
 
 
-def test_dwell_ms_follows_accuracy(ctrl):
-    assert ctrl.dwell_ms == 2150
+def test_dwell_ms_is_uniform(ctrl):
+    assert ctrl.dwell_ms == 3000
+    ctrl.set_calibration(identity_calibration(), error_px=500)
+    assert ctrl.dwell_ms == 3000
 
 
 def test_dwell_clicks_button(ctrl, button):
-    feed(ctrl, 0, 2200)
+    feed(ctrl, 0, 3000)
     assert button.clicks == 1
 
 
-def test_blink_clicks_immediately(ctrl, button):
+def test_blink_ignored_before_ring_starts(ctrl, button):
     ctrl.process(sample(0, blink=True))
+    assert button.clicks == 0
+
+
+def test_blink_clicks_after_ring_starts(ctrl, button):
+    feed(ctrl, 0, 700)  # ~23% of 3000 ms
+    ctrl.process(sample(750, blink=True))
     assert button.clicks == 1
 
 
 def test_blink_then_stare_clicks_once(ctrl, button):
-    ctrl.process(sample(0, blink=True))
-    feed(ctrl, 50, 3000)
+    feed(ctrl, 0, 700)
+    ctrl.process(sample(750, blink=True))
+    feed(ctrl, 800, 3000)
     assert button.clicks == 1
 
 
@@ -89,7 +99,7 @@ def test_only_enabled_buttons_clicked(ctrl, button, qapp):
 def test_child_of_button_resolves_to_button(ctrl, button):
     child = QWidget(button)
     ctrl.hit["widget"] = child
-    feed(ctrl, 0, 2200)
+    feed(ctrl, 0, 3000)
     assert button.clicks == 1
 
 
@@ -198,15 +208,19 @@ def snapping_ctrl(buttons, error_px=150):
 def test_snaps_to_nearest_button_within_accuracy(two_buttons):
     a, b = two_buttons
     c = snapping_ctrl(two_buttons)
-    # error 150 -> dwell 2450 ms
-    feed(c, 0, 2600, feature=(250, 230))  # 66 px below A, 170 px above B
+    c.set_source("eyes")
+    c.set_calibration(identity_calibration(), error_px=150)
+    # 66 px below A, 170 px above B
+    feed(c, 0, 3200, feature=(250, 230))
     assert a.clicks == 1 and b.clicks == 0
 
 
 def test_no_snap_beyond_accuracy(two_buttons):
     a, b = two_buttons
     c = snapping_ctrl(two_buttons, error_px=100)
-    feed(c, 0, 2600, feature=(900, 700))
+    c.set_source("eyes")
+    c.set_calibration(identity_calibration(), error_px=100)
+    feed(c, 0, 3200, feature=(900, 700))
     assert a.clicks == 0 and b.clicks == 0
 
 
@@ -225,8 +239,9 @@ def test_target_is_sticky_against_small_jitter(two_buttons):
 def test_exact_hit_still_wins(qapp, button):
     other = make_button(qapp, 0, 0, text="other")
     c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN, buttons=lambda: [other])
-    c.set_calibration(identity_calibration(), error_px=500)  # dwell 3500 ms
-    feed(c, 0, 3600, feature=(5, 5))
+    c.set_source("eyes")
+    c.set_calibration(identity_calibration(), error_px=500)
+    feed(c, 0, 3200, feature=(5, 5))
     assert button.clicks == 1 and other.clicks == 0
     other.close()
 
@@ -270,24 +285,24 @@ def test_eyes_closed_freezes_point_and_dwell(ctrl, button):
     assert len(points) == n and button.clicks == 0
 
 
-def test_eyes_closed_three_seconds_requests_exit(ctrl, button):
+def test_eyes_closed_five_seconds_requests_exit(ctrl, button):
     exits, progress = [], []
     ctrl.exit_requested.connect(lambda: exits.append(1))
     ctrl.exit_progress.connect(progress.append)
-    for t in range(0, 3600, 100):
-        ctrl.process(sample(t) | {"closed_ms": t})
+    for t in range(0, 5600, 100):
+        ctrl.process(sample(t) | {"closed_ms": t, "ear": 0.05})
     assert exits == [1]  # once per closure
     assert progress and max(progress) == 1.0
-    ctrl.process(sample(3700))  # eyes open again
+    ctrl.process(sample(5700, ear=0.3))
     assert progress[-1] == 0.0 and button.clicks == 0
 
 
 def test_short_closure_does_not_exit(ctrl):
     exits = []
     ctrl.exit_requested.connect(lambda: exits.append(1))
-    for t in range(0, 1400, 100):
-        ctrl.process(sample(t) | {"closed_ms": t})
-    ctrl.process(sample(1500))
+    for t in range(0, 2000, 100):
+        ctrl.process(sample(t) | {"closed_ms": t, "ear": 0.05})
+    ctrl.process(sample(2100, ear=0.3))
     assert exits == []
 
 
@@ -295,9 +310,9 @@ def test_natural_blink_pauses_dwell_without_restart_or_click(ctrl, button):
     feed(ctrl, 0, 600)
     for t in (650, 700, 750):  # 150 ms natural blink
         ctrl.process(sample(t) | {"closed_ms": t - 650 + 1})
-    feed(ctrl, 800, 2000)
+    feed(ctrl, 800, 2500)
     assert button.clicks == 0  # the 150 ms with eyes shut didn't count
-    feed(ctrl, 2050, 2400)
+    feed(ctrl, 2550, 3200)
     assert button.clicks == 1  # earlier open time plus later stare reaches dwell
 
 
@@ -348,6 +363,7 @@ def test_head_rest_zone_selects_nothing_until_you_turn(qapp, button):
     for t in range(0, 4000, 33):
         c.process({"face": True, "ts_ms": t, "head": poses["center"], "feature": (0, 0), "ear": 0.3, "blink": False})
     assert button.clicks == 0  # facing forward = resting
-    for t in range(4000, 7000, 33):
+    # Head dwell is at least 3000 ms after leaving the rest zone.
+    for t in range(4000, 7500, 33):
         c.process({"face": True, "ts_ms": t, "head": (0.15, 0.6), "feature": (0, 0), "ear": 0.3, "blink": False})
     assert button.clicks == 1

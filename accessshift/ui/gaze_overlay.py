@@ -37,9 +37,15 @@ class GazeOverlay(QWidget):
         self._target = QRect()  # targeted button, local coordinates
         self._message = ""  # red alert banner at the top of the screen
 
+    def _ensure_screen_geometry(self) -> None:
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None and self.geometry() != screen.geometry():
+            self.setGeometry(screen.geometry())
+
     @Slot(QPoint)
     def set_point(self, global_point: QPoint) -> None:
-        self._point = global_point - self.geometry().topLeft()
+        self._ensure_screen_geometry()
+        self._point = self.mapFromGlobal(global_point)
         self.update()
 
     @Slot(float)
@@ -49,7 +55,13 @@ class GazeOverlay(QWidget):
 
     @Slot(QRect)
     def set_target(self, global_rect: QRect) -> None:
-        self._target = global_rect.translated(-self.geometry().topLeft()) if not global_rect.isNull() else QRect()
+        self._ensure_screen_geometry()
+        if global_rect.isNull():
+            self._target = QRect()
+        else:
+            # mapFromGlobal keeps the outline aligned when the overlay moves or DPI shifts.
+            top_left = self.mapFromGlobal(global_rect.topLeft())
+            self._target = QRect(top_left, global_rect.size())
         self.update()
 
     def set_message(self, text: str | None) -> None:
@@ -78,10 +90,10 @@ class GazeOverlay(QWidget):
             p.drawRoundedRect(banner, 14, 14)
             p.setPen(QColor(255, 255, 255))
             p.drawText(banner, Qt.AlignCenter, self._message)
-        if not self._target.isNull():  # outline the button gaze will click
+        if not self._target.isNull():  # outline the button gaze will click (match gaze_style radius)
             p.setBrush(Qt.NoBrush)
             p.setPen(QPen(QColor(255, 170, 0), 4))
-            p.drawRoundedRect(self._target.adjusted(-4, -4, 4, 4), 10, 10)
+            p.drawRoundedRect(self._target, 12, 12)
         if self._point is None:
             p.end()
             return

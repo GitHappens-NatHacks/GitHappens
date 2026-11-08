@@ -114,6 +114,8 @@ class GazeMode(QObject):
         self.overlay.show()
         self.preview.place_bottom_right()
         self.preview.show()
+        backend = os.getenv("GAZE_BACKEND", "auto")
+        self.status.emit(f"Gaze: on ({backend} tracker, pointing with {self.controller.source})")
         if self._calibrate_on_start and not self.controller.calibration.is_fitted:
             QTimer.singleShot(300, self.recalibrate)  # let the main window paint first
 
@@ -136,6 +138,16 @@ class GazeMode(QObject):
             return
         self.overlay.hide()  # keep the cursor and camera window off the calibration screen
         self.preview.hide()
+        chosen = GazeCalibrationDialog.choose_source(self.controller.source)
+        if chosen is None:
+            self.overlay.show()
+            self.preview.show()
+            self.status.emit("Gaze: calibration cancelled")
+            self._alert("Calibration cancelled. Press Recalibrate gaze to try again")
+            return
+        if chosen != self.controller.source:
+            self.controller.set_source(chosen)
+            self.source_changed.emit(chosen)
         ok = GazeCalibrationDialog.for_controller(self.controller).run()
         self.overlay.show()
         self.preview.show()
@@ -144,9 +156,11 @@ class GazeMode(QObject):
             self._alert("Calibration cancelled. Press Recalibrate gaze to try again")
             return
         self.metrics.start_task(_now_ms())
+        mode = "head" if self.controller.source == "head" else "eye"
         self.status.emit(
-            f"Gaze ready: accuracy ±{self.controller.error_px:.0f} px, dwell {self.controller.dwell_ms} ms. "
-            "Look at a button until the ring fills (about 2 seconds). Slow-blink only after the ring has started."
+            f"Gaze ready ({mode}): accuracy ±{self.controller.error_px:.0f} px, "
+            f"dwell {self.controller.dwell_ms} ms. "
+            "Hold every button for the same time until the ring fills. Slow-blink only after the ring has started."
         )
 
     def _alert(self, text: str) -> None:
