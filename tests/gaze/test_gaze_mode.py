@@ -124,3 +124,19 @@ def test_camera_failure_reports_a_problem(qapp):
     gm.problem.connect(problems.append)
     gm.controller.status.emit("Camera could not be opened. On macOS allow camera access.")
     assert problems and problems[0].startswith("Camera")
+
+
+def test_pointer_and_camera_are_raised_when_a_popup_opens(qapp, monkeypatch):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QApplication, QDialog
+
+    gm = make_mode()
+    raised = []
+    monkeypatch.setattr(gm.overlay, "raise_", lambda: raised.append("overlay"))
+    monkeypatch.setattr(gm.preview, "raise_", lambda: raised.append("preview"))
+    popup = QDialog()
+    monkeypatch.setattr(QApplication, "activeModalWidget", staticmethod(lambda: popup))
+    gm.controller.point.emit(QPoint(10, 10))
+    assert raised == ["overlay", "preview"]
+    gm.controller.point.emit(QPoint(20, 20))  # same popup: not raised again every frame
+    assert raised == ["overlay", "preview"]

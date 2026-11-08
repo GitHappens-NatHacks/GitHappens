@@ -15,7 +15,7 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QRect, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
 from accessshift.modules.gaze.controller import (
     EXIT_CLOSE_MS,
@@ -74,6 +74,7 @@ class GazeMode(QObject):
         self._face_missing = False
         self.palette = None  # app colour palette for the style and calibration screen
         self.controller = GazeController(screen_rect=screen_rect, parent=self)
+        self.controller.scope = self._window  # never target buttons in windows behind this one
         if source in ("head", "eyes"):
             self.controller.set_source(source)
         self.overlay = GazeOverlay(screen_rect)
@@ -81,6 +82,8 @@ class GazeMode(QObject):
         self.metrics = GazeMetrics()
 
         self.controller.point.connect(self.overlay.set_point)
+        self.controller.point.connect(self._keep_pointer_on_top)
+        self._popup = None  # last popup the pointer was raised above
         self.controller.dwell.connect(self.overlay.set_dwell)
         self.controller.dwell.connect(self.preview.set_dwell)
         self.controller.target.connect(self.overlay.set_target)
@@ -184,6 +187,16 @@ class GazeMode(QObject):
                 f"Ready (accuracy about {self.controller.error_px:.0f} px). "
                 "Look at an option until the ring fills. You can also blink slowly once the ring has started."
             )
+
+    def _keep_pointer_on_top(self, _point=None) -> None:
+        """A popup (e.g. "You're booked!") opens above everything; put the pointer and camera back on top."""
+        popup = QApplication.activeModalWidget()
+        if popup is self._popup:
+            return
+        self._popup = popup
+        if popup is not None:
+            self.overlay.raise_()
+            self.preview.raise_()
 
     def _alert(self, text: str) -> None:
         self.overlay.set_message(text)

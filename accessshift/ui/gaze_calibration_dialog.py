@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from statistics import median
 
-from PySide6.QtCore import QRect, Qt, QTimer
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
@@ -75,6 +75,9 @@ FG = QColor(235, 235, 235)
 ACCENT = QColor(255, 170, 0)
 WARN = QColor(200, 40, 40)
 OK = QColor(22, 128, 80)
+UI_FONT = "Helvetica Neue"  # same family as the rest of the app
+HEADER_TOP = 72  # below the macOS menu bar, which covers the top of the screen
+HEADER_HEIGHT = 250  # title, step dots, tip, status pill and the Esc line
 
 
 class GazeCalibrationDialog(QDialog):
@@ -185,8 +188,8 @@ class GazeCalibrationDialog(QDialog):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         hint = QLabel(
-            "Head pointing: turn and tilt your head toward an option.\n"
-            "Eye pointing: keep your head still and look with your eyes."
+            "Use your mouse, trackpad or keyboard to choose.\n"
+            "Head or eye pointing starts after a short calibration."
         )
         hint.setObjectName("hint")
         hint.setAlignment(Qt.AlignCenter)
@@ -424,6 +427,75 @@ class GazeCalibrationDialog(QDialog):
     def _wrapped(p: QPainter, rect: QRect, text: str, align=Qt.AlignLeft | Qt.AlignTop) -> None:
         p.drawText(rect, int(align | Qt.TextWordWrap), text)
 
+    def _muted(self) -> QColor:
+        c = QColor(self._fg)
+        c.setAlpha(170)
+        return c
+
+    def _header_top(self) -> int:
+        """Head: top of the screen. Eyes: centred in a gap between the dot rows, so it never covers a dot."""
+        if self._head:
+            return HEADER_TOP
+        band_centre = 0.3 if self._phase == "calibrate" else 0.5  # dots: rows 0.1/0.5/0.9, check rows 0.3/0.7
+        return max(HEADER_TOP, int(self.height() * band_centre) - HEADER_HEIGHT // 2)
+
+    def _paint_header(self, p: QPainter, label: str, index: int, total: int, tip: str, top: int) -> int:
+        """Centred header: step label, progress dots and the general tip. Returns its bottom y."""
+        w = self.width()
+        p.setPen(self._fg)
+        p.setFont(QFont(UI_FONT, 20, QFont.Bold))
+        p.drawText(QRect(0, top, w, 30), Qt.AlignCenter, f"{label}  ·  step {index + 1} of {total}")
+
+        gap, y = 34, top + 56
+        x0 = w // 2 - gap * (total - 1) // 2
+        for i in range(total):
+            centre_x = x0 + i * gap
+            if i < index:  # done
+                p.setPen(Qt.NoPen)
+                p.setBrush(self._accent)
+                p.drawEllipse(QPoint(centre_x, y), 8, 8)
+            elif i == index:  # now
+                p.setPen(QPen(self._accent, 3))
+                p.setBrush(self._accent)
+                p.drawEllipse(QPoint(centre_x, y), 11, 11)
+            else:  # still to come
+                p.setPen(QPen(self._muted(), 2))
+                p.setBrush(Qt.NoBrush)
+                p.drawEllipse(QPoint(centre_x, y), 8, 8)
+        p.setBrush(Qt.NoBrush)
+
+        p.setPen(self._muted())
+        p.setFont(QFont(UI_FONT, 17))
+        tip_rect = QRect(max(40, w // 2 - 520), y + 30, min(w - 80, 1040), 64)
+        self._wrapped(p, tip_rect, tip, Qt.AlignHCenter | Qt.AlignTop)
+        return tip_rect.bottom() + 12
+
+    def _paint_coach(self, p: QPainter, c: DotCollector, top: int) -> None:
+        """The live status ("Hold still... measuring.") as a soft coloured pill, then how to cancel."""
+        p.setPen(self._muted())
+        p.setFont(QFont(UI_FONT, 15))
+        if self._head:  # top-right corner: head steps have no dots there, and it saves height
+            p.drawText(QRect(0, HEADER_TOP + 3, self.width() - 40, 24), int(Qt.AlignRight | Qt.AlignVCenter),
+                       "Press Esc to cancel")
+        else:
+            p.drawText(QRect(0, top + 62, self.width(), 24), Qt.AlignCenter, "Press Esc to cancel")
+        hint, color = self._coach(c)
+        if not hint:
+            return
+        p.setFont(QFont(UI_FONT, 19, QFont.Bold))
+        metrics = p.fontMetrics()
+        width = min(self.width() - 80, metrics.horizontalAdvance(hint) + 56)
+        lines = 1 if metrics.horizontalAdvance(hint) + 56 <= width else 2
+        pill = QRect((self.width() - width) // 2, top, width, 24 + 28 * lines)
+        tint = QColor(color)
+        tint.setAlpha(36)
+        p.setPen(Qt.NoPen)
+        p.setBrush(tint)
+        p.drawRoundedRect(pill, pill.height() // 2 if lines == 1 else 18, pill.height() // 2 if lines == 1 else 18)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(color)
+        p.drawText(pill.adjusted(24, 0, -24, 0), int(Qt.AlignCenter | Qt.TextWordWrap), hint)
+
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -461,14 +533,8 @@ class GazeCalibrationDialog(QDialog):
             self.instruction if self._phase == "calibrate"
             else "Look at each check dot the same way. This measures how close pointing lands."
         )
-        p.setFont(QFont("Helvetica", 18))
-        self._wrapped(p, QRect(40, 36, self.width() - 80, 90),
-                      f"{title}: dot {c.index + 1} of {len(c.points)}. Esc cancels.\n{tip}")
-        hint, color = self._coach(c)
-        if hint:
-            p.setPen(color)
-            p.setFont(QFont("Helvetica", 20, QFont.Bold))
-            self._wrapped(p, QRect(40, 130, self.width() - 80, 80), hint)
+        bottom = self._paint_header(p, title, c.index, len(c.points), tip, self._header_top())
+        self._paint_coach(p, c, bottom)
 
         x, y = c.target_px()
         ring = 10 + 20 * (1.0 - c.progress(self._ts))
@@ -483,21 +549,15 @@ class GazeCalibrationDialog(QDialog):
     def _paint_head_step(self, p: QPainter, c: DotCollector) -> None:
         step = self.current_step()
         w, h = self.width(), self.height()
-        p.setPen(self._fg)
-        p.setFont(QFont("Helvetica", 18))
-        self._wrapped(p, QRect(40, 36, w - 80, 70),
-                      f"Head calibration: step {c.index + 1} of {len(c.points)}. Esc cancels.\n{self.instruction}")
-        hint, color = self._coach(c)
-        if hint:
-            p.setPen(color)
-            p.setFont(QFont("Helvetica", 20, QFont.Bold))
-            self._wrapped(p, QRect(40, 110, w - 80, 70), hint)
+        bottom = self._paint_header(p, "Head calibration", c.index, len(c.points), self.instruction, HEADER_TOP)
+        self._paint_coach(p, c, bottom)
 
+        title_y = max(h // 2 - 200, bottom + 70)  # just below the status pill  # small screens: keep clear of the header
         p.setPen(self._fg)
-        p.setFont(QFont("Helvetica", 34, QFont.Bold))
-        p.drawText(QRect(0, h // 2 - 200, w, 50), Qt.AlignCenter, HEAD_STEP_TEXT[step])
-        p.setFont(QFont("Helvetica", 18))
-        self._wrapped(p, QRect(80, h // 2 - 140, w - 160, 70), HEAD_STEP_DETAIL[step], Qt.AlignHCenter | Qt.AlignTop)
+        p.setFont(QFont(UI_FONT, 34, QFont.Bold))
+        p.drawText(QRect(0, title_y, w, 50), Qt.AlignCenter, HEAD_STEP_TEXT[step])
+        p.setFont(QFont(UI_FONT, 18))
+        self._wrapped(p, QRect(80, title_y + 60, w - 160, 70), HEAD_STEP_DETAIL[step], Qt.AlignHCenter | Qt.AlignTop)
 
         cx, cy = w // 2, h // 2 + 20
         tx, ty = c.target_px()

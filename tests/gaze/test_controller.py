@@ -470,3 +470,58 @@ def test_popup_buttons_stay_selectable_by_gaze(qapp):
     feed(c, 0, 1200, feature=(100, 100))
     assert clicks == [1]
     popup.close()
+
+
+# --- only the hands-free window (and its popups) can be targeted ---
+
+def test_buttons_outside_scope_window_are_ignored(qapp):
+    """A button in another window (e.g. the settings page's 'Stop head control' hidden
+    behind the booking window) must never be targeted."""
+    booking = QWidget()
+    inside = QPushButton("Myself", booking)
+    inside.setGeometry(0, 0, 300, 64)
+    other = make_button(qapp, 100, 100, text="Stop head control")  # a separate window
+    booking.show()
+    c = GazeController(hit_test=lambda pt: other, screen_rect=SCREEN,
+                       buttons=lambda: [inside, other])
+    c.scope = booking
+    c.set_calibration(identity_calibration(), error_px=150)
+    for t in range(0, 400, 50):
+        c.process(sample(t, feature=(250, 132)))  # right on top of `other`
+    assert c.current_target is not other
+    booking.close()
+    other.close()
+
+
+def test_popup_of_scope_window_is_allowed(qapp):
+    from PySide6.QtWidgets import QDialog
+
+    booking = QWidget()
+    booking.show()
+    popup = QDialog(booking)
+    close = QPushButton("Close", popup)
+    popup.show()
+    c = GazeController(hit_test=lambda pt: close, screen_rect=SCREEN, buttons=lambda: [close])
+    c.scope = booking
+    c.set_calibration(identity_calibration(), error_px=150)
+    for t in range(0, 400, 50):
+        c.process(sample(t, feature=(250, 132)))
+    assert c.current_target is close
+    popup.close()
+    booking.close()
+
+
+@pytest.mark.parametrize("source", ["head", "eyes"])
+@pytest.mark.parametrize("speed_ms", [1600, 1100, 800])
+def test_chosen_speed_applies_to_head_and_eyes(qapp, button, source, speed_ms):
+    c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN)
+    c.set_source(source)
+    c.set_dwell_ms(speed_ms)
+    c.set_calibration(identity_calibration(), error_px=50)
+    feed_at = (100, 100) if source == "eyes" else (50, 50)  # head: outside the centre rest zone
+    for t in range(0, speed_ms - 150, 50):
+        c.process(sample(t, feature=feed_at))
+    assert button.clicks == 0, "clicked before the chosen speed"
+    for t in range(speed_ms - 150, speed_ms + 400, 50):
+        c.process(sample(t, feature=feed_at))
+    assert button.clicks == 1

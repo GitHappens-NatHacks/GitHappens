@@ -75,7 +75,7 @@ def test_book_appointment_shows_green_confirmation(portal, qapp, monkeypatch):
     seen = []
 
     class FakeDialog(QDialog):
-        def __init__(self, who, visit, when, parent=None, auto_close_ms=5000):
+        def __init__(self, who, visit, when, parent=None, auto_close_ms=5000, full_window=False):
             super().__init__(parent)
             seen.append({"who": who, "visit": visit, "when": when})
             layout_labels = QLabel(f"You're booked!\n{visit}\nfor {who}\n{when}")
