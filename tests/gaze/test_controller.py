@@ -17,10 +17,10 @@ def identity_calibration():
     return c
 
 
-def sample(t, feature=(100, 100), blink=False, face=True):
+def sample(t, feature=(100, 100), blink=False, face=True, ear=0.3):
     s = {"camera_ok": True, "face": face, "ts_ms": t}
     if face:
-        s.update({"feature": feature, "head": feature, "blink": blink, "ear": 0.3})
+        s.update({"feature": feature, "head": feature, "blink": blink, "ear": ear})
     return s
 
 
@@ -41,7 +41,9 @@ def button(qapp):
 def ctrl(qapp, button):
     target = {"widget": button}
     c = GazeController(hit_test=lambda pt: target["widget"], screen_rect=SCREEN)
-    c.set_calibration(identity_calibration(), error_px=50)  # dwell = 1000 ms
+    c.set_source("eyes")
+    c.set_dwell_ms(3000)  # these timing tests use a slow 3 s selection speed
+    c.set_calibration(identity_calibration(), error_px=50)
     c.hit = target
     return c
 
@@ -51,23 +53,36 @@ def feed(ctrl, start, end, step=50, **kw):
         ctrl.process(sample(t, **kw))
 
 
-def test_dwell_ms_follows_accuracy(ctrl):
-    assert ctrl.dwell_ms == 1000
+def test_dwell_ms_is_uniform(ctrl):
+    from accessshift.modules.gaze.dwell import UNIFORM_DWELL_MS
+
+    assert ctrl.dwell_ms == 3000  # the chosen speed, whatever the accuracy
+    ctrl.set_calibration(identity_calibration(), error_px=500)
+    assert ctrl.dwell_ms == 3000
+    ctrl.set_dwell_ms(None)  # no chosen speed: the default ("Normal")
+    assert ctrl.dwell_ms == UNIFORM_DWELL_MS
 
 
 def test_dwell_clicks_button(ctrl, button):
-    feed(ctrl, 0, 1000)
+    feed(ctrl, 0, 3000)
     assert button.clicks == 1
 
 
-def test_blink_clicks_immediately(ctrl, button):
+def test_blink_ignored_before_ring_starts(ctrl, button):
     ctrl.process(sample(0, blink=True))
+    assert button.clicks == 0
+
+
+def test_blink_clicks_after_ring_starts(ctrl, button):
+    feed(ctrl, 0, 700)  # ~23% of 3000 ms
+    ctrl.process(sample(750, blink=True))
     assert button.clicks == 1
 
 
 def test_blink_then_stare_clicks_once(ctrl, button):
-    ctrl.process(sample(0, blink=True))
-    feed(ctrl, 50, 3000)
+    feed(ctrl, 0, 700)
+    ctrl.process(sample(750, blink=True))
+    feed(ctrl, 800, 3000)
     assert button.clicks == 1
 
 
@@ -89,7 +104,7 @@ def test_only_enabled_buttons_clicked(ctrl, button, qapp):
 def test_child_of_button_resolves_to_button(ctrl, button):
     child = QWidget(button)
     ctrl.hit["widget"] = child
-    feed(ctrl, 0, 1000)
+    feed(ctrl, 0, 3000)
     assert button.clicks == 1
 
 
@@ -198,14 +213,19 @@ def snapping_ctrl(buttons, error_px=150):
 def test_snaps_to_nearest_button_within_accuracy(two_buttons):
     a, b = two_buttons
     c = snapping_ctrl(two_buttons)
-    feed(c, 0, 2000, feature=(250, 230))  # 66 px below A, 170 px above B
+    c.set_source("eyes")
+    c.set_calibration(identity_calibration(), error_px=150)
+    # 66 px below A, 170 px above B
+    feed(c, 0, 3200, feature=(250, 230))
     assert a.clicks == 1 and b.clicks == 0
 
 
 def test_no_snap_beyond_accuracy(two_buttons):
     a, b = two_buttons
     c = snapping_ctrl(two_buttons, error_px=100)
-    feed(c, 0, 2000, feature=(900, 700))
+    c.set_source("eyes")
+    c.set_calibration(identity_calibration(), error_px=100)
+    feed(c, 0, 3200, feature=(900, 700))
     assert a.clicks == 0 and b.clicks == 0
 
 
@@ -224,8 +244,9 @@ def test_target_is_sticky_against_small_jitter(two_buttons):
 def test_exact_hit_still_wins(qapp, button):
     other = make_button(qapp, 0, 0, text="other")
     c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN, buttons=lambda: [other])
+    c.set_source("eyes")
     c.set_calibration(identity_calibration(), error_px=500)
-    feed(c, 0, 2000, feature=(5, 5))
+    feed(c, 0, 3200, feature=(5, 5))
     assert button.clicks == 1 and other.clicks == 0
     other.close()
 
@@ -271,24 +292,24 @@ def test_eyes_closed_freezes_point_and_dwell(ctrl, button):
     assert len(points) == n and button.clicks == 0
 
 
-def test_eyes_closed_three_seconds_requests_exit(ctrl, button):
+def test_eyes_closed_five_seconds_requests_exit(ctrl, button):
     exits, progress = [], []
     ctrl.exit_requested.connect(lambda: exits.append(1))
     ctrl.exit_progress.connect(progress.append)
-    for t in range(0, 3600, 100):
-        ctrl.process(sample(t) | {"closed_ms": t})
+    for t in range(0, 5600, 100):
+        ctrl.process(sample(t) | {"closed_ms": t, "ear": 0.05})
     assert exits == [1]  # once per closure
     assert progress and max(progress) == 1.0
-    ctrl.process(sample(3700))  # eyes open again
+    ctrl.process(sample(5700, ear=0.3))
     assert progress[-1] == 0.0 and button.clicks == 0
 
 
 def test_short_closure_does_not_exit(ctrl):
     exits = []
     ctrl.exit_requested.connect(lambda: exits.append(1))
-    for t in range(0, 1400, 100):
-        ctrl.process(sample(t) | {"closed_ms": t})
-    ctrl.process(sample(1500))
+    for t in range(0, 2000, 100):
+        ctrl.process(sample(t) | {"closed_ms": t, "ear": 0.05})
+    ctrl.process(sample(2100, ear=0.3))
     assert exits == []
 
 
@@ -298,10 +319,11 @@ def test_natural_blink_pauses_dwell_without_restart_or_click(ctrl, button):
     feed(ctrl, 0, 600)
     for t in (650, 700, 750):  # 150 ms natural blink
         ctrl.process(sample(t) | {"closed_ms": t - 650 + 1})
-    feed(ctrl, 800, 1100)
+    feed(ctrl, 800, 2500)
     assert button.clicks == 0  # the 150 ms with eyes shut didn't count
-    feed(ctrl, 1150, 1300)
-    assert button.clicks == 1  # ...but the earlier 600 ms did
+    feed(ctrl, 2550, 3200)
+    assert button.clicks == 1  # earlier open time plus later stare reaches dwell
+
 
 
 # --- head or eyes as the pointer -------------------------------------------------------
@@ -350,7 +372,8 @@ def test_head_rest_zone_selects_nothing_until_you_turn(qapp, button):
     for t in range(0, 4000, 33):
         c.process({"face": True, "ts_ms": t, "head": poses["center"], "feature": (0, 0), "ear": 0.3, "blink": False})
     assert button.clicks == 0  # facing forward = resting
-    for t in range(4000, 7000, 33):
+    # Head dwell is at least 3000 ms after leaving the rest zone.
+    for t in range(4000, 7500, 33):
         c.process({"face": True, "ts_ms": t, "head": (0.15, 0.6), "feature": (0, 0), "ear": 0.3, "blink": False})
     assert button.clicks == 1
 
@@ -380,8 +403,70 @@ def test_head_mode_keeps_pointing_but_pauses_dwell_while_eyes_closed(ctrl, butto
     points = []
     ctrl.point.connect(points.append)
     for t in range(0, 2000, 50):
-        ctrl.process(sample(t, feature=(100 + t // 10, 100)) | {"closed_ms": t + 1})
+        # really closed: very low eye openness (a head-tilt dip stays above HEAD_CLOSED_EAR)
+        ctrl.process(sample(t, feature=(100 + t // 10, 100)) | {"closed_ms": t + 1, "ear": 0.08})
     assert len(points) > 30 and points[-1].x() > points[0].x()  # dot kept moving
     assert button.clicks == 0
-    feed(ctrl, 2050, 3200, feature=(300, 100))  # eyes open again: dwell works
+    feed(ctrl, 2050, 5200, feature=(300, 100))  # eyes open again: dwell works (3 s test speed)
     assert button.clicks == 1
+
+
+def test_deleted_target_button_is_dropped_not_crashing(qapp):
+    # e.g. the Head/Eye chooser popup closes while one of its buttons was targeted
+    from shiboken6 import delete
+
+    doomed = QPushButton("Head pointing")
+    doomed.setGeometry(100, 100, 300, 100)
+    doomed.show()
+    c = GazeController(hit_test=lambda pt: None, screen_rect=SCREEN, buttons=lambda: [b for b in [doomed] if b])
+    c.set_dwell_ms(3000)
+    c.set_calibration(identity_calibration(), error_px=150)
+    targets = []
+    c.target.connect(targets.append)
+    feed(c, 0, 300, feature=(250, 150))
+    assert c.current_target is doomed
+    delete(doomed)  # the C++ widget is gone; the Python object is a dead shell
+    c._buttons = lambda: []
+    feed(c, 350, 1500, feature=(250, 150))  # must not raise
+    assert c.current_target is None and targets[-1] == QRect()
+
+
+def test_open_popup_blocks_gaze_selection_behind_it(qapp, button):
+    # e.g. the booking confirmation is open: gaze must not press "Back" behind it
+    from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+    popup = QDialog()
+    popup.setModal(True)
+    popup_btn = QPushButton("Close", popup)
+    QVBoxLayout(popup).addWidget(popup_btn)
+    popup.setGeometry(600, 500, 300, 200)
+    popup.show()
+    qapp.processEvents()
+    c = GazeController(hit_test=lambda pt: button, screen_rect=SCREEN)  # gaze sits on the background button
+    c.set_dwell_ms(1000)
+    c.set_calibration(identity_calibration(), error_px=0)  # exact hits only
+    feed(c, 0, 1500, feature=(100, 100))
+    assert button.clicks == 0
+    popup.close()
+    qapp.processEvents()
+    feed(c, 1550, 3000, feature=(100, 100))
+    assert button.clicks == 1  # popup gone: background works again
+
+
+def test_popup_buttons_stay_selectable_by_gaze(qapp):
+    from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+    popup = QDialog()
+    popup.setModal(True)
+    popup_btn = QPushButton("Start over", popup)
+    QVBoxLayout(popup).addWidget(popup_btn)
+    popup.show()
+    qapp.processEvents()
+    clicks = []
+    popup_btn.clicked.connect(lambda: clicks.append(1))
+    c = GazeController(hit_test=lambda pt: popup_btn, screen_rect=SCREEN)
+    c.set_dwell_ms(1000)
+    c.set_calibration(identity_calibration(), error_px=0)
+    feed(c, 0, 1200, feature=(100, 100))
+    assert clicks == [1]
+    popup.close()

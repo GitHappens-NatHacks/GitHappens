@@ -64,6 +64,35 @@ def test_full_booking_through_the_grid(portal):
         next(b for b in g.visible_squares() if b.text() == choice).click()
     assert labels(g) == ["Book appointment", "Back"]
     assert "Confirm appointment" in g.heading()
+    assert "Tomorrow 10:00" in g.heading()
+
+
+def test_book_appointment_shows_green_confirmation(portal, qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog, QLabel
+
+    import accessshift.ui.portal_view as portal_mod
+
+    seen = []
+
+    class FakeDialog(QDialog):
+        def __init__(self, who, visit, when, parent=None, auto_close_ms=5000):
+            super().__init__(parent)
+            seen.append({"who": who, "visit": visit, "when": when})
+            layout_labels = QLabel(f"You're booked!\n{visit}\nfor {who}\n{when}")
+            layout_labels.setParent(self)
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(portal_mod, "BookingConfirmationDialog", FakeDialog)
+
+    g = GazeGridPanel(portal)
+    g.refresh()
+    for choice in ("Myself", "Check-up", "Tomorrow 10:00"):
+        next(b for b in g.visible_squares() if b.text() == choice).click()
+    next(b for b in g.visible_squares() if b.text() == "Book appointment").click()
+    assert seen == [{"who": "Myself", "visit": "Check-up", "when": "Tomorrow 10:00"}]
+    assert labels(g) == ["Myself", "Someone I care for"]  # reset to start
 
 
 def test_squares_use_high_contrast_gaze_style(portal):

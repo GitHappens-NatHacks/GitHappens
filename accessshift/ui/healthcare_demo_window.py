@@ -17,7 +17,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout,
-    QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QSizePolicy,
+    QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -497,11 +497,11 @@ class HealthcareDemoWindow(QDialog):
         }
         self.success.setText('✓  Sample request completed locally. No information was sent.')
         self.demo_submitted.emit(payload)
-        QMessageBox.information(
-            self, 'Demo completed',
-            'Your sample appointment form was completed.\n\n'
-            'No real appointment was booked and no data left this computer.'
-        )
+        from accessshift.ui.booking_confirmation import BookingConfirmationDialog
+        when = f'Wednesday, November 11 · {self._selected_time}'
+        visit = self.department.currentText() or 'Visit'
+        who = f'{payload["first_name"]} {payload["last_name"]}'.strip() or 'you'
+        BookingConfirmationDialog(who=who, visit=visit, when=when, parent=self).exec()
 
     def activate_target(self, target_id: str) -> bool:
         """Allows a future gaze module to press named on-screen targets."""

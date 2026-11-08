@@ -3,8 +3,13 @@ import pytest
 from accessshift.modules.gaze.features import (
     LEFT_EYE,
     LEFT_IRIS,
+    LEFT_LID_MID,
     RIGHT_EYE,
     RIGHT_IRIS,
+    RIGHT_LID_MID,
+    _LID_BLEND,
+    _VERTICAL_GAIN,
+    axis_ratio,
     gaze_feature,
     iris_ratio,
 )
@@ -29,17 +34,27 @@ def test_zero_width_eye_returns_center():
     assert iris_ratio((5, 5), (5, 5), (5, 5)) == (0.5, 0.0)
 
 
-def test_gaze_feature_averages_both_eyes():
+def test_axis_ratio_vertical():
+    assert axis_ratio((0, 0), (0, 10), (0, 3)) == pytest.approx(0.3)
+
+
+def test_gaze_feature_vertical_uses_corner_and_lid():
     points = [(0.0, 0.0)] * 478
     points = list(points)
-    # left eye: corners (0,0)-(10,0), iris at u=0.2 ; right eye: corners (20,0)-(30,0), iris at u=0.6
     points[LEFT_EYE[0]], points[LEFT_EYE[3]] = (0.0, 0.0), (10.0, 0.0)
+    points[LEFT_EYE[1]], points[LEFT_EYE[2]] = (5.0, -2.0), (5.0, -2.0)
+    points[LEFT_EYE[4]], points[LEFT_EYE[5]] = (5.0, 8.0), (5.0, 8.0)
+    points[LEFT_LID_MID[0]], points[LEFT_LID_MID[1]] = (5.0, -2.0), (5.0, 8.0)
     points[RIGHT_EYE[0]], points[RIGHT_EYE[3]] = (20.0, 0.0), (30.0, 0.0)
+    points[RIGHT_EYE[1]], points[RIGHT_EYE[2]] = (25.0, -2.0), (25.0, -2.0)
+    points[RIGHT_EYE[4]], points[RIGHT_EYE[5]] = (25.0, 8.0), (25.0, 8.0)
+    points[RIGHT_LID_MID[0]], points[RIGHT_LID_MID[1]] = (25.0, -2.0), (25.0, 8.0)
     for i in LEFT_IRIS:
-        points[i] = (2.0, 1.0)
+        points[i] = (5.0, 2.0)
     for i in RIGHT_IRIS:
-        points[i] = (26.0, 1.0)
-    assert gaze_feature(points) == pytest.approx((0.4, 0.1))
+        points[i] = (25.0, 2.0)
+    expected_v = _VERTICAL_GAIN * (0.2 + _LID_BLEND * (0.4 - 0.5))
+    assert gaze_feature(points) == pytest.approx((0.5, expected_v))
 
 
 # --- head pointing: nose tip relative to the eyes -------------------------------------

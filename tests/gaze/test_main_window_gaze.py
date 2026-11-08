@@ -60,9 +60,9 @@ def test_unrelated_setting_changes_do_not_restart_the_camera(window):
     assert controller._thread is thread  # same camera thread, never stopped
 
 
-def test_exit_button_turns_eye_navigation_off(window):
+def test_close_on_booked_popup_turns_head_control_off(window):
     window._change_module("gaze_control", True)
-    window.gaze_window.btn_exit.click()
+    window.gaze_window.portal.booking_finished.emit("close")  # Close on the booked popup
     assert not window.prefs.gaze_control and not window.gaze_window.gaze.enabled
     assert not window.gaze_window.isVisible()
 
@@ -86,7 +86,7 @@ def test_calibration_button_runs_gaze_calibration_not_a_placeholder(window, monk
     assert window.prefs.gaze_control and window.gaze_window.isVisible() and calls == [1]
 
 
-def test_head_eyes_switch_and_wide_exit_in_gaze_window(window, qapp):
+def test_head_eyes_switch_in_gaze_window(window, qapp):
     window._change_module("gaze_control", True)
     gw = window.gaze_window
     gw.resize(1200, 800)
@@ -94,7 +94,6 @@ def test_head_eyes_switch_and_wide_exit_in_gaze_window(window, qapp):
     assert gw.gaze.controller.source == "head" and "Head" in gw.btn_source.text()
     gw.btn_source.click()
     assert gw.gaze.controller.source == "eyes" and "Eyes" in gw.btn_source.text()
-    assert gw.btn_exit.width() >= 0.35 * gw.bar.width()
 
 
 def test_closing_main_window_releases_camera(window):
@@ -231,7 +230,7 @@ def test_exit_from_full_screen_leaves_full_screen_before_hiding(window, qapp):
     gw = window.gaze_window
     gw.showFullScreen()  # e.g. macOS green button
     qapp.processEvents()
-    gw.btn_exit.click()
+    gw.portal.booking_finished.emit("close")  # Close on the booked popup
     assert not gw.isFullScreen()  # left full screen first...
     wait(qapp, 1200)
     assert not gw.isVisible()  # ...then hidden, so no empty full-screen space is left
@@ -241,5 +240,34 @@ def test_exit_brings_control_center_to_front(window, monkeypatch):
     raised = []
     monkeypatch.setattr(window, "raise_", lambda: raised.append(1))
     window.gaze_toggle.click()
-    window.gaze_window.btn_exit.click()
+    window.gaze_window.portal.booking_finished.emit("close")  # Close on the booked popup
     assert raised
+
+
+# --- end of a booking ---------------------------------------------------------------------------
+
+def test_no_exit_button_in_the_hands_free_bar(window):
+    window.gaze_toggle.click()
+    texts = [b.text() for b in window.gaze_window.bar.findChildren(type(window.gaze_toggle).__mro__[1])]
+    assert not any("Exit" in t for t in texts)
+
+
+def test_booking_popup_close_leaves_hands_free(window):
+    window.gaze_toggle.click()
+    window.gaze_window.portal.booking_finished.emit("close")
+    assert not window.prefs.gaze_control and not window.gaze_window.isVisible()
+
+
+def test_booking_popup_start_over_goes_back_to_step_one_without_calibrating(window, monkeypatch):
+    from accessshift.ui.gaze_booking_window import GazeBookingWindow
+
+    calibrations = []
+    monkeypatch.setattr(GazeBookingWindow, "recalibrate", lambda self: calibrations.append(1))
+    window.gaze_toggle.click()
+    gw = window.gaze_window
+    for choice in ("Myself", "Check-up", "Tomorrow 10:00"):
+        next(b for b in gw.grid.visible_squares() if b.text() == choice).click()
+    gw.portal._reset_flow()
+    gw.portal.booking_finished.emit("start_over")
+    assert window.prefs.gaze_control and gw.gaze.enabled and calibrations == []
+    assert [b.text() for b in gw.grid.visible_squares()] == ["Myself", "Someone I care for"]

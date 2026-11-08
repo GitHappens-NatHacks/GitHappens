@@ -9,6 +9,7 @@ GazeMode (camera, cursor, preview, big high-contrast style) is attached to this 
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -22,7 +23,7 @@ from accessshift.ui.portal_view import PortalView
 
 
 class GazeBookingWindow(QWidget):
-    exit_requested = Signal()  # Exit button, eyes closed 3 s, or the window was closed
+    exit_requested = Signal()  # Close on the booked popup, eyes closed 5 s, or the window was closed
     problem = Signal(str)  # stopped by a problem: the settings page shows this message
 
     def __init__(self, repo_root: Path, parent: QWidget | None = None):
@@ -39,11 +40,9 @@ class GazeBookingWindow(QWidget):
         self.btn_source = QPushButton()
         self.status = QLabel()
         self.status.setWordWrap(True)
-        self.btn_exit = QPushButton("✕  Exit hands-free control\n(or close your eyes for 3 s)")
         bar.addWidget(self.btn_recalibrate, 1)
         bar.addWidget(self.btn_source, 1)
-        bar.addWidget(self.status, 1)
-        bar.addWidget(self.btn_exit, 2)  # wide target: easy to hit
+        bar.addWidget(self.status, 2)  # to leave: Close on the booked popup, or eyes closed 5 s
 
         self.portal = self._new_portal()
         self.grid = GazeGridPanel(self.portal)
@@ -59,7 +58,6 @@ class GazeBookingWindow(QWidget):
         self.gaze.problem.connect(self.problem)
         self.btn_recalibrate.clicked.connect(self.gaze.request_recalibrate)
         self.btn_source.clicked.connect(self.gaze.toggle_source)
-        self.btn_exit.clicked.connect(self.exit_requested)
         self._show_source(self.gaze.controller.source)
         self.setObjectName("gazeRoot")
         self.apply_theme("standard")
@@ -83,8 +81,18 @@ class GazeBookingWindow(QWidget):
         self.gaze.controller.set_dwell_ms(int(dwell_ms))
         self.gaze.controller.blink_select = bool(blink_select)
 
+    def _booking_finished(self, choice: str) -> None:
+        if choice == "close":
+            self.exit_requested.emit()  # same as leaving hands-free control
+            return
+        # Start over: the portal is back at step 1; same calibration, new timed booking.
+        self.gaze.metrics.start_task(int(time.monotonic() * 1000))
+        self.grid.refresh()
+        self.status.setText("Starting over. Choose who this visit is for.")
+
     def _new_portal(self) -> PortalView:
         portal = PortalView(self._repo_root / "assets" / "portal")
+        portal.booking_finished.connect(self._booking_finished)
         portal.set_accessible(True)  # the all-buttons, step-by-step booking flow
         portal.hide()  # never shown: the grid mirrors it
         return portal

@@ -75,9 +75,14 @@ class DwellSelector:
         return DwellState(target, progress, False)
 
 
+# Same dwell for every button. Accuracy still drives snap radius, not click timing.
+UNIFORM_DWELL_MS = 1100  # "Normal" selection speed; the control center passes the chosen speed
+
+
 def adaptive_dwell_ms(error_px: float) -> int:
-    """Longer dwell when tracking is less accurate, within 600..2000 ms."""
-    return max(600, min(2000, round(800 + 4 * error_px)))
+    """Return the uniform dwell. error_px kept for call-site compatibility."""
+    del error_px
+    return UNIFORM_DWELL_MS
 
 
 def min_target_px(error_px: float) -> int:

@@ -22,9 +22,9 @@ class BlinkDetector:
     def __init__(
         self,
         ear_threshold: float = 0.21,
-        min_ms: int = 300,
+        min_ms: int = 400,
         max_ms: int = 1500,
-        cooldown_ms: int = 500,
+        cooldown_ms: int = 700,
     ):
         self.ear_threshold = ear_threshold
         self.min_ms = min_ms

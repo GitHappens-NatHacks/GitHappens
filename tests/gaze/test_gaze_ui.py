@@ -30,7 +30,7 @@ def test_calibration_dialog_fits_and_unpauses(qapp):
     assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
     assert ctrl.calibration.is_fitted and not ctrl.paused
     assert ctrl.error_px < 5
-    assert t < 25_000  # 13 dots x 1.5 s, no retries for steady eyes
+    assert t < 35_000  # 13 dots x 2.1 s (0.7 s settle + 1.4 s measure), no retries for steady eyes
 
 
 def test_calibration_dialog_escape_cancels(qapp):
@@ -143,7 +143,8 @@ def test_head_calibration_guides_center_left_right_up_down(qapp):
     up_y = ctrl.calibration.map(HEAD_POSES_FEATURES["up"])[1]
     right_x = ctrl.calibration.map(HEAD_POSES_FEATURES["right"])[0]
     assert up_y < SCREEN.height() / 2 and right_x > SCREEN.width() / 2  # up is up, right is right
-    assert t < 12_000
+    assert t < 16_000  # 5 poses x 2.7 s (0.9 s settle + 1.8 s measure), no retries
+    assert ctrl.error_px is not None and ctrl.error_px < 5  # real score from the fitted map
 
 
 def test_head_calibration_prompts_name_each_direction(qapp):
@@ -158,7 +159,7 @@ def test_head_calibration_prompts_name_each_direction(qapp):
 def test_head_calibration_retries_when_user_barely_moves(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     tiny = dict(HEAD_POSES_FEATURES, up=(0.0, 0.598), down=(0.0, 0.602))
-    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=12_000)
+    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=16_000)
     assert dlg.isVisible() and not ctrl.calibration.is_fitted
     assert seen[:6] == ["center", "left", "right", "up", "down", "center"]  # started again
     assert "tilt" in dlg.message().lower()
@@ -169,7 +170,8 @@ def test_eyes_calibration_keeps_nine_dots_and_check(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     ctrl.set_source("eyes")
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
-    assert "look" in dlg.instruction.lower()
+    assert "eyes" in dlg.instruction.lower()
+    assert dlg._max_spread >= 0.05  # eyes must tolerate normal webcam jitter
     dlg.begin()
     assert len(dlg.current_points()) == 9
     dlg.reject()
@@ -187,7 +189,7 @@ def test_head_calibration_ignores_eye_openness_when_tilting(qapp):
         ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[step], "ear": ear})
         t += 33
     assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
-    assert t < 12_000  # no endless retries on the up/down steps
+    assert t < 16_000  # no endless retries on the up/down steps
 
 
 def no_face(ctrl, t0, t1):
@@ -248,3 +250,50 @@ def test_head_calibration_tunes_closed_eyes_to_the_narrowest_pose(qapp):
         ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[step], "ear": ear})
         t += 33
     assert ctrl.last_blink_ears == [0.18]  # threshold = 0.75 x the tilted-down eye openness
+
+
+def test_choose_source_head_and_eyes_buttons(qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog, QPushButton
+
+    seen = []
+
+    def tracking_exec(self):
+        for btn in self.findChildren(QPushButton):
+            if btn.text() == "Eye pointing":
+                seen.append(btn.text())
+                btn.click()
+                return QDialog.DialogCode.Accepted
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", tracking_exec)
+    assert GazeCalibrationDialog._real_choose_source("head") == "eyes"
+    assert seen == ["Eye pointing"]
+
+
+def test_choose_source_cancel_returns_none(qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
+    assert GazeCalibrationDialog._real_choose_source("head") is None
+
+
+def test_pointing_chooser_covers_the_screen_with_a_distinct_card(qapp, monkeypatch):
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtWidgets import QDialog, QFrame
+
+    from accessshift.modules.smartinterface.visual_controller import PALETTES
+
+    seen = {}
+
+    def inspect_exec(self):
+        seen["geometry"] = self.geometry()
+        card = self.findChild(QFrame, "chooserCard")
+        seen["card_qss"] = self.styleSheet()
+        seen["has_card"] = card is not None
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", inspect_exec)
+    GazeCalibrationDialog._real_choose_source("head", palette=PALETTES["standard"])
+    assert seen["geometry"] == QGuiApplication.primaryScreen().geometry()  # booking hidden behind it
+    assert seen["has_card"]
+    assert PALETTES["standard"].accent.lower() in seen["card_qss"].lower()  # card colour differs from page

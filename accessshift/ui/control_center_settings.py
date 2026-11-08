@@ -21,7 +21,7 @@ class AccessibilitySettings:
     blink_select: bool = True
     reduce_complexity: bool = True
     tremor_strength: int = 50
-    gaze_dwell_ms: int = 1100
+    gaze_dwell_ms: int = 1100  # Normal speed (Relaxed 1.6 s, Normal 1.1 s, Quick 0.8 s)
     target_size_pct: int = 140
     font_size_pct: int = 110
     color_profile: str = "standard"

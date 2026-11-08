@@ -8,6 +8,7 @@ window exactly as it was.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from collections.abc import Callable
@@ -16,7 +17,13 @@ from PySide6.QtCore import QObject, QRect, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QPushButton, QWidget
 
-from accessshift.modules.gaze.controller import STATUS_NO_FACE, STATUS_TRACKING, GazeController
+from accessshift.modules.gaze.controller import (
+    EXIT_CLOSE_MS,
+    EXIT_COUNTDOWN_FROM_MS,
+    STATUS_NO_FACE,
+    STATUS_TRACKING,
+    GazeController,
+)
 from accessshift.modules.gaze.metrics import GazeMetrics
 from accessshift.ui import gaze_style
 from accessshift.ui.gaze_calibration_dialog import GazeCalibrationDialog
@@ -112,7 +119,15 @@ class GazeMode(QObject):
                 self._window_geometry = self._window.geometry()
                 screen = self._window.screen() or QGuiApplication.primaryScreen()
                 self._window.setGeometry(screen.availableGeometry())
-        self.controller.start(self._camera_index, tracker_factory=self._tracker_factory, preview=True)
+        started = self.controller.start(self._camera_index, tracker_factory=self._tracker_factory, preview=True)
+        if not started:
+            # The controller already reported why (a "Camera..." status becomes a problem message).
+            if self._window is not None:
+                gaze_style.restore(self._window)
+                if self._window_geometry is not None:
+                    self._window.setGeometry(self._window_geometry)
+                    self._window_geometry = None
+            return
         self.overlay.show()
         self.preview.place_bottom_right()
         self.preview.show()
@@ -142,7 +157,13 @@ class GazeMode(QObject):
         self.overlay.hide()  # keep the cursor and camera window off the calibration screen
         self.preview.hide()
         try:
-            ok = GazeCalibrationDialog.for_controller(self.controller, palette=self.palette).run()
+            chosen = GazeCalibrationDialog.choose_source(self.controller.source, palette=self.palette)
+            if chosen is not None and chosen != self.controller.source:
+                self.controller.set_source(chosen)
+                self.source_changed.emit(chosen)
+            ok = chosen is not None and GazeCalibrationDialog.for_controller(
+                self.controller, palette=self.palette
+            ).run()
         finally:
             self._calibrating = False
         if not self.enabled:
@@ -154,11 +175,14 @@ class GazeMode(QObject):
             return
         self.metrics.start_task(_now_ms())
         if self.controller.source == "head":
-            self.status.emit("Ready. Turn your head toward an option and hold still, or slow-blink to choose.")
+            self.status.emit(
+                "Ready. Turn your head toward an option and hold still until the ring fills. "
+                "You can also blink slowly once the ring has started."
+            )
         else:
             self.status.emit(
                 f"Ready (accuracy about {self.controller.error_px:.0f} px). "
-                "Look at an option until the ring fills, or slow-blink to choose."
+                "Look at an option until the ring fills. You can also blink slowly once the ring has started."
             )
 
     def _alert(self, text: str) -> None:
@@ -193,7 +217,8 @@ class GazeMode(QObject):
 
     def _on_exit_progress(self, progress: float) -> None:
         if progress > 0:
-            seconds_left = max(1, round(1.5 * (1 - progress) + 0.49))
+            countdown_s = (EXIT_CLOSE_MS - EXIT_COUNTDOWN_FROM_MS) / 1000
+            seconds_left = max(1, math.ceil(countdown_s * (1 - progress)))
             self.overlay.set_message(f"{EXIT_HINT}… {seconds_left}")
         elif self.overlay.message().startswith(EXIT_HINT):
             self.overlay.set_message(None)
