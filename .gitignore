@@ -45,3 +45,6 @@ assets/models/*.pt
 
 # Node leftovers (if any)
 node_modules/
+
+# Superpowers plan workspace (local scratch)
+.superpowers/

@@ -21,7 +21,7 @@ class AccessibilitySettings:
     blink_select: bool = True
     reduce_complexity: bool = True
     tremor_strength: int = 50
-    gaze_dwell_ms: int = 1100
+    gaze_dwell_ms: int = 3000
     target_size_pct: int = 140
     font_size_pct: int = 110
     color_profile: str = "standard"
@@ -74,7 +74,7 @@ def load_settings(store: QSettings | None = None) -> AccessibilitySettings:
         if candidate.profile not in PROFILES:
             candidate.profile = "custom"
         candidate.tremor_strength = max(0, min(100, int(candidate.tremor_strength)))
-        candidate.gaze_dwell_ms = max(600, min(2000, int(candidate.gaze_dwell_ms)))
+        candidate.gaze_dwell_ms = max(2800, min(4200, int(candidate.gaze_dwell_ms)))
         candidate.target_size_pct = max(100, min(200, int(candidate.target_size_pct)))
         candidate.font_size_pct = max(90, min(160, int(candidate.font_size_pct)))
         candidate.speech_rate = max(100, min(220, int(candidate.speech_rate)))

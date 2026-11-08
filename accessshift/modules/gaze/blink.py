@@ -1,6 +1,12 @@
-"""Blink detection from eye aspect ratio (EAR)."""
+"""Deliberate blink detection from eye aspect ratio (EAR).
 
-from collections import deque
+A selection blink is a closure lasting min_ms..max_ms. Natural blinks (~100-150 ms)
+are too short, and resting the eyes is too long. Time-based, so it works at any frame rate.
+"""
+
+from __future__ import annotations
+
+from statistics import median
 
 
 def eye_aspect_ratio(eye):
@@ -13,29 +19,44 @@ def eye_aspect_ratio(eye):
 
 
 class BlinkDetector:
-    def __init__(self, ear_threshold=0.21, min_closed_frames=2, cooldown_frames=12):
+    def __init__(
+        self,
+        ear_threshold: float = 0.21,
+        min_ms: int = 400,
+        max_ms: int = 1500,
+        cooldown_ms: int = 700,
+    ):
         self.ear_threshold = ear_threshold
-        self.min_closed_frames = min_closed_frames
-        self.cooldown_frames = cooldown_frames
-        self._closed = 0
-        self._cooldown = 0
-        self.history = deque(maxlen=30)
+        self.min_ms = min_ms
+        self.max_ms = max_ms
+        self.cooldown_ms = cooldown_ms
+        self._closed_since: int | None = None
+        self._last_fired: int | None = None
 
-    def update(self, left_eye, right_eye):
-        ear = (eye_aspect_ratio(left_eye) + eye_aspect_ratio(right_eye)) / 2.0
-        self.history.append(ear)
-        intentional = False
+    def calibrate_open(self, ears: list[float]) -> None:
+        """Set the closed threshold from EAR samples taken with eyes open."""
+        if ears:
+            self.ear_threshold = 0.75 * median(ears)
 
-        if self._cooldown > 0:
-            self._cooldown -= 1
-            return ear, intentional
+    def closed_ms(self, ts_ms: int) -> int:
+        """How long the eyes have been closed right now (0 if open)."""
+        return 0 if self._closed_since is None else max(0, ts_ms - self._closed_since)
 
+    def update(self, ear: float, ts_ms: int) -> bool:
+        """Return True on the frame the eyes reopen after a deliberate blink."""
         if ear < self.ear_threshold:
-            self._closed += 1
-        else:
-            if self._closed >= self.min_closed_frames:
-                intentional = True
-                self._cooldown = self.cooldown_frames
-            self._closed = 0
+            if self._closed_since is None:
+                self._closed_since = ts_ms
+            return False
 
-        return ear, intentional
+        if self._closed_since is None:
+            return False
+
+        duration = ts_ms - self._closed_since
+        self._closed_since = None
+        if not (self.min_ms <= duration <= self.max_ms):
+            return False
+        if self._last_fired is not None and ts_ms - self._last_fired < self.cooldown_ms:
+            return False
+        self._last_fired = ts_ms
+        return True
