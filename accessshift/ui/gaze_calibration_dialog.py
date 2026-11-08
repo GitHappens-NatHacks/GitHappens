@@ -411,7 +411,9 @@ class GazeCalibrationDialog(QDialog):
         else:
             quality = "Usable. Recalibrate later if pointing feels off"
         self._message = f"{quality}\nAccuracy ±{error_px:.0f} px"
-        self._stop_listening()
+        # Stay paused while "Calibration done" is showing: gaze must not start a dwell behind
+        # this screen, or the first option would be chosen the moment it closes.
+        # accept() resumes tracking.
         if self._result_delay_ms <= 0:
             self.accept()
         else:

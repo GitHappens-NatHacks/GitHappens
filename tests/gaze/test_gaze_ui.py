@@ -297,3 +297,38 @@ def test_pointing_chooser_covers_the_screen_with_a_distinct_card(qapp, monkeypat
     assert seen["geometry"] == QGuiApplication.primaryScreen().geometry()  # booking hidden behind it
     assert seen["has_card"]
     assert PALETTES["standard"].accent.lower() in seen["card_qss"].lower()  # card colour differs from page
+
+
+def test_first_selection_after_calibration_takes_the_full_dwell(qapp):
+    # The "Calibration done" screen stays up for a moment. Gaze must not start
+    # counting behind it, or the first option is chosen almost instantly afterwards.
+    import time
+
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QPushButton
+
+    btn = QPushButton("Myself")
+    btn.show()
+    clicks = []
+    ctrl = GazeController(hit_test=lambda p: btn, screen_rect=SCREEN)
+    ctrl.set_dwell_ms(2000)
+    btn.clicked.connect(lambda: clicks.append(t))
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=600)
+    dlg.begin()
+    t = 0
+    while dlg.current_step() and dlg._phase != "result":
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[dlg.current_step()]})
+        t += 33
+    # result screen showing: the person is already pointing at "Myself"
+    end = time.monotonic() + 1.0
+    while dlg.isVisible() and time.monotonic() < end:
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": (-0.12, 0.5)})
+        t += 33
+        QCoreApplication.processEvents()
+        time.sleep(0.02)
+    assert not dlg.isVisible()
+    closed_at = t
+    while not clicks and t < closed_at + 4000:
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": (-0.12, 0.5)})
+        t += 33
+    assert clicks and clicks[0] - closed_at >= 1900  # full 2 s dwell, counted from when the screen closed
