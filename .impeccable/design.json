@@ -1,0 +1,311 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-08T02:00:00Z",
+  "title": "Design System: AccessShift AI",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Console Violet",
+        "canonical": "#684BE2",
+        "tonalRamp": ["#2A1A6E", "#3D2899", "#4F35C0", "#684BE2", "#8570EB", "#A696F2", "#C9BFF8", "#EDE9FF"]
+      },
+      "primary-deep": {
+        "role": "primary",
+        "displayName": "Violet Deep",
+        "canonical": "#5537CB",
+        "tonalRamp": ["#24186A", "#352498", "#462DB8", "#5537CB", "#7359D8", "#9680E6", "#BDAEEC", "#E8E2FA"]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "Lavender Wash",
+        "canonical": "#F0EDFF",
+        "tonalRamp": ["#4A3A9A", "#6B58C0", "#8E7AD8", "#B0A0EC", "#C9BEF5", "#DCD5FA", "#F0EDFF", "#F9F7FF"]
+      },
+      "primary-ink": {
+        "role": "primary",
+        "displayName": "Violet Ink",
+        "canonical": "#5038D4",
+        "tonalRamp": ["#241670", "#3524A0", "#422DBF", "#5038D4", "#6E58E0", "#9480EC", "#C0B4F6", "#EBE6FF"]
+      },
+      "logo-mark": {
+        "role": "primary",
+        "displayName": "Logo Violet",
+        "canonical": "#7456EB",
+        "tonalRamp": ["#2E1A78", "#4329A8", "#5A3CD0", "#7456EB", "#9176F0", "#B09AF5", "#D0C4FA", "#EEE9FF"]
+      },
+      "hero-start": {
+        "role": "primary",
+        "displayName": "Hero Start",
+        "canonical": "#4932AF",
+        "tonalRamp": ["#1E1458", "#2E1F80", "#3C289C", "#4932AF", "#6550C8", "#8878DC", "#B3A8EC", "#E4DFF8"]
+      },
+      "hero-mid": {
+        "role": "primary",
+        "displayName": "Hero Mid",
+        "canonical": "#6550DE",
+        "tonalRamp": ["#261A70", "#3A28A0", "#4F3AC8", "#6550DE", "#8270E8", "#A494F2", "#C8BCF8", "#EDE8FF"]
+      },
+      "hero-end": {
+        "role": "primary",
+        "displayName": "Hero End",
+        "canonical": "#9276F1",
+        "tonalRamp": ["#3A2480", "#5438B0", "#6E52D4", "#9276F1", "#AA94F4", "#C4B4F8", "#DDD4FC", "#F4F0FF"]
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "Care Teal",
+        "canonical": "#156F5A",
+        "tonalRamp": ["#063528", "#0A4A38", "#105C48", "#156F5A", "#2E8A72", "#5BB89A", "#A8E0CC", "#E8F7F0"]
+      },
+      "success-soft": {
+        "role": "secondary",
+        "displayName": "Teal Soft",
+        "canonical": "#E8F7F0",
+        "tonalRamp": ["#0E4A3A", "#18785F", "#3A9A7C", "#6CBBA0", "#9AD8C0", "#C5ECD8", "#E8F7F0", "#F6FCF8"]
+      },
+      "success-ink": {
+        "role": "secondary",
+        "displayName": "Teal Ink",
+        "canonical": "#18785F",
+        "tonalRamp": ["#063528", "#0C4E3E", "#136650", "#18785F", "#349A7A", "#66BFA0", "#A8E2CC", "#E6F8EF"]
+      },
+      "warning-ink": {
+        "role": "neutral",
+        "displayName": "Warning Umber",
+        "canonical": "#966222",
+        "tonalRamp": ["#4A2E10", "#6A4218", "#80531C", "#966222", "#B8843E", "#D4A86A", "#EBD2A8", "#FFF0D9"]
+      },
+      "warning-soft": {
+        "role": "neutral",
+        "displayName": "Warning Soft",
+        "canonical": "#FFF0D9",
+        "tonalRamp": ["#6A4218", "#966222", "#B8843E", "#D4A86A", "#E8C890", "#F5DCB4", "#FFF0D9", "#FFF8EC"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink Navy",
+        "canonical": "#18233C",
+        "tonalRamp": ["#0B101C", "#12182C", "#18233C", "#2A3650", "#4A5670", "#7A869C", "#B0B8C8", "#E8EBF2"]
+      },
+      "ink-strong": {
+        "role": "neutral",
+        "displayName": "Ink Strong",
+        "canonical": "#202B46",
+        "tonalRamp": ["#0E1424", "#161E34", "#202B46", "#35435E", "#566478", "#8490A4", "#B8C0CE", "#EBEEF4"]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Body Slate",
+        "canonical": "#61708A",
+        "tonalRamp": ["#2A3448", "#3E4A60", "#506078", "#61708A", "#7A879F", "#9AA6B8", "#C4CCD8", "#E8ECF2"]
+      },
+      "ink-subtle": {
+        "role": "neutral",
+        "displayName": "Subtle Slate",
+        "canonical": "#75819A",
+        "tonalRamp": ["#343C50", "#4A5468", "#606C84", "#75819A", "#8E98AC", "#ADB6C6", "#D0D6E0", "#EEF0F4"]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Sidebar Midnight",
+        "canonical": "#151A30",
+        "tonalRamp": ["#0A0C18", "#101428", "#151A30", "#242B47", "#3B4267", "#6A7494", "#A8B0C8", "#E2E6F0"]
+      },
+      "sidebar-border": {
+        "role": "neutral",
+        "displayName": "Sidebar Border",
+        "canonical": "#272C48",
+        "tonalRamp": ["#101428", "#1A2038", "#272C48", "#3B4267", "#5A6288", "#8890B0", "#C0C6DC", "#E8EBF4"]
+      },
+      "sidebar-nav": {
+        "role": "neutral",
+        "displayName": "Nav Mist",
+        "canonical": "#C6CEE3",
+        "tonalRamp": ["#3B4267", "#5A6488", "#8490B0", "#A8B2CC", "#C6CEE3", "#D8DEEC", "#E8ECF4", "#F6F7FB"]
+      },
+      "sidebar-nav-active": {
+        "role": "neutral",
+        "displayName": "Nav Active",
+        "canonical": "#2D2C54",
+        "tonalRamp": ["#141428", "#1E1E40", "#2D2C54", "#3E3C6C", "#5A58A0", "#8A84C8", "#C4B8FF", "#EEE9FF"]
+      },
+      "nav-accent": {
+        "role": "primary",
+        "displayName": "Nav Accent",
+        "canonical": "#AE9AFF",
+        "tonalRamp": ["#3A2890", "#5540C0", "#7A64E8", "#AE9AFF", "#C4B8FF", "#D3CAFF", "#E6E0FF", "#F5F2FF"]
+      },
+      "focus-ring": {
+        "role": "primary",
+        "displayName": "Focus Ring",
+        "canonical": "#8C72FF",
+        "tonalRamp": ["#2E1A80", "#4A30B8", "#684BE2", "#8C72FF", "#A994FF", "#C4B8FF", "#DDD6FF", "#F2EFFF"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Card White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": ["#4A5568", "#7A8498", "#A8B0C0", "#C9CFDD", "#E4E8F2", "#F2F3FD", "#F6F7FB", "#FFFFFF"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas Mist",
+        "canonical": "#F6F7FB",
+        "tonalRamp": ["#3A4458", "#67758F", "#98A4BC", "#C9CFDD", "#E4E8F2", "#EEF0F6", "#F6F7FB", "#FCFCFE"]
+      },
+      "inner-surface": {
+        "role": "neutral",
+        "displayName": "Inner Lilac",
+        "canonical": "#F2F3FD",
+        "tonalRamp": ["#3C3A70", "#6560A8", "#9490D0", "#C0BCE8", "#D8D6F4", "#E5E5F7", "#F2F3FD", "#F9F9FE"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline Cool",
+        "canonical": "#E4E8F2",
+        "tonalRamp": ["#5A6480", "#8490A8", "#A8B2C4", "#C9CFDD", "#D6DDEF", "#E4E8F2", "#EEF0F6", "#F8F9FC"]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Border Strong",
+        "canonical": "#D6DDEF",
+        "tonalRamp": ["#4A546C", "#70809A", "#98A4BC", "#B8C2D6", "#D6DDEF", "#E4E8F2", "#EEF1F8", "#F7F8FC"]
+      },
+      "gaze-amber": {
+        "role": "tertiary",
+        "displayName": "Gaze Amber",
+        "canonical": "#FFD54F",
+        "tonalRamp": ["#7A5A10", "#A87A18", "#D4A020", "#FFD54F", "#FFE07A", "#FFEAA0", "#FFF3C8", "#FFFBEA"]
+      },
+      "gaze-ink": {
+        "role": "neutral",
+        "displayName": "Gaze Ink",
+        "canonical": "#0B1F1A",
+        "tonalRamp": ["#050F0C", "#0B1F1A", "#1A3830", "#3A5C54", "#6A8880", "#A0B8B0", "#D4E0DC", "#F2F6F4"]
+      },
+      "booking-green": {
+        "role": "secondary",
+        "displayName": "Booking Green",
+        "canonical": "#0F7A4A",
+        "tonalRamp": ["#053820", "#0A5A36", "#0F7A4A", "#1A9860", "#3CB880", "#78D4A8", "#C8F0DA", "#F4FFF8"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles on settings workspace pages (30px / 800)." },
+      "headline": { "displayName": "Headline", "purpose": "Hero card titles inside the violet gradient panel (25px / 800)." },
+      "title": { "displayName": "Title", "purpose": "Section and card headings (18px / 800 or 14px / 750)." },
+      "body": { "displayName": "Body", "purpose": "Descriptions, helper copy, and default control labels (12–13px)." },
+      "label": { "displayName": "Label", "purpose": "Uppercase chrome labels, pills, and micro meta (9–11px / 800)." }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      { "name": "shell-min", "value": "940px", "purpose": "Control Center minimum window width." },
+      { "name": "shell-default", "value": "1220px", "purpose": "Default Control Center window width." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main shell action: save, launch demo, confirm settings.",
+      "html": "<button class=\"ds-btn-primary\">Save preferences</button>",
+      "css": ".ds-btn-primary { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; background: #684BE2; color: #FFFFFF; border: 1px solid #684BE2; border-radius: 11px; padding: 12px 18px; min-height: 42px; font-size: 12px; font-weight: 750; cursor: pointer; } .ds-btn-primary:hover { background: #5537CB; border-color: #5537CB; } .ds-btn-primary:focus-visible { outline: none; border: 2px solid #8C72FF; } .ds-btn-primary:active { background: #4A2EB8; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting actions on white cards and footers.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; background: #FFFFFF; color: #465676; border: 1px solid #D6DDEF; border-radius: 11px; padding: 10px 15px; min-height: 42px; font-size: 12px; font-weight: 750; cursor: pointer; } .ds-btn-secondary:hover { color: #4F33BD; background: #F5F2FF; border-color: #A69AE7; } .ds-btn-secondary:focus-visible { outline: none; border: 2px solid #8C72FF; }"
+    },
+    {
+      "name": "Preset Tile",
+      "kind": "button",
+      "refersTo": "button-preset",
+      "description": "Large selectable profile or mode choice tile.",
+      "html": "<button class=\"ds-btn-preset\" aria-pressed=\"true\">ALS / severe motor</button>",
+      "css": ".ds-btn-preset { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; display: block; width: 100%; text-align: left; color: #4F34BB; background: #F5F0FF; border: 2px solid #7050E6; border-radius: 15px; padding: 17px; min-height: 91px; font-size: 13px; font-weight: 750; cursor: pointer; } .ds-btn-preset:hover { border-color: #B9A9F5; background: #FDFBFF; color: #25314D; } .ds-btn-preset:focus-visible { outline: none; border: 2px solid #8C72FF; }"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "nav-button-active",
+      "description": "Dark-rail navigation item with leading accent when active.",
+      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item\">Dashboard</button><button class=\"ds-nav-item ds-nav-item-active\">My accessibility profile</button></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 4px; padding: 12px; background: #151A30; border-radius: 12px; } .ds-nav-item { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #C6CEE3; background: transparent; border: none; border-left: 3px solid transparent; border-radius: 10px; text-align: left; padding: 11px 12px; min-height: 40px; font-weight: 650; font-size: 12px; cursor: pointer; } .ds-nav-item:hover { background: #242B47; color: #FFFFFF; } .ds-nav-item-active { background: #2D2C54; color: #FFFFFF; border-left: 3px solid #AE9AFF; } .ds-nav-item:focus-visible { outline: none; box-shadow: inset 0 0 0 2px #C4B8FF; }"
+    },
+    {
+      "name": "Settings Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "White bordered panel for preference groups and stats.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card-title\">Gaze dwell time</h3><p class=\"ds-card-body\">How long to look before a click registers.</p></article>",
+      "css": ".ds-card { background: #FFFFFF; border: 1px solid #E4E8F2; border-radius: 17px; padding: 20px; max-width: 360px; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; } .ds-card:hover { border-color: #D5D8EF; } .ds-card-title { margin: 0 0 8px; color: #22304B; font-size: 14px; font-weight: 750; } .ds-card-body { margin: 0; color: #61708A; font-size: 12px; line-height: 1.45; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Default line edit / text field on the console canvas.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Display name</span><input class=\"ds-input\" type=\"text\" value=\"Alex\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; max-width: 320px; } .ds-field-label { color: #34425C; font-size: 12px; font-weight: 600; } .ds-input { background: #FFFFFF; color: #243450; border: 1px solid #D6DDEB; border-radius: 10px; padding: 11px 13px; font-size: 13px; } .ds-input:hover { border-color: #C4CDE0; } .ds-input:focus { outline: none; border: 2px solid #7154E5; padding: 10px 12px; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "good-pill",
+      "description": "Compact status chip for local/demo and success meta.",
+      "html": "<span class=\"ds-pill ds-pill-good\">Local demo</span> <span class=\"ds-pill\">Profile ready</span>",
+      "css": ".ds-pill { display: inline-block; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #5340C7; background: #F0EDFF; border-radius: 10px; padding: 5px 11px; font-size: 11px; font-weight: 700; } .ds-pill-good { color: #18785F; background: #E6F8EF; border-radius: 11px; padding: 6px 11px; font-size: 10px; font-weight: 750; }"
+    },
+    {
+      "name": "Hero Panel",
+      "kind": "custom",
+      "refersTo": "hero",
+      "description": "Gradient overview callout with inverted CTA.",
+      "html": "<section class=\"ds-hero\"><p class=\"ds-hero-kicker\">Overview</p><h2 class=\"ds-hero-title\">Adapt the path to the person</h2><p class=\"ds-hero-body\">One profile drives gaze, SteadyHand, and SmartInterface.</p><button class=\"ds-hero-btn\">Open Demo Lab</button></section>",
+      "css": ".ds-hero { background: linear-gradient(135deg, #4932AF 0%, #6550DE 52%, #9276F1 100%); border-radius: 20px; padding: 24px; max-width: 520px; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; } .ds-hero-kicker { margin: 0 0 8px; color: #D3CAFF; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; } .ds-hero-title { margin: 0 0 8px; color: #FFFFFF; font-size: 25px; font-weight: 800; } .ds-hero-body { margin: 0 0 16px; color: #EEE9FF; font-size: 13px; } .ds-hero-btn { color: #4F34C7; background: #FFFFFF; border: 1px solid #FFFFFF; border-radius: 11px; padding: 11px 17px; font-size: 12px; font-weight: 750; cursor: pointer; } .ds-hero-btn:hover { background: #F0EDFF; } .ds-hero-btn:focus-visible { outline: 2px solid #C4B8FF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Gaze Target Button",
+      "kind": "custom",
+      "refersTo": "button-primary",
+      "description": "High-contrast enlarged target while GazeControl is applied.",
+      "html": "<button class=\"ds-gaze-btn ds-gaze-btn-target\">Confirm appointment</button>",
+      "css": ".ds-gaze-btn { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #0B1F1A; background: #FFFFFF; border: 3px solid #0B1F1A; border-radius: 12px; font-size: 22px; font-weight: 700; padding: 12px 18px; min-height: 96px; cursor: pointer; } .ds-gaze-btn-target { background: #FFD54F; border: 6px solid #0B1F1A; } .ds-gaze-btn:hover { filter: brightness(0.98); } .ds-gaze-btn:focus-visible { outline: 3px solid #FFAA00; outline-offset: 2px; } .ds-gaze-btn:disabled { color: #3A3A3A; background: #D6D6D6; border-color: #7A7A7A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Adaptive Care Console",
+    "overview": "AccessShift AI's shipped shell is a soft clinical control console: a dark indigo navigation rail against a cool lilac-gray canvas, white card surfaces, and a violet accent used for brand, selection, and primary actions. Density is comfortable for settings work (wide content gutters, roomy cards, 40–42px controls) rather than dense data tables. The aesthetic is native desktop PySide6 chrome, not a marketing site: QSS object names (`primaryButton`, `card`, `navButton`) carry the look.\n\nDepth comes from tonal contrast (sidebar vs canvas vs white cards) and hairline borders, not drop shadows. Profile modes temporarily override the shell: GazeControl enlarges targets with high-contrast black borders and amber dwell highlight; calibration uses a near-black fullscreen stage; booking success floods the dialog with solid green. Those modes are interaction overlays on the Adaptive Care Console, not alternate brand worlds.",
+    "keyCharacteristics": [
+      "Cool lilac-gray canvas (#F6F7FB) with white cards and a midnight sidebar (#151A30)",
+      "Single violet accent family for primary actions, focus, and selection",
+      "Soft radii (10–20px) and 1px cool borders; flat surfaces at rest",
+      "One UI sans stack across roles; heavy weights (750–800) for titles and labels",
+      "Accessibility-first focus rings (#8C72FF / #C4B8FF) and large minimum control heights"
+    ],
+    "rules": [
+      { "name": "The One Violet Rule", "body": "Resting chrome uses at most one violet accent family per view (primary button, selected preset, or nav edge). Soft lavender fills support it; they do not compete as a second brand hue.", "section": "colors" },
+      { "name": "The Mode Overlay Rule", "body": "Gaze amber, calibration near-black, and booking green are temporary full-context overrides. After the mode ends, the console palette returns unchanged.", "section": "colors" },
+      { "name": "The Weight Ladder Rule", "body": "Hierarchy is carried by weight and size on one family. Do not introduce a second display face for product chrome.", "section": "typography" },
+      { "name": "The Border-Not-Shadow Rule", "body": "Surfaces stay flat. Depth is tonal and edged, never offset-shadowed.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the midnight sidebar / mist canvas / white card sandwich for new shell pages.",
+      "Do use Console Violet for primary actions and 2px violet focus rings on interactive controls.",
+      "Do keep resting surfaces flat with 1px cool borders and the soft radius scale (10–20px).",
+      "Do enlarge targets and apply gaze amber only while GazeControl (or equivalent dwell UI) is active."
+    ],
+    "donts": [
+      "Don't introduce a second resting brand hue beside the violet family and teal status.",
+      "Don't add drop shadows to cards or chrome to fake depth.",
+      "Don't leave gaze, calibration, or booking-green styles applied after those modes end.",
+      "Don't shrink primary controls below ~40px height in the shell."
+    ]
+  }
+}
