@@ -27,10 +27,10 @@ class Palette:
 
 
 PALETTES: dict[str, Palette] = {
-    'standard': Palette('#F5F7FC', '#FFFFFF', '#F8F9FF', '#1D2941', '#64718B', '#E4E8F3', '#6347E9', '#FFFFFF'),
-    'high_contrast': Palette('#090E1C', '#111827', '#192438', '#FFFFFF', '#E4ECF7', '#D3DEFC', '#FFD84D', '#101010'),
-    'warm': Palette('#FFF7E9', '#FFFEFA', '#FFF1D9', '#332718', '#6B563B', '#E9D3B4', '#9159CB', '#FFFFFF'),
-    'cool': Palette('#ECF6FF', '#FFFFFF', '#DCEFFF', '#152C45', '#486784', '#B9D8F4', '#255FD3', '#FFFFFF'),
+    'standard': Palette('#F7F7F5', '#FFFFFF', '#F3F1FF', '#1B1B28', '#70707D', '#E9E8ED', '#6B57E8', '#FFFFFF'),
+    'high_contrast': Palette('#080A14', '#121628', '#1E2440', '#FFFFFF', '#E7ECFC', '#BECBF2', '#F7DC5E', '#101010'),
+    'warm': Palette('#FCF5E9', '#FFFCF7', '#FFF0DB', '#3D3027', '#675447', '#E5D4C2', '#7255D3', '#FFFFFF'),
+    'cool': Palette('#EDF5FC', '#FFFFFF', '#E2F0FC', '#182D41', '#49627D', '#BFD6E9', '#3D67C9', '#FFFFFF'),
 }
 
 
@@ -41,9 +41,9 @@ def _font_size(percentage: int, base: int) -> int:
 def scaled_stylesheet(base_qss: str, font_size_pct: int) -> str:
     """Scale content typography without making navigation/sidebar overflow."""
     pct = max(90, min(160, int(font_size_pct)))
-    fixed = ('#navButton', '#sideSection', '#brandName', '#brandSub',
-             '#sidebarFoot', '#logoMark', '#topBarTitle', '#topBarBadge',
-             '#heroEyebrow', '#goodPill', '#footerText')
+    fixed = ('#navButton', '#brandName', '#sidebarIntro', '#sideCaption',
+             '#sideFoot', '#sidebarFoot', '#sidebarEyebrow', '#logoMark', '#topTitle', '#topBadge',
+             '#brandName', '#brandSub', '#navTab', '#statusTag', '#footerText')
 
     def update_rule(match: re.Match[str]) -> str:
         selector, body = match.group(1), match.group(2)
@@ -58,33 +58,56 @@ def scaled_stylesheet(base_qss: str, font_size_pct: int) -> str:
 
 
 def theme_override(profile: str) -> str:
-    """Themed content surfaces; the persistent dark sidebar remains legible."""
+    """Theme AccessShift-owned surfaces, not external applications or screens.
+
+    The Focus 2.0 top navigation + tool list must all receive palette colours,
+    including labels in every card.  These selectors also retain legacy names
+    for older local UI components.
+    """
     if profile == 'standard':
         return ''
     p = PALETTES.get(profile, PALETTES['standard'])
     return f'''
-    QWidget#appRoot, QWidget#scrollContent {{ background: {p.background}; color: {p.foreground}; }}
-    QFrame#topBar, QFrame#footerBar {{ background: {p.panel}; border-color: {p.border}; }}
-    QFrame#card, QFrame#optionCard {{ background: {p.panel}; border-color: {p.border}; }}
-    QFrame#innerCard {{ background: {p.surface}; border-color: {p.border}; }}
-    QLabel#pageTitle, QLabel#sectionTitle, QLabel#cardTitle, QLabel#number,
-    QLabel#bodyText, QLabel#topBarTitle {{ color: {p.foreground}; }}
-    QLabel#pageDescription, QLabel#eyebrow, QLabel#subtle, QLabel#micro,
-    QLabel#footerText {{ color: {p.muted}; }}
-    QLabel#pill {{ background: {p.surface}; color: {p.foreground}; }}
-    QPushButton#secondaryButton, QPushButton#presetButton {{
+    QWidget#appRoot, QWidget#scrollContent, QWidget#contentBody,
+    QStackedWidget#pageStack {{ background: {p.background}; color: {p.foreground}; }}
+    QFrame#topbar, QFrame#appFooter, QFrame#topBar,
+    QFrame#footerBar {{ background: {p.panel}; border-color: {p.border}; }}
+    QFrame#surface, QFrame#presetBar, QFrame#toolList,
+    QFrame#card, QFrame#toolCard, QFrame#optionCard {{
+        background: {p.panel}; border-color: {p.border};
+    }}
+    QFrame#tabsBar, QFrame#inlineToggle, QFrame#innerCard {{
+        background: {p.surface}; border-color: {p.border};
+    }}
+    QFrame#lineDivider {{ background: {p.border}; }}
+    QLabel {{ color: {p.foreground}; }}
+    QLabel#pageTitle, QLabel#sectionTitle, QLabel#cardTitle,
+    QLabel#fieldLabel, QLabel#brandName, QLabel#toolTitle {{ color: {p.foreground}; }}
+    QLabel#pageDescription, QLabel#body, QLabel#toolDetail,
+    QLabel#supportText, QLabel#footerText, QLabel#brandSub,
+    QLabel#sectionHint, QLabel#disclaimer {{ color: {p.muted}; }}
+    QLabel#eyebrow {{ color: {p.accent}; }}
+    QLabel#toolNumber, QLabel#valuePill {{
+        background: {p.surface}; color: {p.foreground}; border-color: {p.border};
+    }}
+    QLabel#statusTag {{ background: {p.surface}; color: {p.foreground}; }}
+    QPushButton#navTab, QPushButton#detailTab, QPushButton#navButton {{
+        background: transparent; color: {p.foreground};
+    }}
+    QPushButton#navTab:checked, QPushButton#detailTab:checked,
+    QPushButton#navButton:checked {{
+        background: {p.surface}; border: 1px solid {p.accent}; color: {p.foreground};
+    }}
+    QPushButton#primaryButton {{
+        background: {p.accent}; color: {p.accent_text}; border-color: {p.accent};
+    }}
+    QPushButton#secondaryButton {{
         background: {p.panel}; color: {p.foreground}; border-color: {p.border};
     }}
-    QPushButton#presetButton:checked {{ background: {p.surface}; border-color: {p.accent}; color: {p.foreground}; }}
-    QPushButton#primaryButton {{ background: {p.accent}; color: {p.accent_text}; border-color: {p.accent}; }}
-    QLineEdit, QTextEdit, QComboBox {{ background: {p.panel}; color: {p.foreground}; border-color: {p.border}; }}
+    QLineEdit, QTextEdit, QComboBox {{
+        background: {p.panel}; color: {p.foreground}; border-color: {p.border};
+    }}
     QComboBox QAbstractItemView {{ background: {p.panel}; color: {p.foreground}; }}
-    QFrame#sidebar QLabel#brandName {{ color: #FFFFFF; }}
-    QFrame#sidebar QLabel#brandSub {{ color: #98A4C8; }}
-    QFrame#sidebar QLabel#sideSection {{ color: #8591B6; }}
-    QFrame#sidebar QLabel#sidebarFoot {{ color: #8390B1; }}
-    QFrame#sidebar QFrame#innerCard {{ background: #252B49; border-color: #3B4267; }}
-    QFrame#sidebar QFrame#innerCard QLabel#micro {{ color: #BCC7E4; }}
     '''
 
 
