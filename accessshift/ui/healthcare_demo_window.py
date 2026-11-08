@@ -54,7 +54,7 @@ class HealthcareDemoWindow(QDialog):
         self._targets: dict[str, QPushButton] = {}
         self._build_ui()
         self.set_accessible(False)  # start as original baseline, then listen for edits
-        self.setWindowTitle('AccessShift AI — SmartInterface Demo Lab')
+        self.setWindowTitle('North Health · Appointment form')
         # Keep controls usable when the window is dragged smaller.
         # A narrow original portal scrolls instead of crushing form fields.
         self.resize(1170, 800)
@@ -94,41 +94,39 @@ class HealthcareDemoWindow(QDialog):
         outer.setContentsMargins(21, 18, 21, 15)
         outer.setSpacing(12)
 
-        # Header clearly identifies this as a demonstration, not a patient app.
         header = QHBoxLayout()
         headings = QVBoxLayout()
-        headings.setSpacing(3)
-        headings.addWidget(self._label('Live preview · same healthcare form', 'pageTitle'))
+        headings.setSpacing(4)
+        headings.addWidget(self._label('Schedule an appointment', 'pageTitle'))
         headings.addWidget(self._label(
-            'Leave this window open. Change SmartInterface settings in AccessShift; this exact form updates live.',
+            'Sample form only. Change reading settings in AccessShift and this page updates.',
             'subheading', True))
         header.addLayout(headings, 1)
-        tag = self._label('Local simulation · no data sent', 'demoBadge')
+        tag = self._label('Nothing is sent', 'demoBadge')
         header.addWidget(tag, 0, Qt.AlignmentFlag.AlignTop)
         outer.addLayout(header)
 
-        # One display-only status strip: all switches and sliders live in the
-        # FIRST window (AccessShift Settings), never in this demo.
-        toggler, tlay = self._frame('toggleSurface', padding=12, spacing=8)
+        toggler, tlay = self._frame('toggleSurface', padding=16, spacing=6)
         live_row = QHBoxLayout()
-        live_row.addWidget(self._label('Live from AccessShift settings', 'subheading'))
+        live_row.addWidget(self._label('Form view', 'subheading'))
         live_row.addStretch(1)
-        self.mode_tag = self._label('Original baseline', 'modeTag')
+        self.mode_tag = self._label('Standard', 'modeTag')
         live_row.addWidget(self.mode_tag)
         tlay.addLayout(live_row)
         self.mode_status = self._label(
-            'This is the complicated original form. Change a preference in the AccessShift window to transform it.',
+            'This is the full form. Turn on Simplify in AccessShift to show one step at a time.',
             'modeDescription', True)
         tlay.addWidget(self.mode_status)
         outer.addWidget(toggler)
 
-        # The comparison is narrated on screen, so judges see what changed.
+        # Quiet status chips (updated in set_accessible; kept for compatibility).
         changes = QHBoxLayout()
         changes.setSpacing(8)
         self.chip_clutter = self._label('', 'changeChip')
         self.chip_size = self._label('', 'changeChip')
         self.chip_flow = self._label('', 'changeChip')
         for chip in (self.chip_clutter, self.chip_size, self.chip_flow):
+            chip.hide()
             changes.addWidget(chip)
         changes.addStretch(1)
         outer.addLayout(changes)
@@ -149,16 +147,16 @@ class HealthcareDemoWindow(QDialog):
         portal_l.setContentsMargins(14, 14, 14, 16)
         portal_l.setSpacing(13)
 
-        top, top_l = self._frame('portalHeader', padding=17, spacing=6)
+        top, top_l = self._frame('portalHeader', padding=20, spacing=8)
         topline = QHBoxLayout()
-        brand = self._label('✚  NORTHHEALTH', 'portalBrand')
+        brand = self._label('North Health', 'portalBrand')
         topline.addWidget(brand)
         topline.addStretch(1)
-        topline.addWidget(self._label('Patient portal  /  Appointments', 'portalPath'))
+        topline.addWidget(self._label('Appointments', 'portalPath'))
         top_l.addLayout(topline)
-        top_l.addWidget(self._label('Schedule a healthcare appointment', 'portalTitle'))
+        top_l.addWidget(self._label('Book a visit', 'portalTitle'))
         top_l.addWidget(self._label(
-            'Sample appointment data only. This is not connected to a clinic.', 'portalSub'))
+            'Practice form. Not connected to a real clinic.', 'portalSub'))
         portal_l.addWidget(top)
 
         self.progress_row = QHBoxLayout()
@@ -251,8 +249,8 @@ class HealthcareDemoWindow(QDialog):
         center_l.addWidget(self.times)
 
         self.review, review_l = self._frame('sectionCard', padding=18, spacing=11)
-        review_l.addWidget(self._label('Review the same appointment', 'sectionTitle'))
-        review_l.addWidget(self._label('Nothing was lost when SmartInterface changed the layout.', 'sectionHint', True))
+        review_l.addWidget(self._label('Review', 'sectionTitle'))
+        review_l.addWidget(self._label('Check the details, then submit.', 'sectionHint', True))
         self.summary = self._label('', 'reviewSummary', True)
         review_l.addWidget(self.summary)
         center_l.addWidget(self.review)
@@ -287,8 +285,7 @@ class HealthcareDemoWindow(QDialog):
         body.addWidget(self.notes)
 
         bottom = self._label(
-            'AccessShift changes the presentation of this same local form. No medical records, '
-            'real appointments, browser extensions or third-party websites are involved.',
+            'Local practice form only. No clinic connection and no patient data leaves this computer.',
             'footerText', True)
         outer.addWidget(bottom)
 
@@ -388,8 +385,7 @@ class HealthcareDemoWindow(QDialog):
         self._simplify = True
         self.set_accessible(False)
         self.mode_status.setText(
-            'ORIGINAL FORM — Now use the first AccessShift window to change text size, colour, '
-            'target size, or toggle SmartInterface. This preview updates automatically.')
+            'Full form. Open AccessShift to change text size, colour, or simplify the steps.')
 
     def apply_preferences(self, settings: dict) -> None:
         """Called by MainWindow.preferences_changed on Qt's GUI thread.
@@ -415,28 +411,22 @@ class HealthcareDemoWindow(QDialog):
         self.sidebar.setVisible(not guided)
         self.notes.setVisible(not guided)
         if self._accessible:
-            font_pct = int(self._visual_settings.get('font_size_pct', 110))
-            target_pct = int(self._visual_settings.get('target_size_pct', 140))
-            tone = str(self._visual_settings.get('color_profile', 'standard')).replace('_',' ')
-            spacing = int(self._visual_settings.get('letter_spacing_px', 0))
             self.mode_status.setText(
-                'LIVE ADAPTATION — This is the same form: text ' + str(font_pct) + '%, '
-                + 'targets ' + str(target_pct) + '%, ' + tone + ' colours, '
-                + str(spacing) + ' px letter spacing. '
-                + ('Guided steps and reduced clutter are on.' if guided else
-                   'All sections stay visible (reduce complexity is off).'))
-            self.mode_tag.setText('SMARTINTERFACE ON')
-            self.chip_clutter.setText('2 sidebars hidden' if guided else 'Sidebars visible')
-            self.chip_size.setText('Targets ' + str(target_pct) + '%')
-            self.chip_flow.setText('Guided steps' if guided else 'All sections visible')
+                'Simplified view. Side panels are hidden'
+                + (' and steps show one at a time.' if guided else '.')
+            )
+            self.mode_tag.setText('Simplified')
+            self.chip_clutter.setText('Sidebars hidden' if guided else 'Sidebars visible')
+            self.chip_size.setText('Larger targets')
+            self.chip_flow.setText('Guided steps' if guided else 'All sections')
         else:
             self.mode_status.setText(
-                'ORIGINAL PORTAL — SmartInterface is off. Toggle it on in the AccessShift '
-                'settings window, or change another preference while it is enabled.')
-            self.mode_tag.setText('ORIGINAL FORM')
-            self.chip_clutter.setText('2 extra sidebars')
-            self.chip_size.setText('Compact targets')
-            self.chip_flow.setText('All sections visible')
+                'Full form. Turn on Simplify in AccessShift to reduce clutter.'
+            )
+            self.mode_tag.setText('Standard')
+            self.chip_clutter.setText('Sidebars')
+            self.chip_size.setText('Compact')
+            self.chip_flow.setText('All sections')
         previous_scroll = self.scroll.verticalScrollBar().value()
         self._go_step(self._step if guided else 0)
         self._styling(self._accessible)

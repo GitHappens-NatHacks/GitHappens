@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>AccessShift · Boarding Pass</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;font-family:"IBM Plex Sans",Helvetica,Arial,sans-serif;background:#E9EDF2;color:#121820;display:flex}
+aside{width:228px;background:#1A2330;color:#D0D7E2;padding:22px 14px}
+.brand{font-size:18px;font-weight:700;color:#fff;margin-bottom:18px;font-family:"IBM Plex Mono",monospace}
+.nav{padding:11px 12px;font-size:13px;font-weight:600}
+.nav.on{background:#2A3648;border-left:3px solid #E23B2E}
+main{flex:1;padding:24px 28px;display:flex;gap:18px}
+.pass{width:420px;background:#fff;border:1px solid #B8C2CE;border-radius:8px;overflow:hidden}
+.seg{padding:14px 16px;border-bottom:1px dashed #C5CED8}
+.seg label{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5B6A7C;margin-bottom:4px}
+.seg .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.scan{background:#121820;color:#fff;padding:16px;font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.12em}
+.board{flex:1;background:#fff;border:1px solid #B8C2CE;border-radius:8px;overflow:hidden}
+.board h1{font-size:18px;padding:14px 16px;border-bottom:1px solid #D5DCE5}
+.row{display:grid;grid-template-columns:1.2fr .6fr .5fr;padding:14px 16px;border-bottom:1px solid #E6EBF1;font-size:14px;font-weight:600}
+.row.head{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#5B6A7C}
+.row.alert{background:#FDECEA;border-left:4px solid #E23B2E}
+.row .mono{font-family:"IBM Plex Mono",monospace}
+</style></head><body>
+<aside>
+  <div class="brand">ACCESSSHIFT</div>
+  <div class="nav on">Dashboard</div>
+  <div class="nav">My accessibility profile</div>
+  <div class="nav">Eye & blink control</div>
+  <div class="nav">SteadyHand</div>
+  <div class="nav">SmartInterface</div>
+  <div class="nav">Communication</div>
+  <div class="nav">Demo Lab & tests</div>
+</aside>
+<main>
+  <div class="pass">
+    <div class="seg"><label>Passenger setup</label><div class="v">ALS · motor</div></div>
+    <div class="seg"><label>Active modules</label><div class="v">1 / 4</div></div>
+    <div class="seg"><label>Environment</label><div class="v">Local demo</div></div>
+    <div class="scan">AS-LOCAL · PREFS SAVED</div>
+  </div>
+  <div class="board">
+    <h1>Module board · live status</h1>
+    <div class="row head"><span>Module</span><span>Status</span><span>Gate</span></div>
+    <div class="row alert"><span>Eye & blink</span><span>On</span><span class="mono">A1</span></div>
+    <div class="row"><span>SteadyHand</span><span>Off</span><span class="mono">—</span></div>
+    <div class="row"><span>SmartInterface</span><span>Off</span><span class="mono">—</span></div>
+    <div class="row"><span>Communication</span><span>Off</span><span class="mono">—</span></div>
+  </div>
+</main>
+</body></html>

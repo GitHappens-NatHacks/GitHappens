@@ -41,8 +41,8 @@ class MainWindow(ControlCenterWindow):
 
     # --- healthcare demo (Elizabeth) -------------------------------------------------
     def _add_demo_toolbar_button(self) -> None:
-        shortcut = button('Open Demo Lab', 'secondaryButton')
-        shortcut.setToolTip('Open the separate, local healthcare demo window')
+        shortcut = button('Open form demo', 'secondaryButton')
+        shortcut.setToolTip('Open the sample appointment form')
         shortcut.setMinimumHeight(36)
         shortcut.clicked.connect(self._open_healthcare_demo)
         self.top_bar_layout.insertWidget(self.top_bar_layout.count() - 1, shortcut)
@@ -50,30 +50,30 @@ class MainWindow(ControlCenterWindow):
     def _add_local_demo_entries(self) -> None:
         test_page = self._pages['test']
         test_layout = test_page.widget().layout()
-        demo, column = card(name='innerCard', margins=19, spacing=10)
-        column.addWidget(label('Healthcare Demo Lab · live SmartInterface', 'sectionTitle'))
+        demo, column = card(name='innerCard', margins=20, spacing=10)
+        column.addWidget(label('Appointment form demo', 'sectionTitle'))
         column.addWidget(label(
-            'Open a separate fictional healthcare form. AccessShift stays open on SmartInterface settings: '
-            'change a slider or theme and watch the same form update instantly.',
+            'Open the sample healthcare form. Reading settings from AccessShift update it live.',
             'bodyText', True))
-        launch = button('Launch healthcare preview  ↗', 'primaryButton')
-        launch.setAccessibleName('Open live local healthcare form preview')
+        launch = button('Open appointment form', 'primaryButton')
+        launch.setAccessibleName('Open sample appointment form')
+        launch.setMinimumHeight(48)
         launch.clicked.connect(self._open_healthcare_demo)
         column.addWidget(launch, alignment=Qt.AlignmentFlag.AlignLeft)
-        test_layout.insertWidget(4, demo)
+        test_layout.insertWidget(3, demo)
 
         preferences_page = self._pages['interface']
         pref_layout = preferences_page.widget().layout()
-        preview_card, pl = card(name='innerCard', margins=18, spacing=9)
-        pl.addWidget(label('Live healthcare preview', 'sectionTitle'))
+        preview_card, pl = card(name='innerCard', margins=20, spacing=10)
+        pl.addWidget(label('See the form', 'sectionTitle'))
         pl.addWidget(label(
-            'Keep this window open alongside a fictional appointment form. Changes to text size, colour, '
-            'tint, layout and target size apply immediately without resetting entered data.',
+            'Open the appointment form beside these settings. Text size and colour update right away.',
             'bodyText', True))
-        open_button = button('Open separate demo window  ↗', 'secondaryButton')
+        open_button = button('Open appointment form', 'secondaryButton')
+        open_button.setMinimumHeight(48)
         open_button.clicked.connect(self._open_healthcare_demo)
         pl.addWidget(open_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        pref_layout.insertWidget(4, preview_card)
+        pref_layout.insertWidget(2, preview_card)
 
     def _open_healthcare_demo(self) -> None:
         self._navigate('interface')
@@ -118,12 +118,12 @@ class MainWindow(ControlCenterWindow):
         bar = QHBoxLayout(self.gaze_bar)
         bar.setContentsMargins(28, 16, 28, 16)
         bar.setSpacing(14)
-        self.btn_recalibrate_gaze = QPushButton('Recalibrate gaze')
+        self.btn_recalibrate_gaze = QPushButton('Recalibrate HeadPoint')
         self.btn_gaze_source = QPushButton()
         self.gaze_status = QLabel()
         self.gaze_status.setObjectName('gazeStatusLabel')
         self.gaze_status.setWordWrap(True)
-        self.btn_exit_gaze = QPushButton('Exit gaze control\n(or close your eyes for 3 s)')
+        self.btn_exit_gaze = QPushButton('Exit HeadPoint\n(or close your eyes for 3 s)')
         self.btn_exit_gaze.setMinimumHeight(96)
         self.btn_exit_gaze.clicked.connect(lambda: self.chk_gaze.setChecked(False))
         for btn in (self.btn_recalibrate_gaze, self.btn_gaze_source):

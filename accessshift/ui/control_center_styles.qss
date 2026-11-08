@@ -3,7 +3,7 @@ QWidget#appRoot, QWidget#scrollContent { background: #F5F5F7; color: #0B1F3A; }
 QFrame#siteHeader { background: rgba(255, 255, 255, 0.92); border: none; border-bottom: 1px solid #D7E0EC; }
 QLabel#brandMark { color: #0B1F3A; font-size: 30px; font-weight: 200; letter-spacing: -0.8px; }
 QLabel#brandDot { color: #2F6FED; font-size: 22px; font-weight: 700; }
-QWidget#navCluster { background: transparent; max-width: 520px; }
+QWidget#navCluster { background: transparent; max-width: 640px; }
 QPushButton#navButton {
     color: #3E5370; background: transparent; border: none; border-radius: 0;
     padding: 8px 10px; font-weight: 500; font-size: 13px; letter-spacing: -0.1px;

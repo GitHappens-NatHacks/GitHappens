@@ -285,7 +285,7 @@ def clinical_title(text: str) -> QLabel:
 
 def dwell_band_label(ms: int) -> str:
     if ms <= 2900:
-        return 'Snappy'
+        return 'Fast'
     if ms <= 3400:
-        return 'Balanced'
-    return 'Safe'
+        return 'Medium'
+    return 'Slow'

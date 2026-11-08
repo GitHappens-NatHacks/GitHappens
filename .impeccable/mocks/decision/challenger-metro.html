@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>AccessShift · Metro Tiles</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;font-family:"Segoe UI",Helvetica,Arial,sans-serif;background:#000;color:#fff;display:flex}
+aside{width:200px;padding:24px 12px;background:#111}
+.brand{font-size:18px;font-weight:300;margin-bottom:24px;color:#00BCF2}
+.nav{padding:14px 10px;font-size:16px;font-weight:300}
+.nav.on{background:#00BCF2;color:#000;font-weight:600}
+main{flex:1;padding:28px;display:flex;flex-direction:column;gap:18px}
+h1{font-size:64px;font-weight:200;line-height:.9;white-space:nowrap;overflow:hidden;max-width:100%}
+.sub{font-size:16px;color:#9AA;max-width:40ch}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:1}
+.tile{background:#00BCF2;color:#000;padding:20px;min-height:180px;display:flex;flex-direction:column;justify-content:flex-end}
+.tile.dim{background:#1A1A1A;color:#fff}
+.tile h2{font-size:28px;font-weight:300;text-transform:lowercase}
+.tile span{font-size:14px;margin-top:8px;font-weight:600}
+</style></head><body>
+<aside>
+  <div class="brand">accessshift</div>
+  <div class="nav on">dashboard</div>
+  <div class="nav">profile</div>
+  <div class="nav">eye control</div>
+  <div class="nav">steadyhand</div>
+  <div class="nav">smartinterface</div>
+  <div class="nav">speech</div>
+  <div class="nav">demo lab</div>
+</aside>
+<main>
+  <h1>accessibility, your way.</h1>
+  <p class="sub">Configure your tools, preview your changes, and return whenever you need.</p>
+  <div class="tiles">
+    <div class="tile"><h2>eye & blink</h2><span>on</span></div>
+    <div class="tile dim"><h2>steadyhand</h2><span>off</span></div>
+    <div class="tile dim"><h2>smartinterface</h2><span>off</span></div>
+    <div class="tile dim"><h2>communication</h2><span>off</span></div>
+  </div>
+</main>
+</body></html>

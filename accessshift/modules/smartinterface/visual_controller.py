@@ -104,27 +104,27 @@ def apply_accessshift_appearance(window: Any, base_qss: str, font_size_pct: int,
 
 
 class VisualPreview(QFrame):
-    """A working, independently styled preview of text, contrast and spacing."""
+    """Quiet sample of text size, contrast, and spacing for the Demo Lab form."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName('smartPreview')
-        self.setMinimumHeight(200)
+        self.setMinimumHeight(180)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(23, 22, 23, 22)
-        lay.setSpacing(10)
-        self.heading = QLabel('Your screen, your comfort.')
+        lay.setContentsMargins(28, 26, 28, 26)
+        lay.setSpacing(12)
+        self.heading = QLabel('Sample appointment text')
         self.heading.setAccessibleName('Preview heading')
         self.body = QLabel(
-            'Make text easier to read with size, spacing and contrast adjustments.\n'
-            'This live preview updates as you move the controls.',
+            'Patient name, visit type, and time appear at this size and spacing.\n'
+            'Move the controls above to see the change here.',
         )
         self.body.setWordWrap(True)
-        self.note = QLabel('Changes affect AccessShift and the local healthcare demo only.')
+        self.note = QLabel('Updates the Demo Lab form only. Other apps stay the same.')
         self.note.setWordWrap(True)
-        self.action = QPushButton('Try sample button')
-        self.action.setAccessibleName('Try sample button in preview')
-        self.action.setMinimumHeight(42)
+        self.action = QPushButton('Sample button')
+        self.action.setAccessibleName('Sample button in preview')
+        self.action.setMinimumHeight(44)
         self.action.clicked.connect(self._pressed)
         action_lay = QHBoxLayout()
         action_lay.addWidget(self.action)
@@ -137,18 +137,18 @@ class VisualPreview(QFrame):
         self.set_preferences(110, 'standard', 0)
 
     def _pressed(self):
-        self.note.setText('Selected successfully. This sample button is interactive.')
+        self.note.setText('Button works. Ready for the Demo Lab form.')
 
     def set_preferences(self, font_size_pct: int, color_profile: str, letter_spacing_px: int) -> None:
         p = PALETTES.get(color_profile, PALETTES['standard'])
         self.setStyleSheet(
-            f'QFrame#smartPreview {{ background-color: {p.background}; '
-            f'border: 1px solid {p.border}; border-radius: 15px; }}',
+            f'QFrame#smartPreview {{ background-color: {p.panel}; '
+            f'border: none; border-radius: 0; }}',
         )
         for widget, pt, weight, color in [
-            (self.heading, 19, QFont.Weight.Bold, p.foreground),
-            (self.body, 13, QFont.Weight.Normal, p.foreground),
-            (self.note, 11, QFont.Weight.Normal, p.muted),
+            (self.heading, 22, QFont.Weight.ExtraLight, p.foreground),
+            (self.body, 15, QFont.Weight.Normal, p.muted),
+            (self.note, 13, QFont.Weight.Normal, p.muted),
         ]:
             font = QFont(widget.font())
             font.setPixelSize(_font_size(font_size_pct, pt))
@@ -158,8 +158,8 @@ class VisualPreview(QFrame):
             widget.setStyleSheet(f'color: {color}; background: transparent; border: none;')
         self.action.setStyleSheet(
             f'QPushButton {{ background: {p.accent}; color: {p.accent_text}; '
-            'padding: 10px 16px; border: none; border-radius: 9px; font-weight: 700; }',
+            'padding: 12px 20px; border: none; border-radius: 980px; font-weight: 650; }',
         )
         action_font = QFont(self.action.font())
-        action_font.setPixelSize(_font_size(font_size_pct, 12))
+        action_font.setPixelSize(_font_size(font_size_pct, 14))
         self.action.setFont(action_font)

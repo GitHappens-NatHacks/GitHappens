@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>AccessShift · Canon</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;font-family:Inter,system-ui,sans-serif;background:#F8FAFC;color:#0F172A;display:flex}
+aside{width:240px;background:#0F172A;color:#E2E8F0;padding:24px 16px}
+.brand{font-size:18px;font-weight:700;margin-bottom:20px}
+.nav{padding:10px 12px;border-radius:8px;font-size:14px;margin-bottom:4px}
+.nav.on{background:#1E293B;color:#fff}
+main{flex:1}
+.top{height:56px;background:#fff;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;padding:0 32px;font-size:13px;font-weight:600;color:#64748B}
+.content{padding:28px 32px}
+h1{font-size:28px;font-weight:700;margin-bottom:8px}
+.sub{color:#64748B;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:20px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.card h2{font-size:13px;color:#64748B;margin-bottom:8px}
+.card .v{font-size:24px;font-weight:700}
+.btn{display:inline-block;margin-top:20px;background:#2563EB;color:#fff;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px}
+</style></head><body>
+<aside>
+  <div class="brand">AccessShift</div>
+  <div class="nav on">Dashboard</div>
+  <div class="nav">Profile</div>
+  <div class="nav">Eye control</div>
+  <div class="nav">SteadyHand</div>
+  <div class="nav">SmartInterface</div>
+  <div class="nav">Communication</div>
+  <div class="nav">Demo Lab</div>
+</aside>
+<main>
+  <div class="top">Settings</div>
+  <div class="content">
+    <h1>Accessibility settings</h1>
+    <p class="sub">Manage modules and preferences for your demo environment.</p>
+    <div class="grid">
+      <div class="card"><h2>Selected features</h2><div class="v">1 / 4</div></div>
+      <div class="card"><h2>Profile</h2><div class="v">Custom</div></div>
+      <div class="card"><h2>Environment</h2><div class="v">Local</div></div>
+    </div>
+    <div class="btn">Customize profile</div>
+  </div>
+</main>
+</body></html>

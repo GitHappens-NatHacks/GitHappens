@@ -33,8 +33,7 @@ from accessshift.ui.control_center_settings import (
 )
 from accessshift.ui import typography as ui_type
 from accessshift.ui.gaze_control_panel import (
-    DwellRingPreview, GazePostureDiagram, GazeTelemetryViewport, IconToggleRow,
-    clinical_title, dwell_band_label, micro_label,
+    DwellRingPreview, GazeTelemetryViewport, dwell_band_label,
 )
 
 # Atmosphere photos per page. Spread through sections (never clustered as one gallery).
@@ -135,17 +134,19 @@ class FeatureTile(QFrame):
         pixmap: QPixmap,
         *,
         primary: bool = False,
+        cue: str = '',
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self._pix = pixmap
         self._title = title
         self._description = description
+        self._cue = cue
         self._primary = primary
         self._active = False
         self.setObjectName('featureTilePrimary' if primary else 'featureTile')
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(240 if primary else 168)
+        self.setMinimumHeight(260 if primary else 168)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.status = label('Off', 'featureTileStatus')
         self.status.hide()  # painted; kept for _refresh text updates
@@ -204,7 +205,12 @@ class FeatureTile(QFrame):
         body_size = 16 if self._primary else 14
         p.setFont(QFont(ui_type.BODY_FAMILY, body_size, QFont.Weight.Normal))
         body_top = margin + (52 if self._primary else 44)
-        body_rect = QRectF(margin, body_top, rect.width() - margin * 2 - 100, rect.height() - body_top - margin - 8)
+        footer = 36 if self._cue else 8
+        body_rect = QRectF(
+            margin, body_top,
+            rect.width() - margin * 2 - 100,
+            rect.height() - body_top - margin - footer,
+        )
         p.drawText(
             body_rect,
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
@@ -220,6 +226,12 @@ class FeatureTile(QFrame):
         p.drawRoundedRect(badge_rect, 980, 980)
         p.setPen(ink)
         p.drawText(badge_rect, int(Qt.AlignmentFlag.AlignCenter), badge)
+
+        if self._cue:
+            p.setPen(QColor('#A8C8F0'))
+            p.setFont(QFont(ui_type.BODY_FAMILY, 14, QFont.Weight.DemiBold))
+            cue_rect = QRectF(margin, rect.bottom() - margin - 22, rect.width() - margin * 2, 24)
+            p.drawText(cue_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self._cue)
         p.end()
 
 
@@ -565,11 +577,11 @@ class MainWindow(QMainWindow):
         center_l.setSpacing(0)
         nav_entries = [
             ('overview', 'Home', 'navButton'),
-            ('gaze', 'Eye', 'navPrimaryButton'),
-            ('steady', 'Steady', 'navPrimaryButton'),
-            ('interface', 'Interface', 'navButton'),
+            ('gaze', 'HeadPoint', 'navPrimaryButton'),
+            ('steady', 'SteadyHand', 'navPrimaryButton'),
+            ('interface', 'Reading', 'navButton'),
             ('speech', 'Speech', 'navButton'),
-            ('test', 'Demo', 'navButton'),
+            ('test', 'Try demos', 'navButton'),
         ]
         for key, text, role in nav_entries:
             nav_button = button(text, role)
@@ -728,22 +740,23 @@ class MainWindow(QMainWindow):
         self._photo_band(lay, shots[1], 380)
         self._section(
             lay,
-            'Core features',
-            'Head tracking and SteadyHand are the main tools. Open a card to configure it.',
+            'Start here',
+            'HeadPoint and SteadyHand are the two main tools. Open a card, then use Calibrate or Try demo.',
         )
         self.overview_module_labels = {}
         self._module_cells = {}
         primary = [
-            ('gaze_control', 'Head & eye tracking',
-             'Point with your head or eyes, dwell or blink to select, then calibrate for booking focus.',
-             'gaze'),
-            ('steady_hand', 'SteadyHand pointer',
-             'Smooth shaky movement and enlarge targets for in-app practice and supported overlays.',
-             'steady'),
+            ('gaze_control', 'HeadPoint',
+             'Point with your head. Look at a button, then blink or wait to select it.',
+             'gaze', 'Open · Calibrate · Try booking demo'),
+            ('steady_hand', 'SteadyHand',
+             'Steady a shaky pointer and make buttons easier to hit.',
+             'steady', 'Open · Adjust · Try SteadyHand demo'),
         ]
-        for key, title_text, desc, page_key in primary:
+        for key, title_text, desc, page_key, cue in primary:
             tile = FeatureTile(
-                title_text, desc, self._load_photo(FEATURE_PHOTOS[key]), primary=True,
+                title_text, desc, self._load_photo(FEATURE_PHOTOS[key]),
+                primary=True, cue=cue,
             )
             tile.activated.connect(lambda k=page_key: self._navigate(k))
             lay.addWidget(tile)
@@ -751,18 +764,36 @@ class MainWindow(QMainWindow):
             self._module_cells[key] = tile
             self.overview_module_labels[key] = tile.status
 
+        # Always-visible shortcuts so calibration and demos are not buried.
+        shortcuts = QHBoxLayout()
+        shortcuts.setSpacing(12)
+        cal_now = button('Calibrate HeadPoint', 'primaryButton')
+        cal_now.setMinimumHeight(52)
+        cal_now.clicked.connect(self._try_headpoint_calibrate)
+        try_head = button('Try HeadPoint demo', 'secondaryButton')
+        try_head.setMinimumHeight(52)
+        try_head.clicked.connect(self._try_headpoint_demo)
+        try_steady = button('Try SteadyHand demo', 'secondaryButton')
+        try_steady.setMinimumHeight(52)
+        try_steady.clicked.connect(self._try_steady_demo)
+        shortcuts.addWidget(cal_now, 1)
+        shortcuts.addWidget(try_head, 1)
+        shortcuts.addWidget(try_steady, 1)
+        lay.addLayout(shortcuts)
+        lay.addSpacing(20)
+
         self._photo_pair(lay, shots[2], shots[3], 300)
         self._section(
             lay,
             'Also available',
-            'Helpful extras with their own settings pages. Still one click away.',
+            'Extra helpers. Useful, but secondary to HeadPoint and SteadyHand.',
         )
         secondary = [
-            ('smart_interface', 'SmartInterface',
-             'Simplify the bundled healthcare Demo Lab layout and appearance.',
+            ('smart_interface', 'Easier reading',
+             'Make the appointment form larger and clearer.',
              'interface'),
-            ('predictive_speech', 'Speech & text',
-             'Speak a typed message aloud. Predictive text hooks in from the speech module.',
+            ('predictive_speech', 'Speech',
+             'Type a message and hear it spoken aloud.',
              'speech'),
         ]
         for key, title_text, desc, page_key in secondary:
@@ -840,10 +871,10 @@ class MainWindow(QMainWindow):
         self._photo_band(lay, shots[3], 380)
         self._section(lay, 'Fine-tune your assistance')
         options = [
-            ('gaze_control', 'Eye & blink navigation', 'Navigate through webcam gaze and deliberate blink selection.'),
-            ('steady_hand', 'Stabilize my mouse', 'Smooth shaky cursor movements and help with small targets.'),
-            ('smart_interface', 'SmartInterface demo', 'Enable the simpler layout in the bundled healthcare demo.'),
-            ('predictive_speech', 'Communication support', 'Prepare text-to-speech and predictive text options.'),
+            ('gaze_control', 'HeadPoint', 'Point with your head and select buttons by looking.'),
+            ('steady_hand', 'SteadyHand', 'Smooth shaky mouse movement and enlarge targets.'),
+            ('smart_interface', 'Easier reading', 'Simplify the appointment form in Demo Lab.'),
+            ('predictive_speech', 'Speech', 'Speak a typed message aloud.'),
         ]
         for key, name, desc in options:
             r = PreferenceRow(name, desc)
@@ -872,250 +903,156 @@ class MainWindow(QMainWindow):
         return page
 
     def _page_gaze(self):
-        scroller = QScrollArea()
-        scroller.setWidgetResizable(True)
-        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        container = QWidget()
-        container.setObjectName('scrollContent')
-        lay = QVBoxLayout(container)
-        lay.setContentsMargins(64, 48, 64, 64)
-        lay.setSpacing(24)
-
+        page, lay = self._page(
+            'HeadPoint',
+            'Point with your head. Calibrate once, then try the booking demo.',
+        )
         shots = self._photos('gaze')
-        lay.addWidget(clinical_title('Eye & blink control'))
-        intro = label(
-            'Turn on head or eye pointing, then calibrate with the webcam. Default pointing source is head.',
-            'clinicalLead',
-            True,
-        )
-        lay.addWidget(intro)
-        self._text_on_photo(
-            lay, shots[0],
-            'Point with your head or eyes.',
-            'Webcam tracking stays on this machine. Calibrate before booking focus mode.',
-            height=400,
-        )
-        self._photo_pair(lay, shots[1], shots[2], 300)
+        self._photo_band(lay, shots[0], 280)
 
-        columns = QHBoxLayout()
-        columns.setSpacing(24)
-
-        # Left: telemetry + posture diagram (~45%).
-        left = QVBoxLayout()
-        left.setSpacing(12)
-        left.addWidget(micro_label('TRACKING ENGINE'))
-        telemetry_panel = QFrame()
-        telemetry_panel.setObjectName('clinicalPanel')
-        tp = QVBoxLayout(telemetry_panel)
-        tp.setContentsMargins(10, 10, 10, 10)
-        tp.setSpacing(8)
+        # Keep clinical widgets for refresh hooks; do not show the busy telemetry UI.
         self.gaze_viewport = GazeTelemetryViewport()
-        tp.addWidget(self.gaze_viewport, 1)
-        left.addWidget(telemetry_panel, 3)
-        diagram_panel = QFrame()
-        diagram_panel.setObjectName('clinicalPanel')
-        dp = QVBoxLayout(diagram_panel)
-        dp.setContentsMargins(0, 0, 0, 0)
-        dp.addWidget(GazePostureDiagram())
-        left.addWidget(diagram_panel, 2)
-        columns.addLayout(left, 45)
+        self.gaze_viewport.hide()
+        self.dwell_gauge = DwellRingPreview()
+        self.dwell_gauge.hide()
 
-        # Right: precision controls (~55%).
-        right = QVBoxLayout()
-        right.setSpacing(12)
+        actions = QHBoxLayout()
+        actions.setSpacing(12)
+        cal_btn = button('1 · Calibrate', 'primaryButton')
+        cal_btn.setMinimumHeight(56)
+        cal_btn.clicked.connect(self._try_headpoint_calibrate)
+        demo_btn = button('2 · Try booking demo', 'heroButton')
+        demo_btn.setMinimumHeight(56)
+        demo_btn.clicked.connect(self._try_headpoint_demo)
+        actions.addWidget(cal_btn, 1)
+        actions.addWidget(demo_btn, 1)
+        lay.addLayout(actions)
+        lay.addWidget(label(
+            'Calibrate first. Then start the demo to book a sample visit by looking at large buttons.',
+            'bodyText', True,
+        ))
+        lay.addSpacing(18)
 
-        right.addWidget(micro_label('TRACKING ENGINE'))
-        track_panel = QFrame()
-        track_panel.setObjectName('clinicalPanel')
-        tr = QVBoxLayout(track_panel)
-        tr.setContentsMargins(10, 10, 10, 10)
-        tr.setSpacing(8)
-        self.gaze_toggle = IconToggleRow(
-            'Use eye / head navigation',
-            'Start webcam pointing and open the hands-free booking focus layout.',
-            icon='eye',
+        self.gaze_toggle = PreferenceRow(
+            'Turn on HeadPoint',
+            'Move your head to point at buttons on the screen.',
         )
         self.gaze_toggle.changed.connect(self._on_gaze_toggle)
-        tr.addWidget(self.gaze_toggle)
-        right.addWidget(track_panel)
+        lay.addWidget(self.gaze_toggle)
+        lay.addSpacing(10)
 
-        right.addWidget(micro_label('SELECTION MECHANIC'))
-        select_panel = QFrame()
-        select_panel.setObjectName('clinicalPanel')
-        sp = QVBoxLayout(select_panel)
-        sp.setContentsMargins(10, 10, 10, 10)
-        sp.setSpacing(10)
-        self.blink_row = IconToggleRow(
-            'Blink to select',
-            'Use a deliberate blink as confirmation after dwell has started.',
-            icon='blink',
+        self.blink_row = PreferenceRow(
+            'Blink to confirm',
+            'Blink once when you want to press the highlighted button.',
         )
         self.blink_row.changed.connect(lambda v: self._change_option('blink_select', v))
-        sp.addWidget(self.blink_row)
+        lay.addWidget(self.blink_row)
+        lay.addSpacing(16)
 
-        dwell_head = QHBoxLayout()
-        dwell_copy = QVBoxLayout()
-        dwell_copy.setSpacing(2)
-        dwell_title = label('Dwell time', 'clinicalRowTitle')
-        dwell_copy.addWidget(dwell_title)
-        dwell_copy.addWidget(label(
-            'How long to look at a target before it becomes selected.',
-            'clinicalRowBody',
-            True,
+        timing, tl = card(margins=28, spacing=14)
+        tl.addWidget(label('How long to look', 'sectionTitle'))
+        tl.addWidget(label(
+            'Move toward Slow if buttons click too soon. Move toward Fast if waiting feels long.',
+            'bodyText', True,
         ))
-        dwell_head.addLayout(dwell_copy, 1)
-        self.dwell_gauge = DwellRingPreview()
-        dwell_head.addWidget(self.dwell_gauge, alignment=Qt.AlignmentFlag.AlignTop)
-        sp.addLayout(dwell_head)
-
         self.dwell_slider, dwell_row = self._slider(2800, 4200, 100, 'gaze_dwell_ms', 'ms')
-        self.dwell_band = label('Balanced', 'clinicalBand')
+        self.dwell_band = label('Medium', 'pill')
         dwell_row.addWidget(self.dwell_band)
-        sp.addLayout(dwell_row)
-        ticks = QHBoxLayout()
-        for text in ('2800 ms · Snappy', '3000 ms · Balanced', '4200 ms · Safe'):
-            tick = label(text, 'clinicalTick')
-            ticks.addWidget(tick)
-        ticks.addStretch(1)
-        sp.addLayout(ticks)
+        tl.addLayout(dwell_row)
+        pace = QHBoxLayout()
+        pace.addWidget(label('Fast', 'subtle'))
+        pace.addStretch(1)
+        pace.addWidget(label('Slow', 'subtle'))
+        tl.addLayout(pace)
         self.dwell_slider.valueChanged.connect(self._on_dwell_preview)
-        right.addWidget(select_panel)
-
-        right.addWidget(micro_label('CALIBRATION & SENSITIVITY'))
-        cal_panel = QFrame()
-        cal_panel.setObjectName('clinicalPanel')
-        cp = QVBoxLayout(cal_panel)
-        cp.setContentsMargins(12, 12, 12, 12)
-        cp.setSpacing(10)
-        cp.addWidget(label('Camera calibration', 'clinicalRowTitle'))
-        cp.addWidget(label(
-            'Enable navigation above, then run calibration. Head mode shows guided poses; eyes mode uses on-screen dots.',
-            'clinicalRowBody',
-            True,
-        ))
-        steps = QHBoxLayout()
-        steps.setSpacing(8)
-        for n, title in (
-            ('1', 'Center face'),
-            ('2', 'Track 5-point grid'),
-            ('3', 'Blink test'),
-        ):
-            step = QFrame()
-            step.setObjectName('calStep')
-            sl = QVBoxLayout(step)
-            sl.setContentsMargins(10, 8, 10, 8)
-            sl.setSpacing(4)
-            num = label(n, 'calStepNum')
-            sl.addWidget(num)
-            sl.addWidget(label(title, 'calStepText', True))
-            steps.addWidget(step, 1)
-        cp.addLayout(steps)
-        cal_btn = button('Open gaze calibration', 'primaryButton')
-        cal_btn.setObjectName('clinicalPrimary')
-        cal_btn.setMinimumHeight(44)
-        cal_btn.clicked.connect(self._request_calibration)
-        cp.addWidget(cal_btn)
-        right.addWidget(cal_panel)
-        right.addStretch(1)
-        columns.addLayout(right, 55)
-
-        lay.addLayout(columns, 1)
+        lay.addWidget(timing)
         lay.addSpacing(20)
-        self._photo_band(lay, shots[3], 380)
-        self._photo_pair(lay, shots[4], shots[5], 300)
-        self._text_on_photo(
-            lay, shots[6],
-            'Calibration is part of the flow.',
-            'Head poses or on-screen dots, then return here to adjust dwell and blink.',
-            height=360,
-        )
-        self._photo_band(lay, shots[7], 340)
-        scroller.setWidget(container)
-        return scroller
+        self._photo_band(lay, shots[1], 260)
+        lay.addStretch()
+        return page
 
     def _page_steady(self):
         page, lay = self._page(
-            'SteadyHand · Mouse assistance',
-            'Reduce pointer jitter and make small targets easier to select in supported experiences.',
+            'SteadyHand',
+            'Steady a shaky pointer. Try the practice demo any time.',
         )
         shots = self._photos('steady')
-        self._text_on_photo(
-            lay, shots[0],
-            'Steady the pointer.',
-            'Smoothing and larger targets for in-app practice and supported overlays.',
-            height=420,
-        )
-        row = PreferenceRow('Enable SteadyHand', 'Use adaptive smoothing when the pointer integration is active.')
+        self._photo_band(lay, shots[0], 280)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(12)
+        demo_btn = button('Try SteadyHand demo', 'primaryButton')
+        demo_btn.setMinimumHeight(56)
+        demo_btn.clicked.connect(self._try_steady_demo)
+        actions.addWidget(demo_btn, 1)
+        actions.addStretch(1)
+        lay.addLayout(actions)
+        lay.addWidget(label(
+            'The demo lets you practice clicking with simulated shaky movement.',
+            'bodyText', True,
+        ))
+        lay.addSpacing(16)
+
+        row = PreferenceRow('Turn on SteadyHand', 'Smooth the pointer when the helper is active.')
         row.changed.connect(lambda v: self._change_module('steady_hand', v))
         self.steady_toggle = row
         lay.addWidget(row)
         lay.addSpacing(12)
-        self._photo_pair(lay, shots[1], shots[2], 320)
         config, cfg = card(margins=28, spacing=14)
-        cfg.addWidget(label('Stabilization strength', 'sectionTitle'))
-        cfg.addWidget(label('Higher values smooth more movement but may feel slower.', 'bodyText', True))
+        cfg.addWidget(label('How strong', 'sectionTitle'))
+        cfg.addWidget(label('Higher steadies more, but may feel slower.', 'bodyText', True))
         self.strength_slider, sr = self._slider(0, 100, 5, 'tremor_strength', '%')
         cfg.addLayout(sr)
         cfg.addSpacing(12)
-        cfg.addWidget(label('Clickable target size', 'cardTitle'))
-        cfg.addWidget(label('Preference for supported overlays and adapted interfaces.', 'bodyText'))
+        cfg.addWidget(label('Button size', 'cardTitle'))
+        cfg.addWidget(label('Larger targets are easier to hit.', 'bodyText'))
         self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%')
         cfg.addLayout(tr)
         lay.addWidget(config)
-        self._photo_band(lay, shots[3], 380)
-        test_btn = button('Open live in-app tremor test', 'primaryButton')
-        test_btn.setMinimumHeight(48)
-        test_btn.setMinimumWidth(280)
-        test_btn.clicked.connect(lambda: self._navigate('test'))
-        lay.addWidget(test_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        self._photo_pair(lay, shots[4], shots[5], 300)
+        lay.addSpacing(16)
+        self._photo_pair(lay, shots[1], shots[2], 260)
         info, il = card(name='innerCard', margins=24, spacing=12)
-        il.addWidget(label('About system-wide control', 'cardTitle'))
-        il.addWidget(label('The current team controller supports in-app stabilization. '
-                           'Moving the system pointer requires separate macOS/Windows adapters and permissions. '
-                           'The settings here do not silently take over your OS cursor.', 'bodyText', True))
+        il.addWidget(label('Note', 'cardTitle'))
+        il.addWidget(label(
+            'SteadyHand works inside AccessShift demos. It does not take over your whole computer mouse.',
+            'bodyText', True,
+        ))
         lay.addWidget(info)
-        self._text_on_photo(
-            lay, shots[6],
-            'Practice in Demo Lab.',
-            'Run accuracy trials with simulated tremor before judging a setting.',
-            height=360,
-        )
-        self._photo_band(lay, shots[7], 340)
         lay.addStretch()
         return page
 
     def _page_interface(self):
         page, lay = self._page(
-            'SmartInterface',
-            'Personalize AccessShift and the live healthcare demo. No changes are made to other applications.',
+            'Easier reading',
+            'Make the Demo Lab form larger, clearer, and calmer. Other apps are not changed.',
         )
         shots = self._photos('interface')
-        self._text_on_photo(
-            lay, shots[0],
-            'Simplify what you see.',
-            'Appearance changes apply to AccessShift and the bundled healthcare demo only.',
-            height=420,
+        self._photo_band(lay, shots[0], 300)
+        row = PreferenceRow(
+            'Simplify the Demo Lab form',
+            'Hide side panels and show one step at a time.',
         )
-        row = PreferenceRow('Enable SmartInterface in Demo Lab', 'Turn the bundled healthcare form into a simpler, more accessible interface.')
         row.changed.connect(lambda v: self._change_module('smart_interface', v))
         self.interface_toggle = row
         lay.addWidget(row)
-        lay.addSpacing(12)
-        self._photo_pair(lay, shots[1], shots[2], 320)
-        options, ol = card(margins=28, spacing=14)
-        ol.addWidget(label('Live appearance settings', 'sectionTitle'))
-        self.simple_row = PreferenceRow('Guided, distraction-free layout', 'Reduce clutter and display the healthcare form in clear steps.')
+        lay.addSpacing(10)
+        self.simple_row = PreferenceRow(
+            'One step at a time',
+            'Show patient, visit, time, then review as separate steps.',
+        )
         self.simple_row.changed.connect(lambda v: self._change_option('reduce_complexity', v))
-        ol.addWidget(self.simple_row)
-        ol.addSpacing(8)
-        ol.addWidget(label('Text size · AccessShift and Demo Lab', 'cardTitle'))
+        lay.addWidget(self.simple_row)
+        lay.addSpacing(16)
+
+        options, ol = card(margins=28, spacing=14)
+        ol.addWidget(label('Text and colour', 'sectionTitle'))
+        ol.addWidget(label('Text size', 'cardTitle'))
         self.font_slider, fr = self._slider(90, 160, 10, 'font_size_pct', '%')
         ol.addLayout(fr)
-        ol.addWidget(label('Letter spacing · Demo Lab', 'cardTitle'))
+        ol.addWidget(label('Letter spacing', 'cardTitle'))
         self.spacing_slider, spacing_row = self._slider(0, 4, 1, 'letter_spacing_px', 'px')
         ol.addLayout(spacing_row)
-        ol.addWidget(label('Colour theme · both windows', 'cardTitle'))
+        ol.addWidget(label('Colour', 'cardTitle'))
         self.color_combo = QComboBox()
         for text, value in [
             ('Standard', 'standard'), ('High contrast', 'high_contrast'),
@@ -1126,20 +1063,20 @@ class MainWindow(QMainWindow):
         self.color_combo.currentIndexChanged.connect(
             lambda _: self._change_option('color_profile', self.color_combo.currentData()))
         ol.addWidget(self.color_combo)
-        ol.addWidget(label('Live preview', 'cardTitle'))
+        ol.addSpacing(8)
+        ol.addWidget(label('Sample', 'cardTitle'))
         self.visual_preview = VisualPreview()
         ol.addWidget(self.visual_preview)
-        ol.addWidget(label('Visual preferences update AccessShift immediately and the healthcare form while Demo Lab is open. '
-                           'They do not alter system fonts or unrelated applications.', 'bodyText', True))
         lay.addWidget(options)
         lay.addSpacing(16)
-        self._photo_band(lay, shots[3], 380)
-        self._photo_pair(lay, shots[4], shots[5], 300)
+        self._photo_pair(lay, shots[1], shots[2], 280)
 
         tint, tl = card(margins=28, spacing=14)
-        tl.addWidget(label('Optional colour tint · local windows only', 'sectionTitle'))
-        tl.addWidget(label('Add a subtle overlay to the AccessShift control center and its healthcare demo window. '
-                           'The desktop, browser and all other applications remain untouched.', 'bodyText', True))
+        tl.addWidget(label('Optional tint', 'sectionTitle'))
+        tl.addWidget(label(
+            'A light colour wash on AccessShift windows only. Your desktop stays unchanged.',
+            'bodyText', True,
+        ))
         self.tint_color_combo = QComboBox()
         for text, value in [
             ('Soft navy', 'warm'), ('Cool blue', 'cool'), ('Soft mist', 'rose'),
@@ -1149,23 +1086,19 @@ class MainWindow(QMainWindow):
         self.tint_color_combo.currentIndexChanged.connect(
             lambda _: self._change_option('tint_color', self.tint_color_combo.currentData()))
         tl.addWidget(self.tint_color_combo)
-        tl.addWidget(label('Tint intensity (0–20%)', 'cardTitle'))
+        tl.addWidget(label('How strong', 'cardTitle'))
         self.tint_slider, tint_row = self._slider(0, 20, 1, 'tint_opacity', '%')
         tl.addLayout(tint_row)
-        self.tint_row = PreferenceRow('Tint only AccessShift windows',
-                                      'Apply only to these two app-owned windows; no full-screen overlays.')
+        self.tint_row = PreferenceRow(
+            'Use tint',
+            'Applies only to AccessShift and the Demo Lab window.',
+        )
         self.tint_row.changed.connect(self._set_screen_tint)
         tl.addWidget(self.tint_row)
         self.tint_status = label('Window tint is off', 'bodyText')
         tl.addWidget(self.tint_status)
         lay.addWidget(tint)
-        self._text_on_photo(
-            lay, shots[6],
-            'Local windows only.',
-            'Tint never covers the desktop or unrelated applications.',
-            height=360,
-        )
-        self._photo_band(lay, shots[7], 340)
+        self._photo_band(lay, shots[3], 300)
         lay.addStretch()
         return page
 
@@ -1261,22 +1194,29 @@ class MainWindow(QMainWindow):
 
     def _page_test(self):
         page, lay = self._page(
-            'Demo Lab & tests',
-            'Preview SmartInterface on a fictional healthcare form and run SteadyHand accuracy trials.',
+            'Try demos',
+            'Practice SteadyHand here. Start HeadPoint from Home or the HeadPoint page.',
         )
         shots = self._photos('test')
-        self._text_on_photo(
-            lay, shots[0],
-            'Try it before you trust it.',
-            'Benchmark SteadyHand here, then open the healthcare form from the toolbar.',
-            height=420,
-        )
-        self._photo_pair(lay, shots[1], shots[2], 320)
+        self._photo_band(lay, shots[0], 280)
+
+        jump = QHBoxLayout()
+        jump.setSpacing(12)
+        head_btn = button('Calibrate HeadPoint', 'primaryButton')
+        head_btn.setMinimumHeight(52)
+        head_btn.clicked.connect(self._try_headpoint_calibrate)
+        head_demo = button('Try HeadPoint demo', 'secondaryButton')
+        head_demo.setMinimumHeight(52)
+        head_demo.clicked.connect(self._try_headpoint_demo)
+        jump.addWidget(head_btn, 1)
+        jump.addWidget(head_demo, 1)
+        lay.addLayout(jump)
+        lay.addSpacing(16)
+
         test, tl = card(margins=28, spacing=16)
-        tl.addWidget(label('SteadyHand • accuracy & benchmark suite', 'sectionTitle'))
+        tl.addWidget(label('SteadyHand practice', 'sectionTitle'))
         tl.addWidget(label(
-            'Select a test mode and run a 10-step simulated healthcare booking trial. '
-            'Compare raw movement against One-Euro smoothing and target expansion.',
+            'Pick a mode, then start a short trial. Watch how SteadyHand helps shaky movement.',
             'bodyText',
             True,
         ))
@@ -1335,35 +1275,17 @@ class MainWindow(QMainWindow):
         tl.addWidget(self.simulation_row)
         lay.addWidget(test)
         lay.addSpacing(16)
-        self._photo_band(lay, shots[3], 380)
-        self._photo_pair(lay, shots[4], shots[5], 300)
 
         hist_card, hl = card(margins=28, spacing=12)
-        hl.addWidget(label('Completed Trial Benchmarks', 'sectionTitle'))
+        hl.addWidget(label('Your results', 'sectionTitle'))
         self.trial_history_label = label(
-            'No completed trials yet. Choose a mode and click Start trial to benchmark accuracy.',
+            'No trials yet. Choose a mode and press Start trial.',
             'bodyText',
             True,
         )
         hl.addWidget(self.trial_history_label)
         lay.addWidget(hist_card)
-        self._text_on_photo(
-            lay, shots[6],
-            'Ten steps, clear metrics.',
-            'Latency, hits, misses, and accuracy for judging verification.',
-            height=360,
-        )
-
-        info, il = card(name='innerCard', margins=24, spacing=12)
-        il.addWidget(label('Evaluation protocol', 'cardTitle'))
-        il.addWidget(label(
-            'Each trial walks a 10-step sequence (Doctor → Date → Time → Review → Book × 2). '
-            'Metrics record click latency, hits, misses, and accuracy for judging verification.',
-            'bodyText',
-            True,
-        ))
-        lay.addWidget(info)
-        self._photo_band(lay, shots[7], 340)
+        self._photo_pair(lay, shots[1], shots[2], 260)
         lay.addStretch()
         return page
 
@@ -1498,6 +1420,28 @@ class MainWindow(QMainWindow):
         self._change_module('gaze_control', value)
         if hasattr(self, 'gaze_viewport'):
             self.gaze_viewport.set_tracking_active(bool(value))
+
+    def _try_headpoint_calibrate(self) -> None:
+        """Turn HeadPoint on if needed, then open calibration."""
+        if hasattr(self, 'gaze_toggle'):
+            self.gaze_toggle.set_value(True)
+        self._on_gaze_toggle(True)
+        self._request_calibration()
+
+    def _try_headpoint_demo(self) -> None:
+        """Start HeadPoint booking focus (calibrate if the camera is cold)."""
+        if hasattr(self, 'gaze_toggle'):
+            self.gaze_toggle.set_value(True)
+        self._on_gaze_toggle(True)
+        # Recalibrate when starting the demo so pointing lands on the big buttons.
+        self._request_calibration()
+
+    def _try_steady_demo(self) -> None:
+        """Jump to the SteadyHand practice canvas with the module armed."""
+        if hasattr(self, 'steady_toggle'):
+            self.steady_toggle.set_value(True)
+        self._change_module('steady_hand', True)
+        self._navigate('test')
 
     def _on_dwell_preview(self, value: int) -> None:
         if hasattr(self, 'dwell_gauge'):
