@@ -270,6 +270,22 @@ class TremorPlayground(QWidget):
         p.end()
 
 
+class HeadStartButton(QPushButton):
+    """Big Start/Stop button for head movement control (keeps the toggle's set_value API)."""
+
+    def __init__(self):
+        super().__init__()
+        self.setMinimumHeight(64)
+        self.setStyleSheet('QPushButton { font-size: 18px; }')  # colours still come from the app theme
+        self.set_value(False)
+
+    def set_value(self, on: bool) -> None:
+        self.setText('Stop head control' if on else 'Start head control')
+        self.setObjectName('secondaryButton' if on else 'primaryButton')
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+
 class MainWindow(QMainWindow):
     """Drop-in replacement for accessshift.ui.main_window.MainWindow(repo_root)."""
 
@@ -333,7 +349,7 @@ class MainWindow(QMainWindow):
         nav_sections = [
             ('WORKSPACE', [('overview', '▦   Dashboard'), ('personalize', '◈   My accessibility profile')]),
             ('ACCESSIBILITY TOOLS', [
-                ('gaze', '◎   Eye & blink control'),
+                ('gaze', '◎   Head movement control'),
                 ('steady', '⌁   SteadyHand'),
                 ('interface', '◐   SmartInterface'),
                 ('speech', '◌   Communication'),
@@ -452,7 +468,7 @@ class MainWindow(QMainWindow):
         grid.setSpacing(13)
         self.overview_module_labels = {}
         for i, (key, title, desc) in enumerate([
-            ('gaze_control', 'Eye & blink control', 'Head or eye pointing · webcam ready'),
+            ('gaze_control', 'Head movement control', 'Webcam head pointing · ready to use'),
             ('steady_hand', 'SteadyHand', 'Mouse smoothing · in-app test ready'),
             ('smart_interface', 'SmartInterface', 'Visual adaptation in the healthcare demo'),
             ('predictive_speech', 'Communication', 'Text-to-speech · backend dependent'),
@@ -495,7 +511,7 @@ class MainWindow(QMainWindow):
         lay.addLayout(grid)
         self._section(lay, 'Fine-tune your assistance')
         options = [
-            ('gaze_control', 'Eye & blink navigation', 'Navigate through webcam gaze and deliberate blink selection.'),
+            ('gaze_control', 'Head movement navigation', 'Choose options by turning your head, using only your webcam.'),
             ('steady_hand', 'Stabilize my mouse', 'Smooth shaky cursor movements and help with small targets.'),
             ('smart_interface', 'SmartInterface demo', 'Enable the simpler layout in the bundled healthcare demo.'),
             ('predictive_speech', 'Communication support', 'Prepare text-to-speech and predictive text options.'),
@@ -514,37 +530,64 @@ class MainWindow(QMainWindow):
         lay.addStretch()
         return page
 
+    # Head movement control: one Start button, three steps, a speed choice, an eyes note.
+    HEAD_SPEEDS = (('relaxed', 'Relaxed', 1600), ('normal', 'Normal', 1100), ('quick', 'Quick', 800))
+
     def _page_gaze(self):
-        page, lay = self._page(
-            'HANDS-FREE NAVIGATION',
-            'Eye & blink control',
-            'Turn on head or eye pointing, then calibrate with the webcam. Default pointing source is head.',
-        )
-        row = PreferenceRow('Use eye / head navigation', 'Start webcam pointing and open the hands-free booking focus layout.')
-        row.changed.connect(lambda v: self._change_module('gaze_control', v))
-        self.gaze_toggle = row
-        lay.addWidget(row)
-        gaze_box, gb = card()
-        gb.addWidget(label('How should selection work?', 'sectionTitle'))
-        self.blink_row = PreferenceRow('Blink to select', 'Use a deliberate blink as confirmation after dwell has started.')
-        self.blink_row.changed.connect(lambda v: self._change_option('blink_select', v))
-        gb.addWidget(self.blink_row)
-        gb.addWidget(label('Dwell time', 'cardTitle'))
-        gb.addWidget(label('How long to look at a target before it becomes selected.', 'bodyText'))
-        self.dwell_slider, dwell_row = self._slider(2800, 4200, 100, 'gaze_dwell_ms', 'ms')
-        gb.addLayout(dwell_row)
-        lay.addWidget(gaze_box)
-        cal, cl = card(name='innerCard')
-        cl.addWidget(label('Camera calibration', 'sectionTitle'))
-        cl.addWidget(label(
-            'Enable navigation above, then calibrate. Head mode shows guided poses; eyes mode uses on-screen dots.',
-            'bodyText',
-            True,
-        ))
-        cal_btn = button('Open gaze calibration', 'primaryButton')
-        cal_btn.clicked.connect(self._request_calibration)
-        cl.addWidget(cal_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        lay.addWidget(cal)
+        page, lay = self._page('HANDS-FREE NAVIGATION', 'Head movement control',
+                               'Choose options by turning your head. Only your webcam is needed.')
+        self.gaze_notice = label('', 'warningPill', True)  # why hands-free stopped, if it did
+        self.gaze_notice.setStyleSheet('font-size: 14px; padding: 12px 16px;')
+        self.gaze_notice.hide()
+        lay.addWidget(self.gaze_notice)
+        start_box, sb = card(margins=24, spacing=10)
+        self.gaze_toggle = HeadStartButton()
+        self.gaze_toggle.clicked.connect(lambda: self._change_module('gaze_control', not self.prefs.gaze_control))
+        sb.addWidget(self.gaze_toggle)
+        sb.addWidget(label('Opens a full-screen view with large options. Setup takes about 10 seconds.',
+                           'bodyText', True))
+        lay.addWidget(start_box)
+
+        steps, st = card(spacing=14)
+        st.addWidget(label('How it works', 'sectionTitle'))
+        for number, title, text in (
+            ('1', 'Set up', 'Face the screen, then turn your head when the arrows ask.'),
+            ('2', 'Choose', 'Turn your head toward an option. Hold still, or blink slowly, to choose it.'),
+            ('3', 'Finish', 'After booking, choose Start over or Close. To stop early, close your eyes for 5 seconds.'),
+        ):
+            row = QHBoxLayout()
+            row.setSpacing(14)
+            row.addWidget(label(number, 'number'))
+            text_col = QVBoxLayout()
+            text_col.setSpacing(2)
+            text_col.addWidget(label(title, 'cardTitle'))
+            text_col.addWidget(label(text, 'bodyText', True))
+            row.addLayout(text_col, 1)
+            st.addLayout(row)
+        lay.addWidget(steps)
+
+        speed, sp = card(spacing=10)
+        sp.addWidget(label('Selection speed', 'sectionTitle'))
+        sp.addWidget(label('How long to hold still before an option is chosen.', 'bodyText', True))
+        choices = QHBoxLayout()
+        choices.setSpacing(12)
+        self._dwell_buttons = {}
+        for key, name, ms in self.HEAD_SPEEDS:
+            b = button(f'{name}  ·  {ms / 1000:g} s', 'presetButton')
+            b.setCheckable(True)
+            b.setMinimumHeight(54)
+            b.clicked.connect(lambda _=False, ms=ms: self._change_option('gaze_dwell_ms', ms))
+            self._dwell_buttons[key] = b
+            choices.addWidget(b)
+        sp.addLayout(choices)
+        lay.addWidget(speed)
+
+        eyes, en = card(name='innerCard')
+        en.addWidget(label('Prefer to use your eyes?', 'cardTitle'))
+        en.addWidget(label('You can switch to eye movement at any time with the "Pointing with" button '
+                           'in the full-screen view. Head movement is steadier on most laptop webcams.',
+                           'bodyText', True))
+        lay.addWidget(eyes)
         lay.addStretch()
         return page
 
@@ -899,7 +942,8 @@ class MainWindow(QMainWindow):
         self.interface_toggle.set_value(self.prefs.smart_interface)
         self.speech_row.set_value(self.prefs.predictive_speech)
         self.simple_row.set_value(self.prefs.reduce_complexity)
-        self.blink_row.set_value(self.prefs.blink_select)
+        for key, _name, ms in self.HEAD_SPEEDS:
+            self._dwell_buttons[key].setChecked(self.prefs.gaze_dwell_ms == ms)
         for k, (slider, text, suffix) in self._sliders.items():
             value = int(getattr(self.prefs, k))
             slider.blockSignals(True)
@@ -968,7 +1012,7 @@ class MainWindow(QMainWindow):
         hits = summary['hits']
         misses = summary['misses']
         total = summary['interactions']
-        acc = f"{summary['accuracy']:.0%}" if total > 0 else '—'
+        acc = f"{summary['accuracy']:.0%}" if total > 0 else 'n/a'
         elapsed = f"{summary['seconds']:.1f}s"
         self.test_score.setText(
             f'Target {hits + 1}/10: [{lbl}]  •  Hits: {hits}  •  Misses: {misses}  •  Accuracy: {acc}  •  Time: {elapsed}'
@@ -1023,7 +1067,7 @@ class MainWindow(QMainWindow):
 
     def _update_test_score(self, hits, misses):
         n = hits + misses
-        accuracy = f'{hits / n:.0%}' if n else '—'
+        accuracy = f'{hits / n:.0%}' if n else 'n/a'
         if not (self.playground.trial and not self.playground.trial.complete):
             self.test_score.setText(
                 f'Free practice  •  Hits: {hits}  •  Misses: {misses}  •  Accuracy: {accuracy}'

@@ -1,9 +1,13 @@
-"""Green booking success popup: date/time details, Close, and auto-dismiss."""
+"""Green booking success popup: details, then Start over or Close.
+
+choice is "start_over" (book another, no recalibration) or "close" (leave hands-free).
+No auto-close by default: the person chooses.
+"""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 
 class BookingConfirmationDialog(QDialog):
@@ -15,9 +19,10 @@ class BookingConfirmationDialog(QDialog):
         visit: str,
         when: str,
         parent=None,
-        auto_close_ms: int = 5000,
+        auto_close_ms: int = 0,
     ):
         super().__init__(parent)
+        self.choice = "close"
         self.setWindowTitle("Appointment booked")
         self.setModal(True)
         self.setWindowModality(Qt.ApplicationModal)
@@ -57,16 +62,25 @@ class BookingConfirmationDialog(QDialog):
         detail.setWordWrap(True)
         layout.addWidget(detail)
 
-        hint = QLabel("Sample booking only. Nothing was sent to a clinic.\nCloses in a few seconds, or press Close.")
+        hint = QLabel(
+            "Sample booking only. Nothing was sent to a clinic.\n"
+            "Start over to book another, or Close to leave hands-free control."
+        )
         hint.setObjectName("hint")
         hint.setAlignment(Qt.AlignCenter)
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        start_over = QPushButton("Start over")
+        start_over.clicked.connect(lambda: self._choose("start_over"))
         close = QPushButton("Close")
         close.setDefault(True)
-        close.clicked.connect(self.accept)
-        layout.addWidget(close)
+        close.clicked.connect(lambda: self._choose("close"))
+        row.addWidget(start_over)
+        row.addWidget(close)
+        layout.addLayout(row)
 
         if auto_close_ms > 0:
             self._timer = QTimer(self)
@@ -75,6 +89,10 @@ class BookingConfirmationDialog(QDialog):
             self._timer.start(auto_close_ms)
         else:
             self._timer = None
+
+    def _choose(self, choice: str) -> None:
+        self.choice = choice
+        self.accept()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

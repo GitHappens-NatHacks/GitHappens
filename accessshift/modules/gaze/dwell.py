@@ -76,7 +76,7 @@ class DwellSelector:
 
 
 # Same dwell for every button. Accuracy still drives snap radius, not click timing.
-UNIFORM_DWELL_MS = 3000
+UNIFORM_DWELL_MS = 1100  # "Normal" selection speed; the control center passes the chosen speed
 
 
 def adaptive_dwell_ms(error_px: float) -> int:

@@ -16,15 +16,27 @@ BUTTON_BG = "#FFFFFF"
 TARGET_BG = "#FFD54F"  # amber: the button gaze is about to click (matches the overlay outline)
 BUTTON_HEIGHT = 96
 
-BUTTON_QSS = f"""
+OWN_STYLE = "gazeOwnStyle"  # widgets with this property set style themselves (e.g. grid squares)
+
+
+def button_qss(palette=None, font_px: int = 22) -> str:
+    """Big-button style. With an app Palette, uses the app's colours (text, panel, accent)."""
+    if palette is None:
+        text, bg, target, target_text = TEXT, BUTTON_BG, TARGET_BG, TEXT
+    else:
+        text, bg, target, target_text = palette.foreground, palette.panel, palette.accent, palette.accent_text
+    return f"""
 QPushButton {{
-    color: {TEXT}; background: {BUTTON_BG};
-    border: 3px solid {TEXT}; border-radius: 12px;
-    font-size: 22px; font-weight: 700; padding: 12px 18px;
+    color: {text}; background: {bg};
+    border: 3px solid {text}; border-radius: 14px;
+    font-size: {font_px}px; font-weight: 700; padding: 12px 18px;
 }}
-QPushButton[gazeTarget="true"] {{ background: {TARGET_BG}; border: 6px solid {TEXT}; }}
+QPushButton[gazeTarget="true"] {{ color: {target_text}; background: {target}; border: 6px solid {text}; }}
 QPushButton:disabled {{ color: #3A3A3A; background: #D6D6D6; border-color: #7A7A7A; }}
 """
+
+
+BUTTON_QSS = button_qss()
 
 WINDOW_QSS = """
 QLabel, QCheckBox, QRadioButton { font-size: 18px; }
@@ -39,10 +51,10 @@ def is_applied(window: QWidget) -> bool:
     return getattr(window, _SAVED, None) is not None
 
 
-def apply(window: QWidget) -> None:
+def apply(window: QWidget, palette=None) -> None:
     if is_applied(window):
         return
-    buttons = window.findChildren(QPushButton)
+    buttons = [b for b in window.findChildren(QPushButton) if not b.property(OWN_STYLE)]
     saved = {
         "window": window.styleSheet(),
         "buttons": [(b, b.styleSheet(), b.minimumHeight(), QSizePolicy(b.sizePolicy())) for b in buttons],
@@ -52,7 +64,7 @@ def apply(window: QWidget) -> None:
     window.setStyleSheet(window.styleSheet() + WINDOW_QSS)
     for b in buttons:
         # A button's own stylesheet beats its window's, so style each button directly.
-        b.setStyleSheet(BUTTON_QSS)
+        b.setStyleSheet(button_qss(palette))
         b.setMinimumHeight(max(b.minimumHeight(), BUTTON_HEIGHT))
     _stretch_buttons(buttons, saved["stretch"])
 

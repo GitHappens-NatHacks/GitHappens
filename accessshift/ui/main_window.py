@@ -1,53 +1,46 @@
-"""AccessShift entry window: purple Control Center with GazeControl focus mode.
+"""AccessShift control center + a separate, live-updating healthcare preview.
 
-The Control Center (settings, SteadyHand lab, SmartInterface, speech) is the
-default shell. Enabling gaze_control hides the sidebar and opens the hands-free
-booking layout with head/eye pointing.
+The control center stays open. One modeless window holds the ORIGINAL local
+healthcare form, and reacts to preference changes emitted by control_center.py.
+No browser extensions or third-party website adaptation are used.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QHBoxLayout,
-    QLabel,
-    QMessageBox,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtWidgets import QLabel
 from accessshift.ui.control_center import MainWindow as ControlCenterWindow
 from accessshift.ui.control_center_components import button, card, label
-from accessshift.ui.gaze_grid import GazeGridPanel
-from accessshift.ui.gaze_mode import GazeMode
+from accessshift.ui.gaze_booking_window import GazeBookingWindow
 from accessshift.ui.healthcare_demo_window import HealthcareDemoWindow
-from accessshift.ui.portal_view import PortalView
 
 
 class MainWindow(ControlCenterWindow):
     def __init__(self, repo_root: Path):
         super().__init__(repo_root=repo_root)
         self._healthcare_demo: HealthcareDemoWindow | None = None
-        self._build_gaze_focus()
-        self._wire_gaze()
         self._add_local_demo_entries()
         self._add_demo_toolbar_button()
+        # Existing control center signal: emitted on every setting edit.
+        # Use it instead of reading a file on a timer or polling the UI.
         self.preferences_changed.connect(self._update_live_demo)
-        self.engine.modules_changed.connect(self._sync_gaze_from_engine)
-        self._sync_gaze_from_engine(self.engine.modules)
+        # Head movement control: its toggle (or the Hands-free profile) opens the hands-free window.
+        self.gaze_window: GazeBookingWindow | None = None
+        self.preferences_changed.connect(self._sync_gaze)
 
-    # --- healthcare demo (Elizabeth) -------------------------------------------------
     def _add_demo_toolbar_button(self) -> None:
         shortcut = button('Open Demo Lab  ↗', 'secondaryButton')
         shortcut.setToolTip('Open the separate, local healthcare demo window')
         shortcut.setMinimumHeight(36)
         shortcut.clicked.connect(self._open_healthcare_demo)
         self.top_bar_layout.insertWidget(self.top_bar_layout.count() - 1, shortcut)
+        self._demo_shortcut = shortcut
+        self._top_badge = self.top_bar_layout.itemAt(self.top_bar_layout.count() - 1).widget()  # LOCAL DEMO
+        self._show_demo_items(self.stack.currentWidget() is not self._pages['gaze'])
 
     def _add_local_demo_entries(self) -> None:
+        # Retain the Demo Lab launcher in its own testing tab.
         test_page = self._pages['test']
         test_layout = test_page.widget().layout()
         demo, column = card(name='innerCard', margins=19, spacing=10)
@@ -62,7 +55,10 @@ class MainWindow(ControlCenterWindow):
         column.addWidget(launch, alignment=Qt.AlignmentFlag.AlignLeft)
         test_layout.insertWidget(4, demo)
 
+        # Shortcut from the actual preferences page, so the first window can
+        # remain on the settings controls while the second stays open.
         preferences_page = self._pages['interface']
+        # The SmartInterface page is the live control panel for the preview.
         pref_layout = preferences_page.widget().layout()
         preview_card, pl = card(name='innerCard', margins=18, spacing=9)
         pl.addWidget(label('Live healthcare preview', 'sectionTitle'))
@@ -73,14 +69,19 @@ class MainWindow(ControlCenterWindow):
         open_button = button('Open separate demo window  ↗', 'secondaryButton')
         open_button.clicked.connect(self._open_healthcare_demo)
         pl.addWidget(open_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        # Insert immediately before the preferences option cards.
         pref_layout.insertWidget(4, preview_card)
 
     def _open_healthcare_demo(self) -> None:
+        # Focus the SmartInterface settings in the FIRST window.
         self._navigate('interface')
         if self._healthcare_demo is None:
             self._healthcare_demo = HealthcareDemoWindow(
                 self.repo_root, smart_interface_enabled=False, parent=self)
+            # Explicitly register this one extra AccessShift-owned window; never monitors.
             self.tint_manager.register_window(self._healthcare_demo)
+        # Always begin at the original baseline to make the comparison obvious.
+        # The first manual preference change enables the live adaptation.
         self._healthcare_demo.enter_baseline()
         self._healthcare_demo.show()
         self._healthcare_demo.raise_()
@@ -88,118 +89,68 @@ class MainWindow(ControlCenterWindow):
 
     def _update_live_demo(self, settings: object) -> None:
         if self._healthcare_demo is not None and self._healthcare_demo.isVisible():
+            # No replacement of fields, no reload, no network operations.
             self._healthcare_demo.apply_preferences(dict(settings))
 
-    # --- GazeControl focus mode ------------------------------------------------------
-    def _build_gaze_focus(self) -> None:
-        """Booking portal + 2x2 grid used while gaze/head pointing is on."""
-        root_layout = self.centralWidget().layout()
 
-        self.chk_gaze = QCheckBox('GazeControl')
-        self.chk_gaze.hide()  # driven by Control Center toggle / engine profiles
+    def _navigate(self, key):
+        super()._navigate(key)
+        self._show_demo_items(key != 'gaze')  # keep the head movement page uncluttered
 
-        self.gaze_bar = QWidget()
-        bar = QHBoxLayout(self.gaze_bar)
-        bar.setContentsMargins(8, 8, 8, 8)
-        self.btn_recalibrate_gaze = QPushButton('Recalibrate gaze')
-        self.btn_gaze_source = QPushButton()
-        self.gaze_status = QLabel()
-        self.gaze_status.setWordWrap(True)
-        self.btn_exit_gaze = QPushButton('✕  Exit gaze control\n(or close your eyes for 3 s)')
-        self.btn_exit_gaze.setMinimumHeight(96)
-        self.btn_exit_gaze.clicked.connect(lambda: self.chk_gaze.setChecked(False))
-        bar.addWidget(self.btn_recalibrate_gaze, 1)
-        bar.addWidget(self.btn_gaze_source, 1)
-        bar.addWidget(self.gaze_status, 1)
-        bar.addWidget(self.btn_exit_gaze, 2)
-        self.gaze_bar.hide()
+    def _show_demo_items(self, visible: bool) -> None:
+        for widget in (getattr(self, '_demo_shortcut', None), getattr(self, '_top_badge', None)):
+            if widget is not None:
+                widget.setVisible(visible)
 
-        self.portal = PortalView(self.repo_root / 'assets' / 'portal')
-        self.gaze_grid = GazeGridPanel(self.portal)
-        self.gaze_grid.hide()
+    # --- GazeControl ------------------------------------------------------------------------
+    def _sync_gaze(self, settings: object) -> None:
+        settings = dict(settings)
+        if settings.get('gaze_control') and self.gaze_window is None:
+            self.gaze_window = GazeBookingWindow(self.repo_root)
+            self.gaze_window.exit_requested.connect(self._exit_gaze)
+            self.gaze_window.problem.connect(self._gaze_problem)
+        if self.gaze_window is not None:
+            # Head movement page settings and the app's colour setting, applied live.
+            self.gaze_window.apply_theme(str(settings.get('color_profile', 'standard')))
+            self.gaze_window.apply_settings(settings.get('gaze_dwell_ms', 1100), settings.get('blink_select', True))
+        if settings.get('gaze_control'):
+            self.gaze_notice.hide()  # starting again clears any old message
+            self.gaze_window.start()  # no-op if already running: other settings never restart the camera
+        elif self.gaze_window is not None:
+            self.gaze_window.stop()
 
-        self._focus_host = QWidget()
-        focus = QVBoxLayout(self._focus_host)
-        focus.setContentsMargins(0, 0, 0, 0)
-        focus.addWidget(self.gaze_bar)
-        focus.addWidget(self.portal, 1)
-        focus.addWidget(self.gaze_grid, 1)
-        self._focus_host.hide()
-        root_layout.addWidget(self._focus_host, 3)
+    def _exit_gaze(self) -> None:
+        if self.prefs.gaze_control:
+            self._change_module('gaze_control', False)  # updates the toggle, saves, stops gaze
+        self._bring_to_front()
 
-    def _wire_gaze(self) -> None:
-        self.gaze = GazeMode(self)
-        self.gaze.status.connect(self.gaze_status.setText)
-        self.gaze.status.connect(self._on_gaze_status)
-        self.gaze.exit_requested.connect(lambda: self.chk_gaze.setChecked(False))
-        self.gaze.source_changed.connect(self._show_gaze_source)
-        self.btn_recalibrate_gaze.clicked.connect(self.gaze.request_recalibrate)
-        self.btn_gaze_source.clicked.connect(self.gaze.toggle_source)
-        self.chk_gaze.toggled.connect(self._on_chk_gaze_toggled)
-        self._show_gaze_source(self.gaze.controller.source)
+    def _bring_to_front(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
-    def _on_gaze_status(self, text: str) -> None:
-        self.footer_status.setText(text)
-
-    def _show_gaze_source(self, source: str) -> None:
-        other = 'Eyes' if source == 'head' else 'Head'
-        self.btn_gaze_source.setText(
-            f'Pointing with: {source.capitalize()}\n(switch to {other})'
-        )
-
-    def _on_chk_gaze_toggled(self, enabled: bool) -> None:
-        self.engine.set_module('gaze_control', enabled)
-        self.prefs.gaze_control = enabled
-        if enabled:
-            self.prefs.profile = 'custom' if self.prefs.profile == 'parkinsons' else self.prefs.profile
-        self._apply_gaze_focus(enabled)
-        self._save()
-        self._refresh()
-
-    def _sync_gaze_from_engine(self, modules) -> None:
-        enabled = bool(modules.gaze_control)
-        if self.chk_gaze.isChecked() != enabled:
-            self.chk_gaze.blockSignals(True)
-            self.chk_gaze.setChecked(enabled)
-            self.chk_gaze.blockSignals(False)
-        self._apply_gaze_focus(enabled)
-
-    def _apply_gaze_focus(self, enabled: bool) -> None:
-        self.sidebar.setVisible(not enabled)
-        self.workspace.setVisible(not enabled)
-        self._focus_host.setVisible(enabled)
-        self.gaze_bar.setVisible(enabled)
-        if enabled:
-            self.portal.set_accessible(True)
-            self.portal.setVisible(False)
-            self.gaze_grid.setVisible(True)
-        else:
-            self.portal.set_accessible(False)
-            self.portal.setVisible(True)
-            self.gaze_grid.setVisible(False)
-        self.gaze.set_enabled(enabled)
-        # Exit button stays wide enough for dwell / blink hits.
-        if enabled and self.gaze_bar.width() > 0:
-            self.btn_exit_gaze.setMinimumWidth(int(0.35 * self.gaze_bar.width()))
+    def _gaze_problem(self, message: str) -> None:
+        """Hands-free stopped (e.g. Esc during calibration): back to the settings page, explained."""
+        self._exit_gaze()
+        if self.gaze_window is not None:
+            self.gaze_window.stop()
+        self._navigate('gaze')
+        self.gaze_notice.setText(message)
+        self.gaze_notice.show()
+        self._bring_to_front()
 
     def _request_calibration(self) -> None:
-        if not self.gaze.enabled:
-            self.chk_gaze.setChecked(True)
-        if not self.gaze.enabled:
-            QMessageBox.warning(
-                self,
-                'Gaze calibration',
-                'Could not start the camera. Check Camera privacy settings, then try again.',
-            )
-            return
-        self.gaze.request_recalibrate()
-
-    def _change_module(self, key, value) -> None:
-        super()._change_module(key, value)
-        if key == 'gaze_control':
-            if self.chk_gaze.isChecked() != bool(value):
-                self.chk_gaze.setChecked(bool(value))
+        """Replaces the control center's "integration pending" placeholder."""
+        if not self.prefs.gaze_control:
+            self._change_module('gaze_control', True)
+        if self.gaze_window is not None:
+            self.gaze_window.recalibrate()
 
     def closeEvent(self, event) -> None:
-        self.gaze.set_enabled(False)
+        if self.gaze_window is not None:
+            self.gaze_window.stop()  # release the camera
         super().closeEvent(event)
+
+
+__all__ = ['MainWindow']

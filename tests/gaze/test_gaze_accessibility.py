@@ -124,8 +124,17 @@ def test_gaze_mode_styles_window_and_reverts(qapp):
 
 
 def test_gaze_mode_alerts_follow_status(qapp):
+    import time
+
+    from PySide6.QtCore import QCoreApplication
+
     gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), calibrate_on_start=False)
     gm.controller.status.emit(STATUS_NO_FACE)
+    assert gm.overlay.message() == ""  # not instantly: turning to an edge square can lose the face briefly
+    end = time.monotonic() + 1.5
+    while time.monotonic() < end:
+        QCoreApplication.processEvents()
+        time.sleep(0.01)
     assert gm.overlay.message() == STATUS_NO_FACE and gm.preview.error_text() == STATUS_NO_FACE
     gm.controller.status.emit(STATUS_TRACKING)
     assert gm.overlay.message() == "" and gm.preview.error_text() == ""
@@ -182,26 +191,28 @@ def test_buttons_stretch_to_fill_height_and_restore(qapp):
     w.close()
 
 
-def test_gaze_mode_maximizes_window_and_restores_state(qapp):
+def test_gaze_mode_fills_screen_without_window_states_and_restores(qapp):
+    # No maximize/full-screen window states: on macOS those can leave an empty black space behind.
     from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
 
     w, _, _ = make_window()
+    w.setGeometry(100, 100, 600, 400)
     w.show()
+    before = w.geometry()
     gm = GazeMode(w, screen_rect=QRect(0, 0, 1000, 800), tracker_factory=FakeTracker, calibrate_on_start=False)
     gm.set_enabled(True)
-    assert w.windowState() & Qt.WindowMaximized
+    assert w.geometry() == QGuiApplication.primaryScreen().availableGeometry()
+    assert not (w.windowState() & (Qt.WindowMaximized | Qt.WindowFullScreen))
     gm.set_enabled(False)
-    assert not (w.windowState() & Qt.WindowMaximized)
+    assert w.geometry() == before
     w.close()
 
 
-def test_eyes_closed_exit_shows_countdown_then_requests_exit(qapp):
-    gm = GazeMode(screen_rect=QRect(0, 0, 1000, 800), calibrate_on_start=False)
-    exits = []
-    gm.exit_requested.connect(lambda: exits.append(1))
-    gm.controller.exit_progress.emit(0.4)
-    assert "eyes closed to exit" in gm.overlay.message().lower()
-    gm.controller.exit_progress.emit(0.0)
-    assert gm.overlay.message() == ""
-    gm.controller.exit_requested.emit()
-    assert exits == [1]
+def test_every_app_theme_keeps_large_text_readable():
+    # 30 px bold square text is "large text": WCAG AAA needs 4.5:1.
+    from accessshift.modules.smartinterface.visual_controller import PALETTES
+
+    for name, p in PALETTES.items():
+        assert contrast_ratio(p.foreground, p.panel) >= 4.5, name
+        assert contrast_ratio(p.accent_text, p.accent) >= 4.5, name

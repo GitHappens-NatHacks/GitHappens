@@ -30,7 +30,7 @@ def test_calibration_dialog_fits_and_unpauses(qapp):
     assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
     assert ctrl.calibration.is_fitted and not ctrl.paused
     assert ctrl.error_px < 5
-    assert t < 45_000  # 13 dots x ~2.4 s, no retries for steady eyes
+    assert t < 35_000  # 13 dots x 2.1 s (0.7 s settle + 1.4 s measure), no retries for steady eyes
 
 
 def test_calibration_dialog_escape_cancels(qapp):
@@ -122,7 +122,7 @@ HEAD_POSES_FEATURES = {
 }
 
 
-def run_head_dialog(ctrl, poses, max_ms=60_000):
+def run_head_dialog(ctrl, poses, max_ms=30_000):
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
     dlg.begin()
     t, seen = 0, []
@@ -143,10 +143,8 @@ def test_head_calibration_guides_center_left_right_up_down(qapp):
     up_y = ctrl.calibration.map(HEAD_POSES_FEATURES["up"])[1]
     right_x = ctrl.calibration.map(HEAD_POSES_FEATURES["right"])[0]
     assert up_y < SCREEN.height() / 2 and right_x > SCREEN.width() / 2  # up is up, right is right
-    # 5 poses x ~2.7 s settle+collect
-    assert t < 20_000
-    # Accuracy is measured from the fitted map, not a fixed ±200 px placeholder.
-    assert ctrl.error_px is not None and ctrl.error_px < 5
+    assert t < 16_000  # 5 poses x 2.7 s (0.9 s settle + 1.8 s measure), no retries
+    assert ctrl.error_px is not None and ctrl.error_px < 5  # real score from the fitted map
 
 
 def test_head_calibration_prompts_name_each_direction(qapp):
@@ -161,10 +159,10 @@ def test_head_calibration_prompts_name_each_direction(qapp):
 def test_head_calibration_retries_when_user_barely_moves(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     tiny = dict(HEAD_POSES_FEATURES, up=(0.0, 0.598), down=(0.0, 0.602))
-    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=25_000)
+    dlg, seen, _ = run_head_dialog(ctrl, tiny, max_ms=16_000)
     assert dlg.isVisible() and not ctrl.calibration.is_fitted
     assert seen[:6] == ["center", "left", "right", "up", "down", "center"]  # started again
-    assert "up" in dlg.message().lower() or "down" in dlg.message().lower()
+    assert "tilt" in dlg.message().lower()
     dlg.reject()
 
 
@@ -172,11 +170,86 @@ def test_eyes_calibration_keeps_nine_dots_and_check(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     ctrl.set_source("eyes")
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
-    assert "eyes" in dlg.instruction.lower() and "orange" in dlg.instruction.lower()
+    assert "eyes" in dlg.instruction.lower()
     assert dlg._max_spread >= 0.05  # eyes must tolerate normal webcam jitter
     dlg.begin()
     assert len(dlg.current_points()) == 9
     dlg.reject()
+
+
+def test_head_calibration_ignores_eye_openness_when_tilting(qapp):
+    # Tilting the head up/down makes the eyelids look narrower to the webcam.
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
+    dlg.begin()
+    t = 0
+    while dlg.isVisible() and t < 20_000:
+        step = dlg.current_step()
+        ear = 0.15 if step in ("up", "down") else 0.3
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[step], "ear": ear})
+        t += 33
+    assert dlg.result() == GazeCalibrationDialog.DialogCode.Accepted
+    assert t < 16_000  # no endless retries on the up/down steps
+
+
+def no_face(ctrl, t0, t1):
+    for t in range(t0, t1, 33):
+        ctrl.process({"camera_ok": True, "face": False, "ts_ms": t})
+
+
+def test_head_calibration_shows_face_not_found_after_a_second(qapp):
+    from accessshift.ui.gaze_calibration_dialog import NO_FACE
+
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    dlg.begin()
+    assert dlg.current_step() == "center"
+    no_face(ctrl, 0, 500)
+    assert dlg.problem() == ""  # a brief loss is not an error
+    no_face(ctrl, 500, 1300)
+    assert dlg.problem() == NO_FACE
+    ctrl.process(fake_sample(1400, (0.5, 0.5)) | {"head": (0.0, 0.6)})
+    assert dlg.problem() == ""
+    dlg.reject()
+
+
+def test_turned_head_losing_the_face_gets_a_gentle_hint_not_an_error(qapp):
+    from accessshift.ui.gaze_calibration_dialog import NO_FACE, TURN_BACK
+
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    dlg.begin()
+    t = 0
+    while dlg.current_step() == "center":
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES["center"]})
+        t += 33
+    assert dlg.current_step() == "left"
+    no_face(ctrl, t, t + 1500)  # turned so far the camera lost the face
+    assert dlg.problem() == TURN_BACK and dlg.problem() != NO_FACE
+    assert "little" in dlg.current_instruction().lower()
+    dlg.reject()
+
+
+def test_calibration_says_when_camera_sends_nothing(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN)
+    dlg.begin()
+    dlg.check_camera(now_ms=dlg.started_ms() + 3000)  # 3 s with no samples at all
+    assert "camera" in dlg.problem().lower()
+    dlg.reject()
+
+
+def test_head_calibration_tunes_closed_eyes_to_the_narrowest_pose(qapp):
+    ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
+    dlg.begin()
+    t = 0
+    while dlg.isVisible() and t < 20_000:
+        step = dlg.current_step()
+        ear = 0.18 if step == "down" else 0.3
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[step], "ear": ear})
+        t += 33
+    assert ctrl.last_blink_ears == [0.18]  # threshold = 0.75 x the tilted-down eye openness
 
 
 def test_choose_source_head_and_eyes_buttons(qapp, monkeypatch):
@@ -193,5 +266,69 @@ def test_choose_source_head_and_eyes_buttons(qapp, monkeypatch):
         return QDialog.DialogCode.Rejected
 
     monkeypatch.setattr(QDialog, "exec", tracking_exec)
-    assert GazeCalibrationDialog.choose_source("head") == "eyes"
+    assert GazeCalibrationDialog._real_choose_source("head") == "eyes"
     assert seen == ["Eye pointing"]
+
+
+def test_choose_source_cancel_returns_none(qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
+    assert GazeCalibrationDialog._real_choose_source("head") is None
+
+
+def test_pointing_chooser_covers_the_screen_with_a_distinct_card(qapp, monkeypatch):
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtWidgets import QDialog, QFrame
+
+    from accessshift.modules.smartinterface.visual_controller import PALETTES
+
+    seen = {}
+
+    def inspect_exec(self):
+        seen["geometry"] = self.geometry()
+        card = self.findChild(QFrame, "chooserCard")
+        seen["card_qss"] = self.styleSheet()
+        seen["has_card"] = card is not None
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", inspect_exec)
+    GazeCalibrationDialog._real_choose_source("head", palette=PALETTES["standard"])
+    assert seen["geometry"] == QGuiApplication.primaryScreen().geometry()  # booking hidden behind it
+    assert seen["has_card"]
+    assert PALETTES["standard"].accent.lower() in seen["card_qss"].lower()  # card colour differs from page
+
+
+def test_first_selection_after_calibration_takes_the_full_dwell(qapp):
+    # The "Calibration done" screen stays up for a moment. Gaze must not start
+    # counting behind it, or the first option is chosen almost instantly afterwards.
+    import time
+
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QPushButton
+
+    btn = QPushButton("Myself")
+    btn.show()
+    clicks = []
+    ctrl = GazeController(hit_test=lambda p: btn, screen_rect=SCREEN)
+    ctrl.set_dwell_ms(2000)
+    btn.clicked.connect(lambda: clicks.append(t))
+    dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=600)
+    dlg.begin()
+    t = 0
+    while dlg.current_step() and dlg._phase != "result":
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": HEAD_POSES_FEATURES[dlg.current_step()]})
+        t += 33
+    # result screen showing: the person is already pointing at "Myself"
+    end = time.monotonic() + 1.0
+    while dlg.isVisible() and time.monotonic() < end:
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": (-0.12, 0.5)})
+        t += 33
+        QCoreApplication.processEvents()
+        time.sleep(0.02)
+    assert not dlg.isVisible()
+    closed_at = t
+    while not clicks and t < closed_at + 4000:
+        ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": (-0.12, 0.5)})
+        t += 33
+    assert clicks and clicks[0] - closed_at >= 1900  # full 2 s dwell, counted from when the screen closed

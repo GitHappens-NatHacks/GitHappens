@@ -54,7 +54,7 @@ class HealthcareDemoWindow(QDialog):
         self._targets: dict[str, QPushButton] = {}
         self._build_ui()
         self.set_accessible(False)  # start as original baseline, then listen for edits
-        self.setWindowTitle('AccessShift AI — SmartInterface Demo Lab')
+        self.setWindowTitle('AccessShift AI · SmartInterface Demo Lab')
         # Keep controls usable when the window is dragged smaller.
         # A narrow original portal scrolls instead of crushing form fields.
         self.resize(1170, 800)
@@ -258,7 +258,7 @@ class HealthcareDemoWindow(QDialog):
         review_l.addWidget(self.summary)
         center_l.addWidget(self.review)
 
-        self.consent = QCheckBox('This is a sample request — no real appointment will be created')
+        self.consent = QCheckBox('This is a sample request. No real appointment will be created')
         self.consent.setChecked(True)
         self.consent.setObjectName('consent_confirmation')
         center_l.addWidget(self.consent)
@@ -389,7 +389,7 @@ class HealthcareDemoWindow(QDialog):
         self._simplify = True
         self.set_accessible(False)
         self.mode_status.setText(
-            'ORIGINAL FORM — Now use the first AccessShift window to change text size, colour, '
+            'ORIGINAL FORM: Now use the first AccessShift window to change text size, colour, '
             'target size, or toggle SmartInterface. This preview updates automatically.')
 
     def apply_preferences(self, settings: dict) -> None:
@@ -421,7 +421,7 @@ class HealthcareDemoWindow(QDialog):
             tone = str(self._visual_settings.get('color_profile', 'standard')).replace('_',' ')
             spacing = int(self._visual_settings.get('letter_spacing_px', 0))
             self.mode_status.setText(
-                'LIVE ADAPTATION — This is the same form: text ' + str(font_pct) + '%, '
+                'LIVE ADAPTATION: This is the same form: text ' + str(font_pct) + '%, '
                 + 'targets ' + str(target_pct) + '%, ' + tone + ' colours, '
                 + str(spacing) + ' px letter spacing. '
                 + ('Guided steps and reduced clutter are on.' if guided else
@@ -432,7 +432,7 @@ class HealthcareDemoWindow(QDialog):
             self.chip_flow.setText('Guided steps' if guided else 'All sections visible')
         else:
             self.mode_status.setText(
-                'ORIGINAL PORTAL — SmartInterface is off. Toggle it on in the AccessShift '
+                'ORIGINAL PORTAL: SmartInterface is off. Toggle it on in the AccessShift '
                 'settings window, or change another preference while it is enabled.')
             self.mode_tag.setText('ORIGINAL FORM')
             self.chip_clutter.setText('2 extra sidebars')

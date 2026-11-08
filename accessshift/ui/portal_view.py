@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -28,6 +28,8 @@ from accessshift.ui.booking_confirmation import BookingConfirmationDialog
 
 
 class PortalView(QWidget):
+    booking_finished = Signal(str)  # "start_over" or "close", chosen on the booked popup
+
     def __init__(self, portal_assets: Path):
         super().__init__()
         self.portal_assets = portal_assets
@@ -69,7 +71,7 @@ class PortalView(QWidget):
             "Gift shop hours",
         ):
             left.addWidget(QLabel(f"• {text}"))
-        notice = QLabel("Seasonal flu clinic — register separately")
+        notice = QLabel("Seasonal flu clinic: register separately")
         notice.setStyleSheet("background:#fff4cc; padding:6px; border:1px dashed #c9a227;")
         left.addWidget(notice)
         left.addStretch(1)
@@ -255,8 +257,8 @@ class PortalView(QWidget):
     def _choose_when(self, name: str) -> None:
         self._when = name
         self._confirm_summary.setText(
-            f"Who: {self._who or '—'}\n"
-            f"Visit: {self._visit or '—'}\n"
+            f"Who: {self._who or 'not chosen yet'}\n"
+            f"Visit: {self._visit or 'not chosen yet'}\n"
             f"When: {self._when}"
         )
         self._acc_stack.setCurrentIndex(3)
@@ -265,25 +267,14 @@ class PortalView(QWidget):
         who = self._who or "you"
         visit = self._visit or "Visit"
         when = self._when or "time to be confirmed"
-        # Gaze focus hides this portal and keeps a stay-on-top overlay. Parent the
-        # dialog to the main window and tuck the overlay away so the green screen shows.
-        from PySide6.QtWidgets import QApplication
-
-        from accessshift.modules.gaze.controller import GAZE_IGNORE
-
+        # The gaze cursor stays visible, so the popup's own buttons can be chosen hands-free.
         host = self.window() if self.window() is not None else self
-        hidden = []
-        for top in QApplication.topLevelWidgets():
-            if top is host:
-                continue
-            if top.property(GAZE_IGNORE) and top.isVisible():
-                top.hide()
-                hidden.append(top)
         dlg = BookingConfirmationDialog(who=who, visit=visit, when=when, parent=host)
         dlg.exec()
-        for top in hidden:
-            top.show()
-        # Ready for another booking from the start.
+        self._reset_flow()  # ready for another booking from the start
+        self.booking_finished.emit(dlg.choice)
+
+    def _reset_flow(self) -> None:
         self._who = self._visit = self._when = ""
         self._confirm_summary.setText("Review your choices, then book.")
         self._acc_stack.setCurrentIndex(0)

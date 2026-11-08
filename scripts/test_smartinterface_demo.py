@@ -62,4 +62,4 @@ assert demo.first.text() == 'Taylor'
 assert demo._selected_time == '11:00 AM'
 assert 'background:#FFFFFF' in demo.styleSheet()
 demo.close()
-print('PASS — resize, scrolling, contrast, shared fields, same data, guided steps')
+print('PASS: resize, scrolling, contrast, shared fields, same data, guided steps')

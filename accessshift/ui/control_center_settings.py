@@ -21,7 +21,7 @@ class AccessibilitySettings:
     blink_select: bool = True
     reduce_complexity: bool = True
     tremor_strength: int = 50
-    gaze_dwell_ms: int = 3000
+    gaze_dwell_ms: int = 1100  # Normal speed (Relaxed 1.6 s, Normal 1.1 s, Quick 0.8 s)
     target_size_pct: int = 140
     font_size_pct: int = 110
     color_profile: str = "standard"
@@ -39,7 +39,7 @@ class AccessibilitySettings:
 # IDs deliberately match accessshift/engine/profiles.py on the team's repo.
 PROFILES: dict[str, dict[str, Any]] = {
     "als": {
-        "label": "Hands-free control", "description": "Use your eyes, blinking and speech.",
+        "label": "Hands-free control", "description": "Use head movement, blinking and speech.",
         "gaze_control": True, "steady_hand": False, "smart_interface": True,
         "predictive_speech": True,
     },
@@ -74,7 +74,7 @@ def load_settings(store: QSettings | None = None) -> AccessibilitySettings:
         if candidate.profile not in PROFILES:
             candidate.profile = "custom"
         candidate.tremor_strength = max(0, min(100, int(candidate.tremor_strength)))
-        candidate.gaze_dwell_ms = max(2800, min(4200, int(candidate.gaze_dwell_ms)))
+        candidate.gaze_dwell_ms = max(600, min(2000, int(candidate.gaze_dwell_ms)))
         candidate.target_size_pct = max(100, min(200, int(candidate.target_size_pct)))
         candidate.font_size_pct = max(90, min(160, int(candidate.font_size_pct)))
         candidate.speech_rate = max(100, min(220, int(candidate.speech_rate)))

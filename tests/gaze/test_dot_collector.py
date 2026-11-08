@@ -59,3 +59,12 @@ def test_target_px_and_progress():
     c.update(s(0), 0.15)
     # settle 800 + collect 1600: halfway through collect is at 800 + 800 = 1600
     assert c.progress(0) == 0.0 and c.progress(1600) == pytest.approx(0.5) and c.progress(5000) == 1.0
+
+
+def test_ears_are_kept_per_dot():
+    # The head calibration tunes "closed eyes" against the narrowest held pose.
+    c = DotCollector([(0.5, 0.5), (0.5, 0.9)], SIZE)
+    t = run(c, 0, 2600, ear=0.3)
+    run(c, t, t + 2600, ear=0.2)
+    assert c.done
+    assert min(c.dot_ears[0]) == 0.3 and max(c.dot_ears[1]) == 0.2

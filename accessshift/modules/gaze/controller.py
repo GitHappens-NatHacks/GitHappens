@@ -12,15 +12,16 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, QPoint, QRect, QThread, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QAbstractButton, QApplication, QWidget
+from shiboken6 import isValid
 
 from accessshift.modules.gaze.calibration import GazeCalibration
-from accessshift.modules.gaze.dwell import DwellSelector, UNIFORM_DWELL_MS
+from accessshift.modules.gaze.dwell import UNIFORM_DWELL_MS, DwellSelector
 from accessshift.modules.gaze.worker import GazeWorker
 from accessshift.modules.steadyhand.filter import OneEuroFilter
 
-STATUS_NO_FACE = "Face not found — look at the camera"
+STATUS_NO_FACE = "Face not found. Look at the camera."
 STATUS_UNCALIBRATED = "Calibrate first"
-STATUS_TRACKING = "Gaze tracking"
+STATUS_TRACKING = "Tracking"
 
 # Keep the current target unless another button is at least this much nearer (stops flicker).
 SNAP_HYSTERESIS_PX = 80
@@ -38,9 +39,11 @@ HEAD_REST_FRACTION = 0.12
 DWELL_GRACE_MS = 400  # a glance away shorter than this keeps the dwell ring going
 # Blink may finish a selection only after the dwell ring has clearly started.
 BLINK_SELECT_MIN_PROGRESS = 0.2
+# Head tilt (looking up) often lowers EAR without a real eye close. Below this it counts as closed.
+HEAD_CLOSED_EAR = 0.14
 
 # Close your eyes this long to exit gaze control (no aiming needed). Longer than
-# a select blink, and longer than a brief low-EAR spike when tilting the head up.
+# a select blink, and longer than a brief low-EAR dip when tilting the head up.
 EXIT_CLOSE_MS = 5000
 EXIT_COUNTDOWN_FROM_MS = 2500
 
@@ -90,6 +93,11 @@ def visible_buttons() -> list[QAbstractButton]:
     return out
 
 
+def _alive(w: QWidget | None) -> QWidget | None:
+    """The widget, or None if Qt already deleted it (e.g. a closed popup's button)."""
+    return w if w is not None and isValid(w) else None
+
+
 def _global_rect(w: QWidget) -> QRect:
     """Button bounds in global screen coords (recomputed each frame for layout shifts)."""
     top_left = w.mapToGlobal(QPoint(0, 0))
@@ -131,6 +139,9 @@ class GazeController(QObject):
         self.source = "head"
         self.calibration = GazeCalibration()
         self.error_px: float | None = None
+        self.last_blink_ears: list[float] = []
+        self.blink_select = True  # a slow blink confirms (user setting)
+        self._user_dwell_ms: int | None = None  # user setting; None = automatic from accuracy
         self.paused = False  # True while calibrating: report samples, click nothing
         self._dwell = DwellSelector(grace_ms=DWELL_GRACE_MS)
         self._new_filters()
@@ -170,36 +181,57 @@ class GazeController(QObject):
         radius = HEAD_REST_FRACTION * min(r.width(), r.height())
         return math.hypot(pt.x() - r.center().x(), pt.y() - r.center().y()) < radius
 
+    def set_dwell_ms(self, ms: int | None) -> None:
+        """Use the person's chosen selection speed (None = the default dwell)."""
+        self._user_dwell_ms = ms
+        self._dwell.dwell_ms = ms if ms is not None else UNIFORM_DWELL_MS
+
     def set_calibration(self, calibration: GazeCalibration, error_px: float) -> None:
         self.calibration = calibration
         self.error_px = error_px
         self._snap_px = error_px
-        # Same dwell for every button. Calibration error only affects snap radius.
-        self._dwell = DwellSelector(UNIFORM_DWELL_MS, grace_ms=DWELL_GRACE_MS)
+        # Same dwell for every button (the person's chosen speed). Accuracy only sets the snap radius.
+        dwell_ms = self._user_dwell_ms if self._user_dwell_ms is not None else UNIFORM_DWELL_MS
+        self._dwell = DwellSelector(dwell_ms, grace_ms=DWELL_GRACE_MS)
 
     def calibrate_blink(self, ears: list[float]) -> None:
         """Tune the blink threshold to this user's open-eye EAR (from calibration)."""
+        self.last_blink_ears = list(ears)
         tracker = getattr(self._worker, "tracker", None)
         if tracker is not None:
             tracker.blink.calibrate_open(ears)
 
     # --- per-sample logic (testable without a camera) ------------------------------
     def _pick_button(self, pt: QPoint) -> QAbstractButton | None:
-        """Button exactly under the gaze, else the nearest one within gaze accuracy."""
+        """Button exactly under the gaze, else the nearest one within gaze accuracy.
+
+        While a popup (modal dialog) is open, only its own buttons can be chosen, so gaze
+        never presses something hidden behind it (e.g. "Back" behind the booked popup).
+        """
+        popup = QApplication.activeModalWidget()
+        if popup is not None and popup.property(GAZE_IGNORE):
+            popup = None
+
+        def allowed(b: QAbstractButton | None) -> bool:
+            return b is not None and (popup is None or b is popup or popup.isAncestorOf(b))
+
         exact = _button_at(self._hit_test(pt))
+        if not allowed(exact):
+            exact = None
         if exact is not None or self._snap_px <= 0:
             return exact
-        dist = {b: _distance(pt, _global_rect(b)) for b in self._buttons()}
+        dist = {b: _distance(pt, _global_rect(b)) for b in self._buttons() if allowed(b)}
         if not dist:
             return None
         nearest = min(dist, key=dist.get)
-        current = self._target
+        current = _alive(self._target)
         if current in dist and dist[current] <= self._snap_px and dist[current] <= dist[nearest] + SNAP_HYSTERESIS_PX:
             return current
         return nearest if dist[nearest] <= self._snap_px else None
 
     def _set_target(self, button: QAbstractButton | None) -> None:
         # Always re-emit the live rect so the outline tracks layout/resize changes.
+        button = _alive(button)
         self._target = button
         self.target.emit(_global_rect(button) if button is not None else QRect())
 
@@ -239,15 +271,19 @@ class GazeController(QObject):
         self._set_status(STATUS_TRACKING)
 
         closed_ms = sample.get("closed_ms", 0)
-        # Head tilt (look up) often lowers EAR without a real eye close. Ignore mild dips.
-        if self.source == "head" and float(sample.get("ear", 1.0)) >= 0.14:
-            closed_ms = 0
+        if self.source == "head" and float(sample.get("ear", 1.0)) >= HEAD_CLOSED_EAR:
+            closed_ms = 0  # a mild dip from tilting the head is not closed eyes
         self._update_exit(closed_ms)
-        if closed_ms > 0:
+        # While the eyes are shut the dwell pauses, so closing your eyes (a blink, or to exit)
+        # never clicks anything. Eye features are garbage then, so eyes mode also freezes the
+        # dot; head pointing stays valid, so in head mode the dot keeps following your head.
+        eyes_closed = closed_ms > 0
+        if eyes_closed:
             if self._closed_at is None:
                 self._closed_at = sample["ts_ms"]
-            return  # eyes shut: features are garbage, so freeze the dot and the dwell
-        if self._closed_at is not None:
+            if self.source == "eyes":
+                return
+        elif self._closed_at is not None:
             self._dwell.hold(sample["ts_ms"] - self._closed_at)  # closed time doesn't count
             self._closed_at = None
 
@@ -262,15 +298,20 @@ class GazeController(QObject):
         self.point.emit(pt)
 
         picked = None if self._resting(pt) else self._pick_button(pt)
+        if eyes_closed:  # head mode: move the dot, keep the highlight, but don't count or click
+            return
         state = self._dwell.update(picked, ts)
-        button = state.target  # may stay on the previous button during a brief glance away
+        button = _alive(state.target)  # may stay on the previous button during a brief glance away
+        if button is None and state.target is not None:
+            self._dwell.reset()  # that button was deleted (e.g. its popup closed)
         self._set_target(button)
         self.dwell.emit(state.progress)
-        blink_ready = (
-            bool(sample.get("blink"))
+        blinked = (
+            self.blink_select
+            and bool(sample.get("blink"))
             and state.progress >= BLINK_SELECT_MIN_PROGRESS
         )
-        if button is not None and (state.fired or blink_ready):
+        if button is not None and (state.fired or blinked):
             self._dwell.consume()  # not reset(): staring after a click must not click again
             button.click()
             self.selected.emit(button)
@@ -282,7 +323,7 @@ class GazeController(QObject):
 
     @property
     def current_target(self) -> QAbstractButton | None:
-        return self._target
+        return _alive(self._target)
 
     def start(
         self,

@@ -48,10 +48,10 @@ def test_reset_rearms_same_target():
 
 def test_adaptive_values():
     # Dwell is uniform for every button; error only affects snap size elsewhere.
-    assert adaptive_dwell_ms(0) == 3000
-    assert adaptive_dwell_ms(100) == 3000
-    assert adaptive_dwell_ms(800) == 3000
-    assert adaptive_dwell_ms(-100) == 3000
+    from accessshift.modules.gaze.dwell import UNIFORM_DWELL_MS
+
+    for error_px in (0, 100, 800, -100):
+        assert adaptive_dwell_ms(error_px) == UNIFORM_DWELL_MS
     assert min_target_px(10) == 64 and min_target_px(50) == 100
     assert min_target_px(50.2) == 101
 

@@ -32,8 +32,8 @@ def prepare_camera_for_worker(camera_index: int = 0) -> tuple[bool, str]:
         return (
             False,
             "Camera could not be opened. On macOS allow camera access in "
-            "System Settings > Privacy & Security > Camera for Terminal or Cursor. "
-            "Then turn GazeControl on again.",
+            "System Settings > Privacy & Security > Camera for this app (Terminal or VS Code). "
+            "Then choose Start head control again.",
         )
 
     ok, _frame = cap.read()
