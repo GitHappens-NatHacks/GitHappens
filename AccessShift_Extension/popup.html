@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AccessShift controls</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+<header><div class="mark" aria-hidden="true">A<span>+</span></div><div><strong>AccessShift</strong><small>READ · STEADY · SEE</small></div><button id="demo" class="quiet" title="Open the test page">Try demo ↗</button></header>
+<nav aria-label="Settings sections"><button class="selected" data-tab="read" aria-pressed="true">Read</button><button data-tab="steady" aria-pressed="false">Steady</button><button data-tab="see" aria-pressed="false">See</button></nav>
+<main>
+<section id="read" class="panel">
+<div class="section-title"><h1>Read at your pace.</h1><p>Choose the typography and focus aids that feel comfortable to you.</p></div>
+<label class="toggle"><span>Reading-friendly text</span><input id="reading" type="checkbox" checked></label>
+<div class="two"><label>Font<select id="font"><option value="sans">Arial / sans serif</option><option value="verdana">Verdana</option><option value="system">System font</option><option value="serif">Georgia / serif</option></select></label><label>Paper<select id="theme"><option value="warm">Warm cream</option><option value="light">Bright white</option><option value="dark">Deep green</option></select></label></div>
+<label class="range-label" for="size">Text size <output id="sizeValue">20 px</output></label><input id="size" type="range" min="14" max="36" value="20">
+<label class="range-label" for="line">Line spacing <output id="lineValue">1.70×</output></label><input id="line" type="range" min="1.2" max="2.4" step=".05" value="1.7">
+<label class="range-label" for="letter">Letter spacing <output id="letterValue">0.04 em</output></label><input id="letter" type="range" min="0" max=".2" step=".01" value=".04">
+<label class="range-label" for="word">Word spacing <output id="wordValue">0.10 em</output></label><input id="word" type="range" min="0" max=".3" step=".01" value=".1">
+<label class="check"><input id="column" type="checkbox" checked><span>Limit long paragraph widths</span></label>
+<label class="check"><input id="ruler" type="checkbox"><span>Reading guide follows the mouse</span></label>
+<label class="check"><input id="motion" type="checkbox"><span>Reduce CSS animation and transitions</span></label>
+<p class="hint">Personal preferences for dyslexia and attention support. No font or setting works for everyone; these tools are not a treatment.</p>
+</section>
+<section id="steady" class="panel" hidden>
+<div class="section-title"><h1>A steadier point.</h1><p>Filter movement into a green virtual pointer on the webpage.</p></div>
+<label class="toggle"><span>Enable virtual pointer</span><input id="pointer" type="checkbox"></label>
+<label class="range-label" for="smoothing">Smoothing strength <output id="smoothingValue">70%</output></label><input id="smoothing" type="range" min="0" max="100" value="70">
+<p class="hint">More smoothing reduces jitter and adds delay. The ordinary system cursor stays visible.</p>
+<label class="check"><input id="assisted" type="checkbox" checked><span>Click the highlighted button or link using the virtual pointer</span></label>
+<div class="demo-box"><strong>Demonstration only</strong><label class="check"><input id="simulate" type="checkbox"><span>Add simulated tremor to the virtual pointer</span></label><label class="range-label" for="amplitude">Tremor amplitude <output id="amplitudeValue">25 px</output></label><input id="amplitude" type="range" min="0" max="60" value="25"></div>
+<p class="hint">Use the demo page to compare raw and smoothed trials. Ordinary controls are supported; text editing, dragging and custom widgets retain their native behavior. Esc pauses. Alt+Shift+S toggles pause while the page has focus.</p>
+</section>
+<section id="see" class="panel" hidden>
+<div class="section-title"><h1>Make distinctions clearer.</h1><p>Try color redistribution and stronger non-color cues.</p></div>
+<label>Color-vision filter<select id="color"><option value="none">Original colors</option><option value="protan">Protan · experimental red–green assist</option><option value="deutan">Deutan · experimental red–green assist</option><option value="tritan">Tritan · experimental blue–yellow assist</option><option value="gray">Grayscale · check non-color cues</option></select></label>
+<label class="range-label" for="colorStrength">Filter strength <output id="colorStrengthValue">70%</output></label><input id="colorStrength" type="range" min="0" max="100" value="70">
+<label class="check"><input id="cues" type="checkbox" checked><span>Underline links and outline form controls</span></label>
+<div class="swatches" aria-label="Labeled color samples"><span class="s1">▲ A</span><span class="s2">● B</span><span class="s3">■ C</span><span class="s4">◆ D</span></div>
+<p class="hint">Filters alter page colors, including images. They cannot recover missing color information or reliably interpret a chart's meaning. Grayscale is a checking tool, not a correction. Look at the labeled swatches on the demo page when comparing filters.</p>
+</section>
+</main>
+<footer><p id="status" role="status" aria-live="polite">Preferences are ready. Choose Apply for the current page.</p><div class="actions"><button id="restore">Restore page</button><button id="apply" class="primary">Apply to this page</button></div><small>Local settings · no page text uploaded · reapply after navigation</small></footer>
+<script src="math.js"></script><script src="popup.js"></script></body></html>
