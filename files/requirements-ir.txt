@@ -1,0 +1,2 @@
+# Optional Windows IR capture. Uses project numpy/OpenCV pins, not whircam[full].
+whircam==0.1.0; sys_platform == "win32"
