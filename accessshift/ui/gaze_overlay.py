@@ -92,21 +92,21 @@ class GazeOverlay(QWidget):
             p.drawText(banner, Qt.AlignCenter, self._message)
         if not self._target.isNull():  # outline the button gaze will click (match gaze_style radius)
             p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(QColor(255, 170, 0), 4))
-            p.drawRoundedRect(self._target, 12, 12)
+            p.setPen(QPen(QColor(47, 111, 237), 4))
+            p.drawRoundedRect(self._target, 18, 18)
         if self._point is None:
             p.end()
             return
         c = self._point
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor(255, 170, 0, 200))
+        p.setBrush(QColor(47, 111, 237, 210))
         p.drawEllipse(c, DOT_RADIUS, DOT_RADIUS)
 
         ring = QRectF(c.x() - RING_RADIUS, c.y() - RING_RADIUS, 2 * RING_RADIUS, 2 * RING_RADIUS)
         p.setBrush(Qt.NoBrush)
-        p.setPen(QPen(QColor(80, 80, 90, 180), 3))
+        p.setPen(QPen(QColor(90, 110, 140, 180), 3))
         p.drawEllipse(ring)
         if self._dwell > 0:
-            p.setPen(QPen(QColor(60, 200, 110), 5, Qt.SolidLine, Qt.RoundCap))
+            p.setPen(QPen(QColor(11, 31, 58), 5, Qt.SolidLine, Qt.RoundCap))
             p.drawArc(ring, 90 * 16, -int(360 * 16 * self._dwell))  # clockwise from the top
         p.end()

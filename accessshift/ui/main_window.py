@@ -1,7 +1,7 @@
-"""AccessShift entry window: purple Control Center with GazeControl focus mode.
+"""AccessShift entry window: paper Control Center with GazeControl focus mode.
 
 The Control Center (settings, SteadyHand lab, SmartInterface, speech) is the
-default shell. Enabling gaze_control hides the sidebar and opens the hands-free
+default shell. Enabling gaze_control hides the top chrome and opens the hands-free
 booking layout with head/eye pointing.
 """
 from __future__ import annotations
@@ -41,7 +41,7 @@ class MainWindow(ControlCenterWindow):
 
     # --- healthcare demo (Elizabeth) -------------------------------------------------
     def _add_demo_toolbar_button(self) -> None:
-        shortcut = button('Open Demo Lab  ↗', 'secondaryButton')
+        shortcut = button('Open Demo Lab', 'secondaryButton')
         shortcut.setToolTip('Open the separate, local healthcare demo window')
         shortcut.setMinimumHeight(36)
         shortcut.clicked.connect(self._open_healthcare_demo)
@@ -98,16 +98,40 @@ class MainWindow(ControlCenterWindow):
         self.chk_gaze = QCheckBox('GazeControl')
         self.chk_gaze.hide()  # driven by Control Center toggle / engine profiles
 
+        chrome_qss = (
+            'QPushButton {'
+            '  color: #0B1F3A; background: #FFFFFF; border: 1px solid #B8C9DE;'
+            '  border-radius: 980px; padding: 14px 18px; font-size: 15px; font-weight: 650;'
+            '}'
+            'QPushButton:hover { background: #E8F0FE; border-color: #2F6FED; }'
+        )
+        exit_qss = (
+            'QPushButton {'
+            '  color: #FFFFFF; background: #0B1F3A; border: none;'
+            '  border-radius: 18px; padding: 16px 20px; font-size: 16px; font-weight: 650;'
+            '}'
+            'QPushButton:hover { background: #123A6D; }'
+        )
+
         self.gaze_bar = QWidget()
+        self.gaze_bar.setObjectName('gazeFocusBar')
         bar = QHBoxLayout(self.gaze_bar)
-        bar.setContentsMargins(8, 8, 8, 8)
+        bar.setContentsMargins(28, 16, 28, 16)
+        bar.setSpacing(14)
         self.btn_recalibrate_gaze = QPushButton('Recalibrate gaze')
         self.btn_gaze_source = QPushButton()
         self.gaze_status = QLabel()
+        self.gaze_status.setObjectName('gazeStatusLabel')
         self.gaze_status.setWordWrap(True)
-        self.btn_exit_gaze = QPushButton('✕  Exit gaze control\n(or close your eyes for 3 s)')
+        self.btn_exit_gaze = QPushButton('Exit gaze control\n(or close your eyes for 3 s)')
         self.btn_exit_gaze.setMinimumHeight(96)
         self.btn_exit_gaze.clicked.connect(lambda: self.chk_gaze.setChecked(False))
+        for btn in (self.btn_recalibrate_gaze, self.btn_gaze_source):
+            btn.setProperty('gazeChrome', True)
+            btn.setMinimumHeight(52)
+            btn.setStyleSheet(chrome_qss)
+        self.btn_exit_gaze.setProperty('gazeChrome', True)
+        self.btn_exit_gaze.setStyleSheet(exit_qss)
         bar.addWidget(self.btn_recalibrate_gaze, 1)
         bar.addWidget(self.btn_gaze_source, 1)
         bar.addWidget(self.gaze_status, 1)
@@ -115,12 +139,22 @@ class MainWindow(ControlCenterWindow):
         self.gaze_bar.hide()
 
         self.portal = PortalView(self.repo_root / 'assets' / 'portal')
-        self.gaze_grid = GazeGridPanel(self.portal)
+        self.gaze_grid = GazeGridPanel(
+            self.portal,
+            photo_root=self.repo_root / 'assets' / 'ui',
+        )
         self.gaze_grid.hide()
 
         self._focus_host = QWidget()
+        self._focus_host.setObjectName('gazeFocusRoot')
+        self._focus_host.setStyleSheet(
+            'QWidget#gazeFocusRoot { background: #F5F5F7; }'
+            'QWidget#gazeFocusBar { background: #FFFFFF; border-bottom: 1px solid #D7E0EC; }'
+            'QLabel#gazeStatusLabel { color: #3E5370; font-size: 15px; font-weight: 500; padding: 0 8px; }'
+        )
         focus = QVBoxLayout(self._focus_host)
         focus.setContentsMargins(0, 0, 0, 0)
+        focus.setSpacing(0)
         focus.addWidget(self.gaze_bar)
         focus.addWidget(self.portal, 1)
         focus.addWidget(self.gaze_grid, 1)

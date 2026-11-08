@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 
-PURPLE = '#6645D8'
-DARK = '#18223B'
+NAVY = '#0B1F3A'
+DARK = '#0B1F3A'
 
 
 class HealthcareDemoWindow(QDialog):
@@ -98,13 +98,12 @@ class HealthcareDemoWindow(QDialog):
         header = QHBoxLayout()
         headings = QVBoxLayout()
         headings.setSpacing(3)
-        headings.addWidget(self._label('SMARTINTERFACE  /  DEMO LAB', 'eyebrow'))
         headings.addWidget(self._label('Live preview · same healthcare form', 'pageTitle'))
         headings.addWidget(self._label(
             'Leave this window open. Change SmartInterface settings in AccessShift; this exact form updates live.',
             'subheading', True))
         header.addLayout(headings, 1)
-        tag = self._label('LOCAL SIMULATION  ·  NO DATA SENT', 'demoBadge')
+        tag = self._label('Local simulation · no data sent', 'demoBadge')
         header.addWidget(tag, 0, Qt.AlignmentFlag.AlignTop)
         outer.addLayout(header)
 
@@ -112,9 +111,9 @@ class HealthcareDemoWindow(QDialog):
         # FIRST window (AccessShift Settings), never in this demo.
         toggler, tlay = self._frame('toggleSurface', padding=12, spacing=8)
         live_row = QHBoxLayout()
-        live_row.addWidget(self._label('LIVE FROM ACCESS SHIFT SETTINGS', 'eyebrow'))
+        live_row.addWidget(self._label('Live from AccessShift settings', 'subheading'))
         live_row.addStretch(1)
-        self.mode_tag = self._label('ORIGINAL BASELINE', 'modeTag')
+        self.mode_tag = self._label('Original baseline', 'modeTag')
         live_row.addWidget(self.mode_tag)
         tlay.addLayout(live_row)
         self.mode_status = self._label(
@@ -467,9 +466,9 @@ class HealthcareDemoWindow(QDialog):
         for i, label in enumerate(self.step_labels):
             label.setProperty('stepState', 'current' if i == self._step else 'other')
             label.setStyleSheet(
-                'background:#ECE7FF; color:#4D31B4; border-radius:8px; padding:9px; '
+                'background:#D6E8F8; color:#0B1F3A; border-radius:8px; padding:9px; '
                 'font-weight:700;' if i == self._step else
-                'background:#F3F4F9; color:#627088; border-radius:8px; padding:9px;'
+                'background:#F4F7FB; color:#5A6F8A; border-radius:8px; padding:9px;'
             )
         self.scroll.verticalScrollBar().setValue(0)
 
@@ -519,58 +518,57 @@ class HealthcareDemoWindow(QDialog):
         field_font = 16 if accessible else 12
         title_font = 21 if accessible else 17
         style = '''
-QDialog#smartDemo { background: #F6F7FC; color: #18223B; }
-QWidget#portalRoot { background: #F5F7FB; color: #18223B; }
-QScrollArea#portalScroll { border:1px solid #DCE3F0; border-radius:12px; background:#F5F7FB; }
-QLabel { background:transparent; color:#243047; font-family:Arial, sans-serif; }
-QLabel#eyebrow { color:#6853CB; font-size:10px; font-weight:800; letter-spacing:1px; }
-QLabel#pageTitle { font-size:22px; font-weight:800; color:#1E2342; }
-QLabel#subheading { font-size:12px; color:#65718A; }
-QLabel#demoBadge { background:#E9F8EF; color:#176A48; border:1px solid #BEDFCB;
-    border-radius:8px; padding:8px 10px; font-size:10px; font-weight:800; }
-QFrame#toggleSurface { background:#FFFFFF; border:1px solid #E0E6F0; border-radius:12px; }
-QLabel#modeDescription { font-size:12px; color:#56627B; }
-QLabel#modeTag { background:#EDE9FF; color:#5635C0; border-radius:8px; padding:8px; font-weight:800; font-size:10px; }
-QLabel#changeChip { background:#FFFFFF; border:1px solid #DFE4F1; border-radius:8px;
-    padding:7px 12px; color:#41516B; font-size:11px; font-weight:600; }
-QFrame#portalHeader { background:#FFFFFF; border:1px solid #DFE5F1; border-radius:10px; }
-QLabel#portalBrand { color:#3E2ABB; font-size:15px; font-weight:900; }
-QLabel#portalPath { color:#7E8AA1; font-size:11px; }
-QLabel#portalTitle { color:#1F2B45; font-size:20px; font-weight:800; }
-QLabel#portalSub { color:#68778F; font-size:11px; }
-QFrame#sidePanel { background:#FFFFFF; border:1px solid #E1E6F0; border-radius:10px; }
-QLabel#sideHeading { font-size:10px; color:#78849A; font-weight:800; }
-QLabel#sideText { color:#586680; font-size:11px; }
-QFrame#sectionCard { background:#FFFFFF; border:1px solid #DAE1F0; border-radius:12px; }
-QLabel#sectionHint { color:#596780; font-size:12px; }
-QLabel#fieldLabel { color:#34425C; font-size:''' + str(fs) + '''px; font-weight:600; }
-QLabel#sectionTitle { color:#1D2943; font-size:''' + str(title_font) + '''px; font-weight:800; }
+QDialog#smartDemo { background: #F5F5F7; color: #0B1F3A; }
+QWidget#portalRoot { background: #F5F5F7; color: #0B1F3A; }
+QScrollArea#portalScroll { border:1px solid #D7E0EC; border-radius:14px; background:#FFFFFF; }
+QLabel { background:transparent; color:#0B1F3A; font-family:'Albert Sans', 'Avenir Next', Arial, sans-serif; }
+QLabel#pageTitle { font-size:32px; font-weight:200; color:#0B1F3A; letter-spacing:-0.5px; }
+QLabel#subheading { font-size:15px; color:#3E5370; }
+QLabel#demoBadge { background:#E8F0FE; color:#0B1F3A; border:1px solid #C5D8F5;
+    border-radius:999px; padding:8px 14px; font-size:13px; font-weight:600; }
+QFrame#toggleSurface { background:#FFFFFF; border:1px solid #D7E0EC; border-radius:14px; }
+QLabel#modeDescription { font-size:14px; color:#3E5370; }
+QLabel#modeTag { background:#D6E8F8; color:#0B1F3A; border-radius:999px; padding:8px 14px; font-weight:650; font-size:13px; }
+QLabel#changeChip { background:#FFFFFF; border:1px solid #D0DCEC; border-radius:999px;
+    padding:8px 14px; color:#3E5370; font-size:13px; font-weight:500; }
+QFrame#portalHeader { background:#FFFFFF; border:1px solid #D7E0EC; border-radius:12px; }
+QLabel#portalBrand { color:#0B1F3A; font-size:16px; font-weight:650; }
+QLabel#portalPath { color:#5A6F8A; font-size:13px; }
+QLabel#portalTitle { color:#0B1F3A; font-size:22px; font-weight:650; }
+QLabel#portalSub { color:#3E5370; font-size:13px; }
+QFrame#sidePanel { background:#FFFFFF; border:1px solid #D7E0EC; border-radius:12px; }
+QLabel#sideHeading { font-size:13px; color:#5A6F8A; font-weight:650; }
+QLabel#sideText { color:#3E5370; font-size:13px; }
+QFrame#sectionCard { background:#FFFFFF; border:1px solid #D7E0EC; border-radius:14px; }
+QLabel#sectionHint { color:#3E5370; font-size:14px; }
+QLabel#fieldLabel { color:#0B1F3A; font-size:''' + str(fs) + '''px; font-weight:600; }
+QLabel#sectionTitle { color:#0B1F3A; font-size:''' + str(title_font) + '''px; font-weight:200; }
 QLineEdit, QTextEdit, QComboBox {
-    background:#FFFFFF; color:#1D2943; border:1px solid #B9C6DA; border-radius:8px;
-    padding:7px 10px; font-size:''' + str(field_font) + '''px;
-    selection-background-color:#6249D4; selection-color:#FFFFFF;
+    background:#FFFFFF; color:#0B1F3A; border:1px solid #B8C9DE; border-radius:10px;
+    padding:8px 12px; font-size:''' + str(field_font) + '''px;
+    selection-background-color:#D6E8F8; selection-color:#0B1F3A;
 }
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border:2px solid #6850D8; }
-QComboBox QAbstractItemView { background:#FFFFFF; color:#1D2943; selection-background-color:#EDE9FF; }
-QCheckBox { color:#34425C; font-size:''' + str(fs) + '''px; spacing:9px; }
-QPushButton { font-family:Arial,sans-serif; border-radius:9px; font-weight:700; }
-QPushButton#timeButton { color:#293A5B; background:#F6F8FD; border:1px solid #CDD7EB;
-    padding:5px; font-size:''' + str(field_font) + '''px; }
-QPushButton#timeButton:checked { color:#FFFFFF; background:#6043D1; border:2px solid #6043D1; }
-QPushButton#timeButton:hover { background:#E7E1FF; color:#33218A; }
-QPushButton#timeButton:checked:hover { color:#FFFFFF; background:#5134BE; }
-QPushButton#primaryButton { background:#5E40D0; border:1px solid #5E40D0;
-    color:#FFFFFF; padding:10px 16px; font-size:''' + str(fs) + '''px; }
-QPushButton#primaryButton:hover { background:#4930B1; }
-QPushButton#neutralButton { background:#FFFFFF; border:1px solid #C5CFE1;
-    color:#34425C; padding:10px 16px; font-size:''' + str(fs) + '''px; }
-QPushButton:focus { border:2px solid #1C3585; }
-QLabel#reviewSummary { background:#F1F3FF; border:1px solid #D8DDF7; border-radius:10px;
-    color:#253453; font-size:''' + str(fs) + '''px; padding:16px; }
-QLabel#successText { color:#136E4E; font-size:13px; font-weight:800; }
-QLabel#footerText { color:#748199; font-size:11px; }
-QScrollBar:vertical { background:#EEF0F6; width:10px; }
-QScrollBar::handle:vertical { background:#BFC7D8; border-radius:5px; min-height:30px; }
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border:2px solid #2F6FED; }
+QComboBox QAbstractItemView { background:#FFFFFF; color:#0B1F3A; selection-background-color:#D6E8F8; }
+QCheckBox { color:#0B1F3A; font-size:''' + str(fs) + '''px; spacing:9px; }
+QPushButton { font-family:'Albert Sans', 'Avenir Next', Arial, sans-serif; border-radius:10px; font-weight:650; }
+QPushButton#timeButton { color:#0B1F3A; background:#F4F7FB; border:1px solid #B8C9DE;
+    padding:6px; font-size:''' + str(field_font) + '''px; }
+QPushButton#timeButton:checked { color:#FFFFFF; background:#0B1F3A; border:2px solid #0B1F3A; }
+QPushButton#timeButton:hover { background:#E8F0FE; color:#0B1F3A; }
+QPushButton#timeButton:checked:hover { color:#FFFFFF; background:#123A6D; }
+QPushButton#primaryButton { background:#0B1F3A; border:1px solid #0B1F3A;
+    color:#FFFFFF; padding:12px 18px; font-size:''' + str(fs) + '''px; }
+QPushButton#primaryButton:hover { background:#123A6D; }
+QPushButton#neutralButton { background:#FFFFFF; border:1px solid #B8C9DE;
+    color:#0B1F3A; padding:12px 18px; font-size:''' + str(fs) + '''px; }
+QPushButton:focus { border:2px solid #2F6FED; }
+QLabel#reviewSummary { background:#EAF1F8; border:1px solid #D0DCEC; border-radius:12px;
+    color:#0B1F3A; font-size:''' + str(fs) + '''px; padding:16px; }
+QLabel#successText { color:#0B3D6E; font-size:14px; font-weight:650; }
+QLabel#footerText { color:#5A6F8A; font-size:13px; }
+QScrollBar:vertical { background:#EAF1F8; width:10px; }
+QScrollBar::handle:vertical { background:#B8C9DE; border-radius:5px; min-height:30px; }
 '''
         if accessible:
             pct = max(90, min(160, int(self._visual_settings.get('font_size_pct', 110))))
@@ -579,8 +577,8 @@ QScrollBar::handle:vertical { background:#BFC7D8; border-radius:5px; min-height:
                            style)
             theme = str(self._visual_settings.get('color_profile', 'standard'))
             palettes = {
-                'high_contrast': ('#090C14', '#151925', '#FFFFFF', '#FFD84D', '#030405', '#D6DDF2'),
-                'warm': ('#FFF7EA', '#FFFDF8', '#362819', '#8050BA', '#FFFFFF', '#D9C7AB'),
+                'high_contrast': ('#050B16', '#0B1F3A', '#FFFFFF', '#2F6FED', '#FFFFFF', '#3E5370'),
+                'warm': ('#F4F7FB', '#FFFFFF', '#0B1F3A', '#123A6D', '#FFFFFF', '#B8C9DE'),
                 'cool': ('#EAF4FF', '#FFFFFF', '#16304A', '#2866CB', '#FFFFFF', '#B8D5F0'),
             }
             if theme in palettes:

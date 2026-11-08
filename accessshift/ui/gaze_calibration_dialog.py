@@ -40,7 +40,7 @@ EYES_MAX_RETRIES = 2
 EYES_MAX_SPREAD = 0.055
 EYES_INSTRUCTION = (
     "Sit an arm's length from the screen. Keep your head still and move only your eyes "
-    "to the orange dot. Hold each gaze until the ring fills."
+    "to the blue dot. Hold each gaze until the ring fills."
 )
 HEAD_INSTRUCTION = (
     "Sit centered in front of the camera. Move your head only (not your chair). "
@@ -64,11 +64,11 @@ HEAD_STEP_DETAIL = {
 }
 DEFAULT_EAR_THRESHOLD = 0.21
 
-BG = QColor(24, 24, 28)
-FG = QColor(235, 235, 235)
-ACCENT = QColor(255, 170, 0)
-WARN = QColor(230, 90, 90)
-OK = QColor(90, 210, 120)
+BG = QColor(11, 31, 58)  # navy paper field
+FG = QColor(244, 247, 251)
+ACCENT = QColor(47, 111, 237)  # AccessShift blue
+WARN = QColor(200, 120, 120)
+OK = QColor(150, 200, 240)
 
 
 class GazeCalibrationDialog(QDialog):
@@ -138,16 +138,16 @@ class GazeCalibrationDialog(QDialog):
         dlg.setModal(True)
         dlg.setMinimumSize(520, 280)
         dlg.setStyleSheet(
-            "QDialog { background: #1B1B22; }"
-            "QLabel { color: #F2F2F5; background: transparent; }"
-            "QLabel#title { font-size: 26px; font-weight: 800; }"
-            "QLabel#hint { font-size: 15px; color: #B8B8C4; }"
+            "QDialog { background: #0B1F3A; }"
+            "QLabel { color: #F4F7FB; background: transparent; }"
+            "QLabel#title { font-size: 28px; font-weight: 200; letter-spacing: -0.4px; }"
+            "QLabel#hint { font-size: 15px; color: #B8C9DE; }"
             "QPushButton {"
-            "  background: #2A2A35; color: #F2F2F5; font-size: 20px; font-weight: 700;"
-            "  border: 2px solid #5A5A6A; border-radius: 14px; padding: 22px 18px; min-height: 88px;"
+            "  background: #123A6D; color: #F4F7FB; font-size: 18px; font-weight: 650;"
+            "  border: 1px solid #2F6FED; border-radius: 18px; padding: 22px 18px; min-height: 88px;"
             "}"
-            "QPushButton:hover { background: #343443; border-color: #FFAA00; }"
-            "QPushButton#preferred { border: 3px solid #FFAA00; background: #3A3420; }"
+            "QPushButton:hover { background: #1E4F8C; border-color: #5B8FF5; }"
+            "QPushButton#preferred { border: 3px solid #2F6FED; background: #163A6E; }"
         )
         layout = QVBoxLayout(dlg)
         layout.setContentsMargins(28, 28, 28, 28)
@@ -275,7 +275,7 @@ class GazeCalibrationDialog(QDialog):
         if not self._face:
             return ("Face not found. Sit facing the camera with light on your face.", WARN)
         if not self._head and self._ear < self._ear_threshold:
-            return ("Eyes look closed. Open them and look straight at the orange dot.", WARN)
+            return ("Eyes look closed. Open them and look straight at the blue dot.", WARN)
         # Restart coach stays until the next finish/cancel; live issues above still win.
         if self._message and self._phase != "result":
             return (self._message, WARN)
@@ -289,13 +289,13 @@ class GazeCalibrationDialog(QDialog):
             if self._head:
                 tip = "Hold the pose a bit longer with less wobble."
             else:
-                tip = "Keep looking at the orange dot. Small natural tremor is fine."
+                tip = "Keep looking at the blue dot. Small natural tremor is fine."
             return (f"Hold again ({c.retries} of {self._max_retries}). {tip}", WARN)
         progress = c.progress(self._ts)
         if progress <= 0:
             if self._head:
                 return ("Get into position, then hold still. The ring fills while we measure.", FG)
-            return ("Find the orange dot with your eyes, then hold still.", FG)
+            return ("Find the blue dot with your eyes, then hold still.", FG)
         if progress < 1:
             return ("Hold still… measuring.", OK)
         return ("", FG)

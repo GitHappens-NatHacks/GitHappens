@@ -29,14 +29,14 @@ class Switch(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         active = self.isChecked()
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor('#674BE8' if active else '#D6DCEA'))
-        painter.drawRoundedRect(1, 2, 46, 23, 11.5, 11.5)
+        painter.setBrush(QColor('#0B1F3A' if active else '#C9D6E6'))
+        painter.drawRoundedRect(1, 2, 46, 23, 4, 4)
         painter.setBrush(QColor('#FFFFFF'))
         painter.drawEllipse(25 if active else 4, 5, 18, 18)
         if self.hasFocus():
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(QColor('#8E79EF'), 2))
-            painter.drawRoundedRect(0, 1, 47, 25, 12, 12)
+            painter.setPen(QPen(QColor('#2F6FED'), 2))
+            painter.drawRoundedRect(0, 1, 47, 25, 4, 4)
 
 
 def label(text: str, name: str = 'bodyText', wrap: bool = False) -> QLabel:
@@ -50,7 +50,7 @@ def button(text: str, variant: str = 'secondaryButton') -> QPushButton:
     widget = QPushButton(text)
     widget.setObjectName(variant)
     widget.setCursor(Qt.CursorShape.PointingHandCursor)
-    widget.setMinimumHeight(42)
+    widget.setMinimumHeight(46)
     return widget
 
 
@@ -71,8 +71,8 @@ class PreferenceRow(QFrame):
         super().__init__()
         self.setObjectName('card')
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(19, 16, 19, 16)
-        lay.setSpacing(20)
+        lay.setContentsMargins(24, 20, 24, 20)
+        lay.setSpacing(24)
         texts = QVBoxLayout()
         texts.setSpacing(6)
         title = label(heading, 'cardTitle')

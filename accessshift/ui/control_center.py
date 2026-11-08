@@ -10,11 +10,11 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor, QPainter, QPen
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QCursor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-    QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget,
+    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSlider, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -31,6 +31,52 @@ from accessshift.ui.control_center_components import (
 from accessshift.ui.control_center_settings import (
     AccessibilitySettings, PROFILES, load_settings, save_settings,
 )
+from accessshift.ui import typography as ui_type
+from accessshift.ui.gaze_control_panel import (
+    DwellRingPreview, GazePostureDiagram, GazeTelemetryViewport, IconToggleRow,
+    clinical_title, dwell_band_label, micro_label,
+)
+
+# Atmosphere photos per page. Spread through sections (never clustered as one gallery).
+# soft-keyboard.jpg is excluded: keyboard-only crop without a full display.
+PHOTO_SETS = {
+    'overview': (
+        'desk-laptop-a.jpg', 'cam-bezel.jpg', 'mouse-mat.jpg', 'clinic-light.jpg',
+        'screen-glow.jpg', 'audio-desk.jpg', 'window-seat.jpg', 'soft-wall.jpg',
+        'read-ready.jpg', 'mug-stack.jpg',
+    ),
+    'personalize': (
+        'pages-light.jpg', 'read-ready.jpg', 'window-seat.jpg', 'desk-top.jpg',
+        'clinic-light.jpg', 'mug-stack.jpg', 'open-notebook.jpg', 'desk-laptop-a.jpg',
+    ),
+    'gaze': (
+        'cam-bezel.jpg', 'lens-close.jpg', 'webcam.jpg', 'screen-glow.jpg',
+        'soft-wall.jpg', 'care-corner.jpg', 'clinic-light.jpg', 'desk-laptop-a.jpg',
+    ),
+    'steady': (
+        'mouse-mat.jpg', 'desk-top.jpg', 'soft-mouse.jpg', 'screen-glow.jpg',
+        'pages-light.jpg', 'desk-laptop-a.jpg', 'light-field.jpg', 'mug-stack.jpg',
+    ),
+    'interface': (
+        'screen-glow.jpg', 'desk-laptop-a.jpg', 'clinic-light.jpg', 'soft-wall.jpg',
+        'wide-light.jpg', 'pages-light.jpg', 'care-corner.jpg', 'window-seat.jpg',
+    ),
+    'speech': (
+        'audio-desk.jpg', 'read-ready.jpg', 'pages-light.jpg', 'care-corner.jpg',
+        'lens-close.jpg', 'soft-wall.jpg', 'clinic-light.jpg', 'mug-stack.jpg',
+    ),
+    'test': (
+        'mouse-mat.jpg', 'desk-top.jpg', 'desk-laptop-a.jpg', 'cam-bezel.jpg',
+        'screen-glow.jpg', 'light-field.jpg', 'clinic-light.jpg', 'pages-light.jpg',
+    ),
+}
+
+FEATURE_PHOTOS = {
+    'gaze_control': 'cam-bezel.jpg',
+    'steady_hand': 'mouse-mat.jpg',
+    'smart_interface': 'screen-glow.jpg',
+    'predictive_speech': 'audio-desk.jpg',
+}
 
 SEQUENCE = ('doctor', 'date', 'time', 'review', 'book') * 2
 LABELS = {
@@ -40,6 +86,184 @@ LABELS = {
     'review': '4. Review',
     'book': '5. Book',
 }
+
+
+def _fit_pixmap(pix: QPixmap, size, *, fill: QColor | None = None) -> tuple[QPixmap, int, int]:
+    """Scale a photo to fit inside size without cropping. Returns (scaled, x, y)."""
+    if pix.isNull() or size.width() < 1 or size.height() < 1:
+        return QPixmap(), 0, 0
+    scaled = pix.scaled(
+        size,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = (size.width() - scaled.width()) // 2
+    y = (size.height() - scaled.height()) // 2
+    return scaled, x, y
+
+
+class _FitPhoto(QWidget):
+    """Shows the full photo letterboxed; never crops edges for a fill crop."""
+
+    def __init__(self, pixmap: QPixmap, height: int = 360):
+        super().__init__()
+        self._pix = pixmap
+        self.setObjectName('atmosphereImage')
+        self.setMinimumHeight(height)
+        self.setMaximumHeight(height)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.fillRect(self.rect(), QColor('#E8EEF5'))
+        scaled, x, y = _fit_pixmap(self._pix, self.size())
+        if not scaled.isNull():
+            p.drawPixmap(x, y, scaled)
+        p.end()
+
+
+class FeatureTile(QFrame):
+    """Full-width dashboard feature with photo background and high-contrast copy."""
+
+    activated = Signal()
+
+    def __init__(
+        self,
+        title: str,
+        description: str,
+        pixmap: QPixmap,
+        *,
+        primary: bool = False,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        self._pix = pixmap
+        self._title = title
+        self._description = description
+        self._primary = primary
+        self._active = False
+        self.setObjectName('featureTilePrimary' if primary else 'featureTile')
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(240 if primary else 168)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.status = label('Off', 'featureTileStatus')
+        self.status.hide()  # painted; kept for _refresh text updates
+
+    def set_active(self, enabled: bool) -> None:
+        self._active = bool(enabled)
+        self.status.setText('On' if enabled else 'Off')
+        self.setProperty('active', self._active)
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.activated.emit()
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        radius = 20 if self._primary else 16
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor('#0B1F3A'))
+        p.drawRoundedRect(rect, radius, radius)
+        if not self._pix.isNull():
+            scaled = self._pix.scaled(
+                QSize(max(1, int(rect.width())), max(1, int(rect.height()))),
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            x = rect.x() + (rect.width() - scaled.width()) / 2
+            y = rect.y() + (rect.height() - scaled.height()) / 2
+            clip = QPainterPath()
+            clip.addRoundedRect(rect, radius, radius)
+            p.setClipPath(clip)
+            p.drawPixmap(int(x), int(y), scaled)
+            p.setClipping(False)
+        # Strong scrim so title and body stay readable on any photo.
+        scrim = QColor(5, 14, 28, 188 if self._primary else 176)
+        p.fillRect(rect, scrim)
+        if self._active:
+            p.setPen(QPen(QColor('#2F6FED'), 4))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(rect.adjusted(2, 2, -2, -2), radius, radius)
+
+        margin = 28 if self._primary else 22
+        ink = QColor('#FFFFFF')
+        muted = QColor('#D6E8F8')
+        p.setPen(ink)
+        title_size = 34 if self._primary else 24
+        p.setFont(QFont(ui_type.DISPLAY_FAMILY, title_size, QFont.Weight.ExtraLight))
+        title_rect = QRectF(margin, margin, rect.width() - margin * 2, 48 if self._primary else 40)
+        p.drawText(title_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self._title)
+
+        p.setPen(muted)
+        body_size = 16 if self._primary else 14
+        p.setFont(QFont(ui_type.BODY_FAMILY, body_size, QFont.Weight.Normal))
+        body_top = margin + (52 if self._primary else 44)
+        body_rect = QRectF(margin, body_top, rect.width() - margin * 2 - 100, rect.height() - body_top - margin - 8)
+        p.drawText(
+            body_rect,
+            int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
+            self._description,
+        )
+
+        badge = 'On' if self._active else 'Off'
+        p.setFont(QFont(ui_type.BODY_FAMILY, 13, QFont.Weight.DemiBold))
+        badge_w, badge_h = 64, 28
+        badge_rect = QRectF(rect.right() - margin - badge_w, margin, badge_w, badge_h)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor('#2F6FED') if self._active else QColor(255, 255, 255, 40))
+        p.drawRoundedRect(badge_rect, 980, 980)
+        p.setPen(ink)
+        p.drawText(badge_rect, int(Qt.AlignmentFlag.AlignCenter), badge)
+        p.end()
+
+
+class _PhotoTextBand(QWidget):
+    """Full-width editorial photo (uncropped fit) with title over a soft navy scrim."""
+
+    def __init__(self, pixmap: QPixmap, title: str, subtitle: str, height: int = 420):
+        super().__init__()
+        self._pix = pixmap
+        self._title = title
+        self._subtitle = subtitle
+        self.setMinimumHeight(height)
+        self.setMaximumHeight(height)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(title)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = self.rect()
+        p.fillRect(rect, QColor('#0B1F3A'))
+        scaled, x, y = _fit_pixmap(self._pix, rect.size())
+        if not scaled.isNull():
+            p.drawPixmap(x, y, scaled)
+        scrim_h = min(180, max(130, rect.height() // 3))
+        scrim = QRectF(0, rect.height() - scrim_h, rect.width(), scrim_h)
+        p.fillRect(scrim, QColor(11, 31, 58, 180))
+        p.setPen(QColor('#F5F5F7'))
+        title_font = QFont(ui_type.DISPLAY_FAMILY, 34, QFont.Weight.ExtraLight)
+        p.setFont(title_font)
+        text_rect = QRectF(36, rect.height() - scrim_h + 24, rect.width() - 72, 52)
+        p.drawText(text_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self._title)
+        if self._subtitle:
+            body_font = QFont(ui_type.BODY_FAMILY, 15, QFont.Weight.Normal)
+            p.setFont(body_font)
+            p.setPen(QColor('#D6E8F8'))
+            body_rect = QRectF(36, rect.height() - scrim_h + 76, min(720, rect.width() - 72), 60)
+            p.drawText(
+                body_rect,
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
+                self._subtitle,
+            )
+        p.end()
 
 
 class TremorPlayground(QWidget):
@@ -206,9 +430,9 @@ class TremorPlayground(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor('#F6F5FF'))
+        p.setBrush(QColor('#F4F7FB'))
         p.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 14, 14)
-        p.setPen(QPen(QColor('#E8E3FA'), 1))
+        p.setPen(QPen(QColor('#D7E0EC'), 1))
         for gx in range(25, self.width(), 30):
             for gy in range(25, self.height(), 30):
                 p.drawPoint(gx, gy)
@@ -221,39 +445,39 @@ class TremorPlayground(QWidget):
         for t in self.target_manager.targets:
             rect = QRectF(t.x, t.y, t.width, t.height)
             if self.assisted and pad > 0:
-                p.setPen(QPen(QColor('#B9ACF7'), 1, Qt.PenStyle.DashLine))
-                p.setBrush(QColor('#ECE7FF'))
+                p.setPen(QPen(QColor('#9BB8E8'), 1, Qt.PenStyle.DashLine))
+                p.setBrush(QColor('#E8F0FE'))
                 p.drawRoundedRect(rect.adjusted(-pad, -pad, pad, pad), 9, 9)
             is_expected = t.id == expected_id
             if is_expected:
-                p.setPen(QPen(QColor('#10B981'), 2))
-                p.setBrush(QColor('#E6F9F0'))
+                p.setPen(QPen(QColor('#2F6FED'), 2))
+                p.setBrush(QColor('#D6E8F8'))
             else:
-                p.setPen(QPen(QColor('#C8C0EE'), 1))
+                p.setPen(QPen(QColor('#B8C9DE'), 1))
                 p.setBrush(QColor('#FFFFFF'))
             p.drawRoundedRect(rect, 7, 7)
-            p.setPen(QColor('#065F46' if is_expected else '#312E5B'))
+            p.setPen(QColor('#0B1F3A' if is_expected else '#3E5370'))
             font = p.font()
             font.setBold(is_expected)
             font.setPointSize(10)
             p.setFont(font)
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, t.label)
             if candidate and candidate.id == t.id:
-                p.setPen(QPen(QColor('#F59E0B'), 2))
+                p.setPen(QPen(QColor('#0B1F3A'), 2))
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), 9, 9)
 
         if self._inside:
             rx, ry = self._raw
             if self._simulated or self.use_filter:
-                p.setPen(QPen(QColor('#FB8F7B'), 2))
+                p.setPen(QPen(QColor('#5A6F8A'), 2))
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.drawEllipse(QPointF(rx, ry), 9, 9)
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor('#674BE8'))
+            p.setBrush(QColor('#2F6FED'))
             p.drawEllipse(QPointF(sx, sy), 5, 5)
 
-        p.setPen(QColor('#6B648C'))
+        p.setPen(QColor('#5A6F8A'))
         font = p.font()
         font.setPointSize(9)
         font.setBold(False)
@@ -265,7 +489,7 @@ class TremorPlayground(QWidget):
         p.drawText(
             16,
             self.height() - 12,
-            'Coral ring = Raw pointer with tremor   •   Purple dot = Stabilized / assisted pointer   •   Gold outline = Selected candidate',
+            'Grey ring = Raw pointer with tremor   •   Blue dot = Stabilized / assisted pointer   •   Navy outline = Selected candidate',
         )
         p.end()
 
@@ -280,6 +504,7 @@ class MainWindow(QMainWindow):
     def __init__(self, repo_root: Path):
         super().__init__()
         self.repo_root = Path(repo_root)
+        ui_type.ensure_fonts(self.repo_root)
         self.prefs = load_settings()
         self.engine = AdaptiveEngine(self)
         self.steady = SteadyHandController()
@@ -289,6 +514,7 @@ class MainWindow(QMainWindow):
         self._toggle_rows = {}
         self._sliders = {}
         self._preset_buttons = {}
+        self._module_cells = {}
         self._base_qss = Path(__file__).with_name('control_center_styles.qss').read_text(encoding='utf-8')
         self.tint_manager = ScreenTintManager(QApplication.instance())
         self._syncing_engine = True
@@ -299,8 +525,8 @@ class MainWindow(QMainWindow):
         self._syncing_engine = False
         self._refresh()
         self._navigate('overview' if self.prefs.initial_setup_complete else 'personalize')
-        self.resize(1220, 810)
-        self.setMinimumSize(940, 650)
+        self.resize(1280, 860)
+        self.setMinimumSize(960, 680)
         self.setWindowTitle('AccessShift AI  ·  Accessibility Settings')
         self._apply_visual_preferences()
 
@@ -308,74 +534,83 @@ class MainWindow(QMainWindow):
         root = QWidget()
         root.setObjectName('appRoot')
         self.setCentralWidget(root)
-        outer = QHBoxLayout(root)
+        outer = QVBoxLayout(root)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        side = QFrame()
-        side.setObjectName('sidebar')
-        side.setFixedWidth(246)
-        self.sidebar = side
-        side_l = QVBoxLayout(side)
-        side_l.setContentsMargins(18, 28, 18, 20)
-        side_l.setSpacing(5)
-        brand = QHBoxLayout()
-        mark = label('✦', 'logoMark')
-        mark.setFixedSize(43, 43)
-        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand.addWidget(mark)
-        text_l = QVBoxLayout()
-        text_l.setSpacing(2)
-        text_l.addWidget(label('AccessShift', 'brandName'))
-        text_l.addWidget(label('ACCESSIBILITY ASSISTANT', 'brandSub'))
-        brand.addLayout(text_l)
-        side_l.addLayout(brand)
-        side_l.addSpacing(24)
-        nav_sections = [
-            ('WORKSPACE', [('overview', '▦   Dashboard'), ('personalize', '◈   My accessibility profile')]),
-            ('ACCESSIBILITY TOOLS', [
-                ('gaze', '◎   Eye & blink control'),
-                ('steady', '⌁   SteadyHand'),
-                ('interface', '◐   SmartInterface'),
-                ('speech', '◌   Communication'),
-            ]),
-            ('TRY IT OUT', [('test', '▣   Demo Lab & tests')]),
+
+        # Top chrome replaces the left rail; gaze focus still hides it via self.sidebar.
+        header = QFrame()
+        header.setObjectName('siteHeader')
+        self.sidebar = header
+        head = QHBoxLayout(header)
+        head.setContentsMargins(28, 14, 28, 14)
+        head.setSpacing(12)
+
+        left = QWidget()
+        left_l = QHBoxLayout(left)
+        left_l.setContentsMargins(0, 0, 0, 0)
+        left_l.setSpacing(6)
+        brand = label('AccessShift', 'brandMark')
+        brand.setFont(QFont(ui_type.DISPLAY_FAMILY, 28, QFont.Weight.ExtraLight))
+        left_l.addWidget(brand)
+        left_l.addWidget(label('·', 'brandDot'))
+        left_l.addStretch(1)
+
+        # Compact nav cluster: buttons stay packed; outer stretches absorb width.
+        nav_cluster = QWidget()
+        nav_cluster.setObjectName('navCluster')
+        nav_cluster.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        center_l = QHBoxLayout(nav_cluster)
+        center_l.setContentsMargins(0, 0, 0, 0)
+        center_l.setSpacing(0)
+        nav_entries = [
+            ('overview', 'Home', 'navButton'),
+            ('gaze', 'Eye', 'navPrimaryButton'),
+            ('steady', 'Steady', 'navPrimaryButton'),
+            ('interface', 'Interface', 'navButton'),
+            ('speech', 'Speech', 'navButton'),
+            ('test', 'Demo', 'navButton'),
         ]
-        for section, entries in nav_sections:
-            side_l.addWidget(label(section, 'sideSection'))
-            side_l.addSpacing(3)
-            for key, text in entries:
-                nav_button = button(text, 'navButton')
-                nav_button.setCheckable(True)
-                nav_button.setMinimumHeight(40)
-                nav_button.clicked.connect(lambda _, k=key: self._navigate(k))
-                nav_button.setAccessibleName(text.strip())
-                side_l.addWidget(nav_button)
-                self._nav[key] = nav_button
-            side_l.addSpacing(10)
-        side_l.addStretch()
-        info, info_l = card(name='innerCard', margins=12, spacing=5)
-        info_l.addWidget(label('●  PRIVATE BY DESIGN', 'goodPill'))
-        info_l.addWidget(label('Your settings stay on this computer.', 'micro', True))
-        side_l.addWidget(info)
-        side_l.addSpacing(8)
-        side_l.addWidget(label('GitHappens  ·  natHacks 2026', 'sidebarFoot'))
-        outer.addWidget(side)
+        for key, text, role in nav_entries:
+            nav_button = button(text, role)
+            nav_button.setCheckable(True)
+            nav_button.setMinimumHeight(40)
+            nav_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            nav_button.clicked.connect(lambda _, k=key: self._navigate(k))
+            nav_button.setAccessibleName(text)
+            center_l.addWidget(nav_button)
+            self._nav[key] = nav_button
+
+        right = QWidget()
+        right.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        right_l = QHBoxLayout(right)
+        right_l.setContentsMargins(0, 0, 0, 0)
+        right_l.setSpacing(10)
+        right_l.addWidget(label('Local demo', 'topBarBadge'))
+        profile_btn = button('Profile', 'profileNavButton')
+        profile_btn.setCheckable(True)
+        profile_btn.setMinimumHeight(40)
+        profile_btn.setMinimumWidth(104)
+        profile_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        profile_btn.setAccessibleName('Profile')
+        profile_btn.clicked.connect(lambda: self._navigate('personalize'))
+        right_l.addWidget(profile_btn)
+        self._nav['personalize'] = profile_btn
+
+        left.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        head.addWidget(left, 0)
+        head.addStretch(1)
+        head.addWidget(nav_cluster, 0)
+        head.addStretch(1)
+        head.addWidget(right, 0)
+        self.top_bar_layout = right_l
+        outer.addWidget(header)
 
         right = QWidget()
         self.workspace = right
         right_l = QVBoxLayout(right)
         right_l.setContentsMargins(0, 0, 0, 0)
         right_l.setSpacing(0)
-        top_bar = QFrame()
-        top_bar.setObjectName('topBar')
-        top_l = QHBoxLayout(top_bar)
-        top_l.setContentsMargins(33, 14, 33, 14)
-        top_l.setSpacing(12)
-        top_l.addWidget(label('ACCESSIBILITY WORKSPACE', 'topBarTitle'))
-        top_l.addStretch()
-        top_l.addWidget(label('●  LOCAL DEMO', 'topBarBadge'))
-        self.top_bar_layout = top_l
-        right_l.addWidget(top_bar)
         self.stack = QStackedWidget()
         right_l.addWidget(self.stack, 1)
         for key, method in [
@@ -393,7 +628,7 @@ class MainWindow(QMainWindow):
         foot = QFrame()
         foot.setObjectName('footerBar')
         fl = QHBoxLayout(foot)
-        fl.setContentsMargins(33, 11, 33, 11)
+        fl.setContentsMargins(28, 12, 28, 12)
         fl.addWidget(label('AccessShift AI  ·  Local accessibility prototype', 'footerText'))
         fl.addStretch()
         self.footer_status = label('Preferences saved locally', 'footerText')
@@ -401,98 +636,208 @@ class MainWindow(QMainWindow):
         right_l.addWidget(foot)
         outer.addWidget(right, 1)
 
-    def _page(self, eyebrow, title, subtitle):
+    def _page(self, title, subtitle):
         scroller = QScrollArea()
         scroller.setWidgetResizable(True)
         scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         container = QWidget()
         container.setObjectName('scrollContent')
         content = QVBoxLayout(container)
-        content.setContentsMargins(34, 29, 34, 38)
-        content.setSpacing(18)
-        content.addWidget(label(eyebrow, 'eyebrow'))
-        content.addWidget(label(title, 'pageTitle'))
+        content.setContentsMargins(64, 48, 64, 64)
+        content.setSpacing(28)
+        title_label = label(title, 'pageTitle')
+        title_label.setFont(QFont(ui_type.DISPLAY_FAMILY, 56, QFont.Weight.ExtraLight))
+        title_label.setAccessibleName(title)
+        content.addWidget(title_label)
+        content.addSpacing(8)
         desc = label(subtitle, 'pageDescription', True)
+        desc.setMaximumWidth(720)
         content.addWidget(desc)
-        content.addSpacing(5)
+        content.addSpacing(20)
         scroller.setWidget(container)
         return scroller, content
 
     def _section(self, lay, title, subtitle=None):
-        lay.addWidget(label(title, 'sectionTitle'))
+        section = label(title, 'sectionTitle')
+        section.setFont(QFont(ui_type.DISPLAY_FAMILY, 32, QFont.Weight.ExtraLight))
+        lay.addWidget(section)
         if subtitle:
-            lay.addWidget(label(subtitle, 'bodyText', True))
+            sub = label(subtitle, 'bodyText', True)
+            sub.setMaximumWidth(640)
+            lay.addWidget(sub)
+        lay.addSpacing(8)
+
+    def _photos(self, key: str) -> list[str]:
+        files = [f for f in PHOTO_SETS.get(key, PHOTO_SETS['overview']) if f != 'soft-keyboard.jpg']
+        return files or list(PHOTO_SETS['overview'])
+
+    def _load_photo(self, filename: str) -> QPixmap:
+        path = self.repo_root / 'assets' / 'ui' / filename
+        return QPixmap(str(path)) if path.is_file() else QPixmap()
+
+    def _photo_label(self, filename: str, height: int = 360) -> _FitPhoto:
+        return _FitPhoto(self._load_photo(filename), height=height)
+
+    def _photo_band(self, lay, filename: str, height: int = 400) -> None:
+        """One wide photo between content blocks; full frame visible, no crop."""
+        lay.addWidget(self._photo_label(filename, height))
+        lay.addSpacing(8)
+
+    def _photo_pair(self, lay, left: str, right: str, height: int = 300) -> None:
+        row = QHBoxLayout()
+        row.setSpacing(18)
+        row.addWidget(self._photo_label(left, height), 1)
+        row.addWidget(self._photo_label(right, height), 1)
+        lay.addLayout(row)
+        lay.addSpacing(8)
+
+    def _text_on_photo(self, lay, filename: str, title: str, subtitle: str = '', height: int = 400) -> None:
+        """Large photo as background with related copy; image fits without cropping."""
+        band = _PhotoTextBand(self._load_photo(filename), title, subtitle, height)
+        lay.addWidget(band)
+        lay.addSpacing(16)
+
+    def _atmosphere(self, lay, filename: str, height: int = 280) -> None:
+        self._photo_band(lay, filename, height)
 
     def _page_overview(self):
-        page, lay = self._page('WELCOME TO ACCESS SHIFT', 'Accessibility, your way.',
-                               'Configure your tools, preview your changes, and return whenever you need.')
-        hero, hl = card(name='hero', margins=27, spacing=12)
-        hl.addWidget(label('PERSONALIZED DIGITAL ACCESS', 'heroEyebrow'))
-        hl.addWidget(label('Make every interaction easier.', 'heroTitle'))
-        hl.addWidget(label('Fine-tune eye control, mouse stabilization, visual accessibility and communication in one place.',
-                           'heroDescription', True))
-        hr = QHBoxLayout()
+        page, lay = self._page(
+            'Accessibility, your way.',
+            'Configure your tools, preview your changes, and return whenever you need.',
+        )
+        shots = self._photos('overview')
+        self._text_on_photo(
+            lay, shots[0],
+            'Make every interaction easier.',
+            'Fine-tune eye control, mouse stabilization, visual accessibility and communication in one place.',
+            height=460,
+        )
+        action_row = QHBoxLayout()
+        action_row.setSpacing(16)
         self.overview_profile = label('Your setup: Custom', 'heroBadge')
-        hr.addWidget(self.overview_profile)
-        hr.addStretch()
-        edit = button('Customize profile  →', 'heroButton')
+        action_row.addWidget(self.overview_profile)
+        action_row.addStretch(1)
+        edit = button('Customize profile', 'heroButton')
+        edit.setMinimumHeight(48)
+        edit.setMinimumWidth(200)
         edit.clicked.connect(lambda: self._navigate('personalize'))
-        hr.addWidget(edit)
-        hl.addLayout(hr)
-        lay.addWidget(hero)
+        action_row.addWidget(edit)
+        lay.addLayout(action_row)
+        lay.addSpacing(20)
+
+        self._photo_band(lay, shots[1], 380)
+        self._section(
+            lay,
+            'Core features',
+            'Head tracking and SteadyHand are the main tools. Open a card to configure it.',
+        )
+        self.overview_module_labels = {}
+        self._module_cells = {}
+        primary = [
+            ('gaze_control', 'Head & eye tracking',
+             'Point with your head or eyes, dwell or blink to select, then calibrate for booking focus.',
+             'gaze'),
+            ('steady_hand', 'SteadyHand pointer',
+             'Smooth shaky movement and enlarge targets for in-app practice and supported overlays.',
+             'steady'),
+        ]
+        for key, title_text, desc, page_key in primary:
+            tile = FeatureTile(
+                title_text, desc, self._load_photo(FEATURE_PHOTOS[key]), primary=True,
+            )
+            tile.activated.connect(lambda k=page_key: self._navigate(k))
+            lay.addWidget(tile)
+            lay.addSpacing(14)
+            self._module_cells[key] = tile
+            self.overview_module_labels[key] = tile.status
+
+        self._photo_pair(lay, shots[2], shots[3], 300)
+        self._section(
+            lay,
+            'Also available',
+            'Helpful extras with their own settings pages. Still one click away.',
+        )
+        secondary = [
+            ('smart_interface', 'SmartInterface',
+             'Simplify the bundled healthcare Demo Lab layout and appearance.',
+             'interface'),
+            ('predictive_speech', 'Speech & text',
+             'Speak a typed message aloud. Predictive text hooks in from the speech module.',
+             'speech'),
+        ]
+        for key, title_text, desc, page_key in secondary:
+            tile = FeatureTile(
+                title_text, desc, self._load_photo(FEATURE_PHOTOS[key]), primary=False,
+            )
+            tile.activated.connect(lambda k=page_key: self._navigate(k))
+            lay.addWidget(tile)
+            lay.addSpacing(12)
+            self._module_cells[key] = tile
+            self.overview_module_labels[key] = tile.status
+        lay.addSpacing(12)
+        self._photo_pair(lay, shots[8], shots[9], 280)
+
         row = QHBoxLayout()
-        self.stat_modules = StatCard('SELECTED FEATURES', '0 / 4', 'Selected in your profile')
-        self.stat_profile = StatCard('CURRENT PROFILE', 'Custom', 'Edit whenever you like')
-        self.stat_platform = StatCard('DEMO ENVIRONMENT', 'Local only', 'macOS + Windows interface')
+        row.setSpacing(16)
+        self.stat_modules = StatCard('Selected features', '0 / 4', 'In your current profile')
+        self.stat_profile = StatCard('Current profile', 'Custom', 'Edit whenever you like')
+        self.stat_platform = StatCard('Demo environment', 'Local only', 'macOS + Windows')
         for w in (self.stat_modules, self.stat_profile, self.stat_platform):
             row.addWidget(w, 1)
         lay.addLayout(row)
-        self._section(lay, 'Your accessibility toolkit', 'Your chosen settings are saved automatically. Feature availability depends on module integration.')
-        grid = QGridLayout()
-        grid.setSpacing(13)
-        self.overview_module_labels = {}
-        for i, (key, title, desc) in enumerate([
-            ('gaze_control', 'Eye & blink control', 'Head or eye pointing · webcam ready'),
-            ('steady_hand', 'SteadyHand', 'Mouse smoothing · in-app test ready'),
-            ('smart_interface', 'SmartInterface', 'Visual adaptation in the healthcare demo'),
-            ('predictive_speech', 'Communication', 'Text-to-speech · backend dependent'),
-        ]):
-            item, item_l = card(margins=18, spacing=7)
-            title_row = QHBoxLayout()
-            title_row.addWidget(label(title, 'cardTitle'))
-            title_row.addStretch()
-            pill = label('Off', 'pill')
-            title_row.addWidget(pill)
-            item_l.addLayout(title_row)
-            item_l.addWidget(label(desc, 'bodyText', True))
-            grid.addWidget(item, i // 2, i % 2)
-            self.overview_module_labels[key] = pill
-        lay.addLayout(grid)
-        note, nl = card(name='innerCard', margins=15)
+        lay.addSpacing(20)
+        self._text_on_photo(
+            lay, shots[4],
+            'Built for calm focus.',
+            'Quiet rooms, clear targets, and settings that stay local on this machine.',
+            height=400,
+        )
+        self._photo_pair(lay, shots[5], shots[6], 300)
+        self._photo_band(lay, shots[7], 340)
+
+        note, nl = card(name='innerCard', margins=24)
+        nl.setSpacing(12)
         nl.addWidget(label('Prototype status', 'cardTitle'))
-        nl.addWidget(label('Your settings and local demos work inside AccessShift. Webcam navigation and OS-level pointer control '
-                           'are separate team integrations. SmartInterface adapts only the bundled healthcare Demo Lab, '
-                           'not third-party websites.', 'bodyText', True))
+        nl.addWidget(label(
+            'Your settings and local demos work inside AccessShift. Webcam navigation and OS-level pointer control '
+            'are separate team integrations. SmartInterface adapts only the bundled healthcare Demo Lab, '
+            'not third-party websites.',
+            'bodyText', True,
+        ))
         lay.addWidget(note)
         lay.addStretch()
         return page
 
     def _page_personalize(self):
-        page, lay = self._page('PERSONALIZATION', 'My accessibility profile',
-                               'Start from a preset or choose a custom mix. These are preferences, not diagnoses.')
+        page, lay = self._page(
+            'My accessibility profile',
+            'Start from a preset or choose a custom mix. These are preferences, not diagnoses.',
+        )
+        shots = self._photos('personalize')
+        self._text_on_photo(
+            lay, shots[0],
+            'Your setup, your pace.',
+            'Presets are starting points. Everything stays editable.',
+            height=420,
+        )
         self._section(lay, 'Start with a setup')
         grid = QGridLayout()
-        grid.setSpacing(12)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(16)
         for i, (key, p) in enumerate(PROFILES.items()):
             name = p['label']
             description = p['description']
             btn = button(f'{name}\n\n{description}', 'presetButton')
             btn.setCheckable(True)
-            btn.setMinimumHeight(91)
+            btn.setMinimumHeight(110)
+            btn.setMinimumWidth(280)
             btn.clicked.connect(lambda _, k=key: self._apply_profile(k))
             grid.addWidget(btn, i // 2, i % 2)
             self._preset_buttons[key] = btn
         lay.addLayout(grid)
+        lay.addSpacing(20)
+        self._photo_pair(lay, shots[1], shots[2], 320)
+        self._photo_band(lay, shots[3], 380)
         self._section(lay, 'Fine-tune your assistance')
         options = [
             ('gaze_control', 'Eye & blink navigation', 'Navigate through webcam gaze and deliberate blink selection.'),
@@ -505,9 +850,21 @@ class MainWindow(QMainWindow):
             r.changed.connect(lambda value, k=key: self._change_module(k, value))
             self._toggle_rows[key] = r
             lay.addWidget(r)
+            lay.addSpacing(10)
+        self._text_on_photo(
+            lay, shots[4],
+            'Save when it feels right.',
+            'Return to Home any time. Preferences stay on this device.',
+            height=360,
+        )
+        self._photo_pair(lay, shots[5], shots[6], 300)
+        self._photo_band(lay, shots[7], 340)
         actions = QHBoxLayout()
+        actions.setContentsMargins(0, 16, 0, 8)
         actions.addStretch()
-        done = button('Save profile & return to dashboard  →', 'primaryButton')
+        done = button('Save profile & return to dashboard', 'primaryButton')
+        done.setMinimumHeight(48)
+        done.setMinimumWidth(280)
         done.clicked.connect(self._finish_setup)
         actions.addWidget(done)
         lay.addLayout(actions)
@@ -515,81 +872,243 @@ class MainWindow(QMainWindow):
         return page
 
     def _page_gaze(self):
-        page, lay = self._page(
-            'HANDS-FREE NAVIGATION',
-            'Eye & blink control',
+        scroller = QScrollArea()
+        scroller.setWidgetResizable(True)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        container = QWidget()
+        container.setObjectName('scrollContent')
+        lay = QVBoxLayout(container)
+        lay.setContentsMargins(64, 48, 64, 64)
+        lay.setSpacing(24)
+
+        shots = self._photos('gaze')
+        lay.addWidget(clinical_title('Eye & blink control'))
+        intro = label(
             'Turn on head or eye pointing, then calibrate with the webcam. Default pointing source is head.',
+            'clinicalLead',
+            True,
         )
-        row = PreferenceRow('Use eye / head navigation', 'Start webcam pointing and open the hands-free booking focus layout.')
-        row.changed.connect(lambda v: self._change_module('gaze_control', v))
-        self.gaze_toggle = row
-        lay.addWidget(row)
-        gaze_box, gb = card()
-        gb.addWidget(label('How should selection work?', 'sectionTitle'))
-        self.blink_row = PreferenceRow('Blink to select', 'Use a deliberate blink as confirmation after dwell has started.')
+        lay.addWidget(intro)
+        self._text_on_photo(
+            lay, shots[0],
+            'Point with your head or eyes.',
+            'Webcam tracking stays on this machine. Calibrate before booking focus mode.',
+            height=400,
+        )
+        self._photo_pair(lay, shots[1], shots[2], 300)
+
+        columns = QHBoxLayout()
+        columns.setSpacing(24)
+
+        # Left: telemetry + posture diagram (~45%).
+        left = QVBoxLayout()
+        left.setSpacing(12)
+        left.addWidget(micro_label('TRACKING ENGINE'))
+        telemetry_panel = QFrame()
+        telemetry_panel.setObjectName('clinicalPanel')
+        tp = QVBoxLayout(telemetry_panel)
+        tp.setContentsMargins(10, 10, 10, 10)
+        tp.setSpacing(8)
+        self.gaze_viewport = GazeTelemetryViewport()
+        tp.addWidget(self.gaze_viewport, 1)
+        left.addWidget(telemetry_panel, 3)
+        diagram_panel = QFrame()
+        diagram_panel.setObjectName('clinicalPanel')
+        dp = QVBoxLayout(diagram_panel)
+        dp.setContentsMargins(0, 0, 0, 0)
+        dp.addWidget(GazePostureDiagram())
+        left.addWidget(diagram_panel, 2)
+        columns.addLayout(left, 45)
+
+        # Right: precision controls (~55%).
+        right = QVBoxLayout()
+        right.setSpacing(12)
+
+        right.addWidget(micro_label('TRACKING ENGINE'))
+        track_panel = QFrame()
+        track_panel.setObjectName('clinicalPanel')
+        tr = QVBoxLayout(track_panel)
+        tr.setContentsMargins(10, 10, 10, 10)
+        tr.setSpacing(8)
+        self.gaze_toggle = IconToggleRow(
+            'Use eye / head navigation',
+            'Start webcam pointing and open the hands-free booking focus layout.',
+            icon='eye',
+        )
+        self.gaze_toggle.changed.connect(self._on_gaze_toggle)
+        tr.addWidget(self.gaze_toggle)
+        right.addWidget(track_panel)
+
+        right.addWidget(micro_label('SELECTION MECHANIC'))
+        select_panel = QFrame()
+        select_panel.setObjectName('clinicalPanel')
+        sp = QVBoxLayout(select_panel)
+        sp.setContentsMargins(10, 10, 10, 10)
+        sp.setSpacing(10)
+        self.blink_row = IconToggleRow(
+            'Blink to select',
+            'Use a deliberate blink as confirmation after dwell has started.',
+            icon='blink',
+        )
         self.blink_row.changed.connect(lambda v: self._change_option('blink_select', v))
-        gb.addWidget(self.blink_row)
-        gb.addWidget(label('Dwell time', 'cardTitle'))
-        gb.addWidget(label('How long to look at a target before it becomes selected.', 'bodyText'))
-        self.dwell_slider, dwell_row = self._slider(2800, 4200, 100, 'gaze_dwell_ms', 'ms')
-        gb.addLayout(dwell_row)
-        lay.addWidget(gaze_box)
-        cal, cl = card(name='innerCard')
-        cl.addWidget(label('Camera calibration', 'sectionTitle'))
-        cl.addWidget(label(
-            'Enable navigation above, then calibrate. Head mode shows guided poses; eyes mode uses on-screen dots.',
-            'bodyText',
+        sp.addWidget(self.blink_row)
+
+        dwell_head = QHBoxLayout()
+        dwell_copy = QVBoxLayout()
+        dwell_copy.setSpacing(2)
+        dwell_title = label('Dwell time', 'clinicalRowTitle')
+        dwell_copy.addWidget(dwell_title)
+        dwell_copy.addWidget(label(
+            'How long to look at a target before it becomes selected.',
+            'clinicalRowBody',
             True,
         ))
+        dwell_head.addLayout(dwell_copy, 1)
+        self.dwell_gauge = DwellRingPreview()
+        dwell_head.addWidget(self.dwell_gauge, alignment=Qt.AlignmentFlag.AlignTop)
+        sp.addLayout(dwell_head)
+
+        self.dwell_slider, dwell_row = self._slider(2800, 4200, 100, 'gaze_dwell_ms', 'ms')
+        self.dwell_band = label('Balanced', 'clinicalBand')
+        dwell_row.addWidget(self.dwell_band)
+        sp.addLayout(dwell_row)
+        ticks = QHBoxLayout()
+        for text in ('2800 ms · Snappy', '3000 ms · Balanced', '4200 ms · Safe'):
+            tick = label(text, 'clinicalTick')
+            ticks.addWidget(tick)
+        ticks.addStretch(1)
+        sp.addLayout(ticks)
+        self.dwell_slider.valueChanged.connect(self._on_dwell_preview)
+        right.addWidget(select_panel)
+
+        right.addWidget(micro_label('CALIBRATION & SENSITIVITY'))
+        cal_panel = QFrame()
+        cal_panel.setObjectName('clinicalPanel')
+        cp = QVBoxLayout(cal_panel)
+        cp.setContentsMargins(12, 12, 12, 12)
+        cp.setSpacing(10)
+        cp.addWidget(label('Camera calibration', 'clinicalRowTitle'))
+        cp.addWidget(label(
+            'Enable navigation above, then run calibration. Head mode shows guided poses; eyes mode uses on-screen dots.',
+            'clinicalRowBody',
+            True,
+        ))
+        steps = QHBoxLayout()
+        steps.setSpacing(8)
+        for n, title in (
+            ('1', 'Center face'),
+            ('2', 'Track 5-point grid'),
+            ('3', 'Blink test'),
+        ):
+            step = QFrame()
+            step.setObjectName('calStep')
+            sl = QVBoxLayout(step)
+            sl.setContentsMargins(10, 8, 10, 8)
+            sl.setSpacing(4)
+            num = label(n, 'calStepNum')
+            sl.addWidget(num)
+            sl.addWidget(label(title, 'calStepText', True))
+            steps.addWidget(step, 1)
+        cp.addLayout(steps)
         cal_btn = button('Open gaze calibration', 'primaryButton')
+        cal_btn.setObjectName('clinicalPrimary')
+        cal_btn.setMinimumHeight(44)
         cal_btn.clicked.connect(self._request_calibration)
-        cl.addWidget(cal_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        lay.addWidget(cal)
-        lay.addStretch()
-        return page
+        cp.addWidget(cal_btn)
+        right.addWidget(cal_panel)
+        right.addStretch(1)
+        columns.addLayout(right, 55)
+
+        lay.addLayout(columns, 1)
+        lay.addSpacing(20)
+        self._photo_band(lay, shots[3], 380)
+        self._photo_pair(lay, shots[4], shots[5], 300)
+        self._text_on_photo(
+            lay, shots[6],
+            'Calibration is part of the flow.',
+            'Head poses or on-screen dots, then return here to adjust dwell and blink.',
+            height=360,
+        )
+        self._photo_band(lay, shots[7], 340)
+        scroller.setWidget(container)
+        return scroller
 
     def _page_steady(self):
-        page, lay = self._page('PRECISION INPUT', 'SteadyHand · Mouse assistance',
-                               'Reduce pointer jitter and make small targets easier to select in supported experiences.')
+        page, lay = self._page(
+            'SteadyHand · Mouse assistance',
+            'Reduce pointer jitter and make small targets easier to select in supported experiences.',
+        )
+        shots = self._photos('steady')
+        self._text_on_photo(
+            lay, shots[0],
+            'Steady the pointer.',
+            'Smoothing and larger targets for in-app practice and supported overlays.',
+            height=420,
+        )
         row = PreferenceRow('Enable SteadyHand', 'Use adaptive smoothing when the pointer integration is active.')
         row.changed.connect(lambda v: self._change_module('steady_hand', v))
         self.steady_toggle = row
         lay.addWidget(row)
-        config, cfg = card()
+        lay.addSpacing(12)
+        self._photo_pair(lay, shots[1], shots[2], 320)
+        config, cfg = card(margins=28, spacing=14)
         cfg.addWidget(label('Stabilization strength', 'sectionTitle'))
         cfg.addWidget(label('Higher values smooth more movement but may feel slower.', 'bodyText', True))
         self.strength_slider, sr = self._slider(0, 100, 5, 'tremor_strength', '%')
         cfg.addLayout(sr)
-        cfg.addSpacing(5)
+        cfg.addSpacing(12)
         cfg.addWidget(label('Clickable target size', 'cardTitle'))
         cfg.addWidget(label('Preference for supported overlays and adapted interfaces.', 'bodyText'))
         self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%')
         cfg.addLayout(tr)
         lay.addWidget(config)
-        test_btn = button('Open live in-app tremor test  →', 'primaryButton')
+        self._photo_band(lay, shots[3], 380)
+        test_btn = button('Open live in-app tremor test', 'primaryButton')
+        test_btn.setMinimumHeight(48)
+        test_btn.setMinimumWidth(280)
         test_btn.clicked.connect(lambda: self._navigate('test'))
         lay.addWidget(test_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        info, il = card(name='innerCard')
+        self._photo_pair(lay, shots[4], shots[5], 300)
+        info, il = card(name='innerCard', margins=24, spacing=12)
         il.addWidget(label('About system-wide control', 'cardTitle'))
         il.addWidget(label('The current team controller supports in-app stabilization. '
                            'Moving the system pointer requires separate macOS/Windows adapters and permissions. '
                            'The settings here do not silently take over your OS cursor.', 'bodyText', True))
         lay.addWidget(info)
+        self._text_on_photo(
+            lay, shots[6],
+            'Practice in Demo Lab.',
+            'Run accuracy trials with simulated tremor before judging a setting.',
+            height=360,
+        )
+        self._photo_band(lay, shots[7], 340)
         lay.addStretch()
         return page
 
     def _page_interface(self):
-        page, lay = self._page('VISUAL ACCESSIBILITY', 'SmartInterface',
-                               'Personalize AccessShift and the live healthcare demo. No changes are made to other applications.')
+        page, lay = self._page(
+            'SmartInterface',
+            'Personalize AccessShift and the live healthcare demo. No changes are made to other applications.',
+        )
+        shots = self._photos('interface')
+        self._text_on_photo(
+            lay, shots[0],
+            'Simplify what you see.',
+            'Appearance changes apply to AccessShift and the bundled healthcare demo only.',
+            height=420,
+        )
         row = PreferenceRow('Enable SmartInterface in Demo Lab', 'Turn the bundled healthcare form into a simpler, more accessible interface.')
         row.changed.connect(lambda v: self._change_module('smart_interface', v))
         self.interface_toggle = row
         lay.addWidget(row)
-        options, ol = card()
+        lay.addSpacing(12)
+        self._photo_pair(lay, shots[1], shots[2], 320)
+        options, ol = card(margins=28, spacing=14)
         ol.addWidget(label('Live appearance settings', 'sectionTitle'))
         self.simple_row = PreferenceRow('Guided, distraction-free layout', 'Reduce clutter and display the healthcare form in clear steps.')
         self.simple_row.changed.connect(lambda v: self._change_option('reduce_complexity', v))
         ol.addWidget(self.simple_row)
+        ol.addSpacing(8)
         ol.addWidget(label('Text size · AccessShift and Demo Lab', 'cardTitle'))
         self.font_slider, fr = self._slider(90, 160, 10, 'font_size_pct', '%')
         ol.addLayout(fr)
@@ -613,14 +1132,17 @@ class MainWindow(QMainWindow):
         ol.addWidget(label('Visual preferences update AccessShift immediately and the healthcare form while Demo Lab is open. '
                            'They do not alter system fonts or unrelated applications.', 'bodyText', True))
         lay.addWidget(options)
+        lay.addSpacing(16)
+        self._photo_band(lay, shots[3], 380)
+        self._photo_pair(lay, shots[4], shots[5], 300)
 
-        tint, tl = card()
+        tint, tl = card(margins=28, spacing=14)
         tl.addWidget(label('Optional colour tint · local windows only', 'sectionTitle'))
         tl.addWidget(label('Add a subtle overlay to the AccessShift control center and its healthcare demo window. '
                            'The desktop, browser and all other applications remain untouched.', 'bodyText', True))
         self.tint_color_combo = QComboBox()
         for text, value in [
-            ('Warm amber', 'warm'), ('Cool blue', 'cool'), ('Soft rose', 'rose'),
+            ('Soft navy', 'warm'), ('Cool blue', 'cool'), ('Soft mist', 'rose'),
         ]:
             self.tint_color_combo.addItem(text, value)
         self.tint_color_combo.setAccessibleName('AccessShift window tint colour')
@@ -637,18 +1159,35 @@ class MainWindow(QMainWindow):
         self.tint_status = label('Window tint is off', 'bodyText')
         tl.addWidget(self.tint_status)
         lay.addWidget(tint)
+        self._text_on_photo(
+            lay, shots[6],
+            'Local windows only.',
+            'Tint never covers the desktop or unrelated applications.',
+            height=360,
+        )
+        self._photo_band(lay, shots[7], 340)
         lay.addStretch()
         return page
 
     def _page_communication(self):
-        page, lay = self._page('COMMUNICATION & AAC', 'Speech & text assistance',
-                               'Write a message and speak it aloud. Predictive suggestions are connected by Avneet’s module.')
-        speak, spl = card()
+        page, lay = self._page(
+            'Speech & text assistance',
+            'Write a message and speak it aloud. Predictive suggestions are connected by Avneet’s module.',
+        )
+        shots = self._photos('speech')
+        self._text_on_photo(
+            lay, shots[0],
+            'Speak what you write.',
+            'Test a message here. Predictive text hooks in from the speech module.',
+            height=420,
+        )
+        speak, spl = card(margins=28, spacing=14)
         spl.addWidget(label('Text-to-speech settings', 'sectionTitle'))
         self.speech_row = PreferenceRow('Enable communication support',
                                         'Allow supported speech and predictive-text functionality.')
         self.speech_row.changed.connect(lambda v: self._change_module('predictive_speech', v))
         spl.addWidget(self.speech_row)
+        spl.addSpacing(8)
         spl.addWidget(label('Speaking speed', 'cardTitle'))
         self.speech_slider, srl = self._slider(100, 220, 10, 'speech_rate', 'wpm')
         spl.addLayout(srl)
@@ -656,16 +1195,28 @@ class MainWindow(QMainWindow):
         self.speech_input = QLineEdit('Hello, I am using AccessShift to communicate.')
         self.speech_input.setAccessibleName('Message to speak')
         spl.addWidget(self.speech_input)
-        speak_button = button('Speak message  ▶', 'primaryButton')
+        speak_button = button('Speak message', 'primaryButton')
+        speak_button.setMinimumHeight(48)
+        speak_button.setMinimumWidth(200)
         speak_button.clicked.connect(self._speak)
         spl.addWidget(speak_button, alignment=Qt.AlignmentFlag.AlignLeft)
         lay.addWidget(speak)
-        info, il = card(name='innerCard')
+        self._photo_pair(lay, shots[1], shots[2], 320)
+        self._photo_band(lay, shots[3], 380)
+        info, il = card(name='innerCard', margins=24, spacing=12)
         il.addWidget(label('Module ownership', 'cardTitle'))
         il.addWidget(label('Avneet owns the speech engine and predictive text. This page exposes the controls; '
                            'text-to-speech is available only if its Python backend is installed and working.',
                            'bodyText', True))
         lay.addWidget(info)
+        self._photo_pair(lay, shots[4], shots[5], 300)
+        self._text_on_photo(
+            lay, shots[6],
+            'Clear words, quiet room.',
+            'Keep rate comfortable. Revisit this page whenever you need a quick speak test.',
+            height=360,
+        )
+        self._photo_band(lay, shots[7], 340)
         lay.addStretch()
         return page
 
@@ -710,11 +1261,18 @@ class MainWindow(QMainWindow):
 
     def _page_test(self):
         page, lay = self._page(
-            'INTERACTIVE PROTOTYPES',
             'Demo Lab & tests',
             'Preview SmartInterface on a fictional healthcare form and run SteadyHand accuracy trials.',
         )
-        test, tl = card()
+        shots = self._photos('test')
+        self._text_on_photo(
+            lay, shots[0],
+            'Try it before you trust it.',
+            'Benchmark SteadyHand here, then open the healthcare form from the toolbar.',
+            height=420,
+        )
+        self._photo_pair(lay, shots[1], shots[2], 320)
+        test, tl = card(margins=28, spacing=16)
         tl.addWidget(label('SteadyHand • accuracy & benchmark suite', 'sectionTitle'))
         tl.addWidget(label(
             'Select a test mode and run a 10-step simulated healthcare booking trial. '
@@ -724,6 +1282,7 @@ class MainWindow(QMainWindow):
         ))
 
         ctrl_row = QHBoxLayout()
+        ctrl_row.setSpacing(12)
         self.test_mode_combo = QComboBox()
         for mode in TremorPlayground.MODES:
             self.test_mode_combo.addItem(mode)
@@ -732,19 +1291,23 @@ class MainWindow(QMainWindow):
         ctrl_row.addWidget(self.test_mode_combo, 2)
 
         self.btn_start_trial = button('Start trial', 'primaryButton')
+        self.btn_start_trial.setMinimumHeight(44)
         self.btn_start_trial.clicked.connect(self._start_trial)
         ctrl_row.addWidget(self.btn_start_trial)
 
         self.btn_abort_trial = button('Abort trial', 'secondaryButton')
         self.btn_abort_trial.setEnabled(False)
+        self.btn_abort_trial.setMinimumHeight(44)
         self.btn_abort_trial.clicked.connect(self._abort_trial)
         ctrl_row.addWidget(self.btn_abort_trial)
 
         self.btn_export_results = button('Export JSON', 'secondaryButton')
+        self.btn_export_results.setMinimumHeight(44)
         self.btn_export_results.clicked.connect(self._export_trial_results)
         ctrl_row.addWidget(self.btn_export_results)
 
         reset = button('Reset scores', 'secondaryButton')
+        reset.setMinimumHeight(44)
         reset.clicked.connect(self._reset_test_scores)
         ctrl_row.addWidget(reset)
         tl.addLayout(ctrl_row)
@@ -771,8 +1334,11 @@ class MainWindow(QMainWindow):
         self.simulation_row.changed.connect(self.playground.set_simulation)
         tl.addWidget(self.simulation_row)
         lay.addWidget(test)
+        lay.addSpacing(16)
+        self._photo_band(lay, shots[3], 380)
+        self._photo_pair(lay, shots[4], shots[5], 300)
 
-        hist_card, hl = card()
+        hist_card, hl = card(margins=28, spacing=12)
         hl.addWidget(label('Completed Trial Benchmarks', 'sectionTitle'))
         self.trial_history_label = label(
             'No completed trials yet. Choose a mode and click Start trial to benchmark accuracy.',
@@ -781,8 +1347,14 @@ class MainWindow(QMainWindow):
         )
         hl.addWidget(self.trial_history_label)
         lay.addWidget(hist_card)
+        self._text_on_photo(
+            lay, shots[6],
+            'Ten steps, clear metrics.',
+            'Latency, hits, misses, and accuracy for judging verification.',
+            height=360,
+        )
 
-        info, il = card(name='innerCard')
+        info, il = card(name='innerCard', margins=24, spacing=12)
         il.addWidget(label('Evaluation protocol', 'cardTitle'))
         il.addWidget(label(
             'Each trial walks a 10-step sequence (Doctor → Date → Time → Review → Book × 2). '
@@ -791,6 +1363,7 @@ class MainWindow(QMainWindow):
             True,
         ))
         lay.addWidget(info)
+        self._photo_band(lay, shots[7], 340)
         lay.addStretch()
         return page
 
@@ -886,15 +1459,27 @@ class MainWindow(QMainWindow):
         self.stat_profile.value.setText('Personal' if self.prefs.profile == 'custom' else 'Preset')
         for k, lbl in self.overview_module_labels.items():
             enabled = getattr(self.prefs, k)
-            lbl.setText('Selected' if enabled else 'Off')
-            lbl.setObjectName('goodPill' if enabled else 'pill')
-            lbl.style().unpolish(lbl)
-            lbl.style().polish(lbl)
+            lbl.setText('On' if enabled else 'Off')
+            cell = self._module_cells.get(k)
+            if cell is None:
+                continue
+            if hasattr(cell, 'set_active'):
+                cell.set_active(enabled)
+            else:
+                cell.setProperty('active', enabled)
+                cell.style().unpolish(cell)
+                cell.style().polish(cell)
         for k, btn in self._preset_buttons.items():
             btn.setChecked(k == self.prefs.profile)
         for k, row in self._toggle_rows.items():
             row.set_value(getattr(self.prefs, k))
         self.gaze_toggle.set_value(self.prefs.gaze_control)
+        if hasattr(self, 'gaze_viewport'):
+            self.gaze_viewport.set_tracking_active(bool(self.prefs.gaze_control))
+        if hasattr(self, 'dwell_gauge'):
+            self.dwell_gauge.set_dwell_ms(int(self.prefs.gaze_dwell_ms))
+        if hasattr(self, 'dwell_band'):
+            self.dwell_band.setText(dwell_band_label(int(self.prefs.gaze_dwell_ms)))
         self.steady_toggle.set_value(self.prefs.steady_hand)
         self.interface_toggle.set_value(self.prefs.smart_interface)
         self.speech_row.set_value(self.prefs.predictive_speech)
@@ -908,6 +1493,17 @@ class MainWindow(QMainWindow):
             text.setText(f'{value} {suffix}')
         self.footer_status.setText('✓  Settings saved on this device')
         self._apply_visual_preferences()
+
+    def _on_gaze_toggle(self, value: bool) -> None:
+        self._change_module('gaze_control', value)
+        if hasattr(self, 'gaze_viewport'):
+            self.gaze_viewport.set_tracking_active(bool(value))
+
+    def _on_dwell_preview(self, value: int) -> None:
+        if hasattr(self, 'dwell_gauge'):
+            self.dwell_gauge.set_dwell_ms(int(value))
+        if hasattr(self, 'dwell_band'):
+            self.dwell_band.setText(dwell_band_label(int(value)))
 
     def _request_calibration(self):
         self.calibration_requested.emit()

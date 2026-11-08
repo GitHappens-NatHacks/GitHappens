@@ -1,0 +1,89 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "source sans 3",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.711Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "atkinson hyperlegible",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.723Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "frutiger",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.737Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "ibm plex sans",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.751Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "ibm plex mono",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.763Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "helvetica",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.774Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "inter",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.786Z",
+        "reason": "Direction-round HTML sketches exploring replacement worlds; fonts are candidate worlds, not shipping DESIGN.md."
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          ".impeccable/mocks/decision"
+        ],
+        "createdAt": "2026-11-08T02:45:51.799Z",
+        "reason": "Canon card intentionally shows category-standard Inter for the standing exit sketch."
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/assigned-ot.html"
+        ],
+        "createdAt": "2026-11-08T02:45:51.809Z",
+        "reason": "Assigned OT sketch ground retinted off cream; residual detector noise on decision fixture."
+      }
+    ]
+  }
+}

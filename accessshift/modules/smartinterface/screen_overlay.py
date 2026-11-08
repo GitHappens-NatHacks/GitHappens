@@ -14,9 +14,9 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QWidget
 
 TINT_COLORS = {
-    'warm': '#F7BE73',
+    'warm': '#0B1F3A',
     'cool': '#7DBBF1',
-    'rose': '#F9B0D2',
+    'rose': '#B8C9DE',
 }
 
 

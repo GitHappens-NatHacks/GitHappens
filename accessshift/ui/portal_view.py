@@ -70,7 +70,7 @@ class PortalView(QWidget):
         ):
             left.addWidget(QLabel(f"• {text}"))
         notice = QLabel("Seasonal flu clinic — register separately")
-        notice.setStyleSheet("background:#fff4cc; padding:6px; border:1px dashed #c9a227;")
+        notice.setStyleSheet("background:#E8F0FE; padding:8px; border:1px solid #B8C9DE; color:#0B1F3A;")
         left.addWidget(notice)
         left.addStretch(1)
         outer.addLayout(left, 1)
@@ -134,7 +134,7 @@ class PortalView(QWidget):
         actions.addWidget(QPushButton("Save draft"))
         submit = QPushButton("Submit request")
         submit.setFixedHeight(22)
-        submit.setStyleSheet("font-size:10px; background:#0f6a5a; color:white;")
+        submit.setStyleSheet("font-size:10px; background:#0B1F3A; color:white;")
         actions.addWidget(submit)
         center.addLayout(actions)
         outer.addLayout(center, 3)
@@ -156,11 +156,13 @@ class PortalView(QWidget):
 
     def _build_accessible(self) -> QWidget:
         page = QWidget()
+        page.setStyleSheet("background: #F5F5F7;")
         layout = QVBoxLayout(page)
-        layout.setSpacing(12)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
 
         steps = QLabel("1. Who  →  2. Visit type  →  3. Time  →  4. Confirm")
-        steps.setStyleSheet("font-size:14px; font-weight:600; color:#0f6a5a;")
+        steps.setStyleSheet("font-size:15px; font-weight:600; color:#3E5370; letter-spacing:0.2px;")
         layout.addWidget(steps)
 
         self._acc_stack = QStackedWidget()
@@ -266,7 +268,7 @@ class PortalView(QWidget):
         visit = self._visit or "Visit"
         when = self._when or "time to be confirmed"
         # Gaze focus hides this portal and keeps a stay-on-top overlay. Parent the
-        # dialog to the main window and tuck the overlay away so the green screen shows.
+        # dialog to the main window and tuck the overlay away so the booking screen shows.
         from PySide6.QtWidgets import QApplication
 
         from accessshift.modules.gaze.controller import GAZE_IGNORE
@@ -291,20 +293,22 @@ class PortalView(QWidget):
     @staticmethod
     def _big_title(text: str) -> QLabel:
         label = QLabel(text)
-        label.setStyleSheet("font-size:22px; font-weight:700;")
+        label.setStyleSheet(
+            "font-size:36px; font-weight:200; color:#0B1F3A; letter-spacing:-0.6px;"
+        )
         return label
 
     @staticmethod
     def _hint(text: str) -> QLabel:
         label = QLabel(text)
         label.setWordWrap(True)
-        label.setStyleSheet("font-size:14px; color:#3d5c54;")
+        label.setStyleSheet("font-size:16px; color:#3E5370;")
         return label
 
     @staticmethod
     def _big_btn_css() -> str:
         return (
-            "QPushButton { color:#0B1F1A; font-size:18px; font-weight:650; text-align:left; padding:12px; "
-            "border:2px solid #1f4d43; border-radius:12px; background:#e7f6f1; }"
-            "QPushButton:hover { background:#d2efe7; }"
+            "QPushButton { color:#0B1F3A; font-size:18px; font-weight:650; text-align:left; padding:18px; "
+            "border:none; border-radius:18px; background:#FFFFFF; }"
+            "QPushButton:hover { background:#E8F0FE; }"
         )

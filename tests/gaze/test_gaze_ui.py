@@ -172,7 +172,7 @@ def test_eyes_calibration_keeps_nine_dots_and_check(qapp):
     ctrl = GazeController(hit_test=lambda p: None, screen_rect=SCREEN)
     ctrl.set_source("eyes")
     dlg = GazeCalibrationDialog.for_controller(ctrl, screen_rect=SCREEN, result_delay_ms=0)
-    assert "eyes" in dlg.instruction.lower() and "orange" in dlg.instruction.lower()
+    assert "eyes" in dlg.instruction.lower() and "blue" in dlg.instruction.lower()
     assert dlg._max_spread >= 0.05  # eyes must tolerate normal webcam jitter
     dlg.begin()
     assert len(dlg.current_points()) == 9

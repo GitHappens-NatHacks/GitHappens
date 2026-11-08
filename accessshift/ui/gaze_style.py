@@ -1,8 +1,9 @@
-"""Gaze-mode look: big, high-contrast buttons while GazeControl is on.
+"""Gaze-mode look: large, high-contrast targets while GazeControl is on.
 
 apply(window) saves every push button's own stylesheet, minimum height, size policy
 and layout stretch, then enlarges the buttons and lets them share the free height
 (empty stretch space is collapsed). restore(window) puts back exactly what was there.
+Buttons marked with property gazeChrome keep their own chrome styling.
 Colours meet WCAG AAA contrast (7:1), checked in tests.
 """
 
@@ -11,23 +12,23 @@ from __future__ import annotations
 from PySide6.QtWidgets import QBoxLayout, QPushButton, QSizePolicy, QWidget
 from shiboken6 import isValid
 
-TEXT = "#0B1F1A"  # near-black
+TEXT = "#0B1F3A"  # navy ink
 BUTTON_BG = "#FFFFFF"
-TARGET_BG = "#FFD54F"  # amber: the button gaze is about to click (matches the overlay outline)
+TARGET_BG = "#D6E8F8"  # soft blue: the button gaze is about to click
 BUTTON_HEIGHT = 96
 
 BUTTON_QSS = f"""
 QPushButton {{
     color: {TEXT}; background: {BUTTON_BG};
-    border: 3px solid {TEXT}; border-radius: 12px;
-    font-size: 22px; font-weight: 700; padding: 12px 18px;
+    border: 2px solid {TEXT}; border-radius: 18px;
+    font-size: 22px; font-weight: 700; padding: 14px 20px;
 }}
-QPushButton[gazeTarget="true"] {{ background: {TARGET_BG}; border: 6px solid {TEXT}; }}
-QPushButton:disabled {{ color: #3A3A3A; background: #D6D6D6; border-color: #7A7A7A; }}
+QPushButton[gazeTarget="true"] {{ background: {TARGET_BG}; border: 5px solid {TEXT}; }}
+QPushButton:disabled {{ color: #5A6F8A; background: #EAF1F8; border-color: #B8C9DE; }}
 """
 
 WINDOW_QSS = """
-QLabel, QCheckBox, QRadioButton { font-size: 18px; }
+QLabel, QCheckBox, QRadioButton { font-size: 18px; color: #0B1F3A; }
 QLineEdit, QComboBox, QDateEdit, QSpinBox { min-height: 44px; font-size: 18px; }
 """
 
@@ -42,7 +43,10 @@ def is_applied(window: QWidget) -> bool:
 def apply(window: QWidget) -> None:
     if is_applied(window):
         return
-    buttons = window.findChildren(QPushButton)
+    buttons = [
+        b for b in window.findChildren(QPushButton)
+        if not bool(b.property('gazeChrome'))
+    ]
     saved = {
         "window": window.styleSheet(),
         "buttons": [(b, b.styleSheet(), b.minimumHeight(), QSizePolicy(b.sizePolicy())) for b in buttons],
@@ -98,11 +102,12 @@ def _stretch_buttons(buttons: list[QPushButton], saved: list) -> None:
 
 
 def highlight(button: QPushButton | None) -> None:
-    """Fill the targeted button amber (the property selector in BUTTON_QSS)."""
+    """Fill the targeted button soft blue (the property selector in BUTTON_QSS)."""
     global _highlighted
     for b, on in ((_highlighted, False), (button, True)):
         if b is not None and isValid(b):
             b.setProperty("gazeTarget", on)
             b.style().unpolish(b)
             b.style().polish(b)
+            b.update()
     _highlighted = button

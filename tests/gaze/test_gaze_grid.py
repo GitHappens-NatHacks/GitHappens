@@ -67,7 +67,7 @@ def test_full_booking_through_the_grid(portal):
     assert "Tomorrow 10:00" in g.heading()
 
 
-def test_book_appointment_shows_green_confirmation(portal, qapp, monkeypatch):
+def test_book_appointment_shows_booking_confirmation(portal, qapp, monkeypatch):
     from PySide6.QtWidgets import QDialog, QLabel
 
     import accessshift.ui.portal_view as portal_mod

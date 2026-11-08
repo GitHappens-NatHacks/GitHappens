@@ -149,8 +149,8 @@ def test_portal_big_buttons_set_dark_text_on_light_background():
     from accessshift.ui.portal_view import PortalView
 
     css = PortalView._big_btn_css()
-    assert "color:#0B1F1A" in css.replace(" ", "")
-    assert contrast_ratio("#0B1F1A", "#E7F6F1") >= 7
+    assert "color:#0B1F3A" in css.replace(" ", "")
+    assert contrast_ratio("#0B1F3A", "#FFFFFF") >= 7
 
 
 def test_buttons_stretch_to_fill_height_and_restore(qapp):
