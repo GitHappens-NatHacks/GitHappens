@@ -269,7 +269,7 @@ class PortalView(QWidget):
         when = self._when or "time to be confirmed"
         # The gaze cursor stays visible, so the popup's own buttons can be chosen hands-free.
         host = self.window() if self.window() is not None else self
-        dlg = BookingConfirmationDialog(who=who, visit=visit, when=when, parent=host)
+        dlg = BookingConfirmationDialog(who=who, visit=visit, when=when, parent=host, full_window=True)
         dlg.exec()
         self._reset_flow()  # ready for another booking from the start
         self.booking_finished.emit(dlg.choice)

@@ -93,6 +93,19 @@ def visible_buttons() -> list[QAbstractButton]:
     return out
 
 
+def _in_scope(button: QWidget, scope: QWidget | None) -> bool:
+    """True if the button is in the scope window or in a popup opened from it."""
+    if scope is None:
+        return True
+    top = button.window()
+    while top is not None:
+        if top is scope:
+            return True
+        parent = top.parentWidget()
+        top = parent.window() if parent is not None else None
+    return False
+
+
 def _alive(w: QWidget | None) -> QWidget | None:
     """The widget, or None if Qt already deleted it (e.g. a closed popup's button)."""
     return w if w is not None and isValid(w) else None
@@ -132,6 +145,7 @@ class GazeController(QObject):
         self._buttons = buttons or visible_buttons
         self._snap_px = 0.0  # 0 = only exact hits; set to gaze accuracy by set_calibration()
         self._target: QAbstractButton | None = None
+        self.scope: QWidget | None = None  # the hands-free window; other windows are never targeted
         if screen_rect is None:
             screen = QGuiApplication.primaryScreen()
             screen_rect = screen.geometry() if screen else QRect(0, 0, 1440, 900)
@@ -213,7 +227,9 @@ class GazeController(QObject):
             popup = None
 
         def allowed(b: QAbstractButton | None) -> bool:
-            return b is not None and (popup is None or b is popup or popup.isAncestorOf(b))
+            if b is None or not _in_scope(b, self.scope):
+                return False
+            return popup is None or b is popup or popup.isAncestorOf(b)
 
         exact = _button_at(self._hit_test(pt))
         if not allowed(exact):

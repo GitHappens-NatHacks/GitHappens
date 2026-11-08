@@ -332,3 +332,36 @@ def test_first_selection_after_calibration_takes_the_full_dwell(qapp):
         ctrl.process(fake_sample(t, (0.5, 0.5)) | {"head": (-0.12, 0.5)})
         t += 33
     assert clicks and clicks[0] - closed_at >= 1900  # full 2 s dwell, counted from when the screen closed
+
+
+def test_overlay_has_no_window_shadow(qapp):
+    """macOS shadows of a transparent window keep old pointer shapes as grey ghost lines."""
+    from PySide6.QtCore import Qt
+
+    overlay = GazeOverlay(SCREEN)
+    assert overlay.windowFlags() & Qt.NoDropShadowWindowHint
+
+
+def test_pointer_is_dark_with_light_edge(qapp):
+    from accessshift.ui import gaze_overlay
+
+    assert gaze_overlay.POINTER.lightness() < 60  # dark, readable on light screens
+    assert gaze_overlay.EDGE.lightness() > 220  # white edge, readable on the green popup
+
+
+def test_chooser_says_to_choose_by_hand(qapp, monkeypatch):
+    """Pointing isn't calibrated yet, so the chooser must say to pick with mouse or keyboard."""
+    from PySide6.QtWidgets import QDialog, QLabel
+
+    from accessshift.ui.gaze_calibration_dialog import GazeCalibrationDialog
+
+    seen = []
+
+    def fake_exec(dlg):
+        seen.append("\n".join(l.text() for l in dlg.findChildren(QLabel)))
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", fake_exec)
+    GazeCalibrationDialog._real_choose_source("head")
+    assert "mouse, trackpad or keyboard" in seen[0]
+    assert "starts after a short calibration" in seen[0]

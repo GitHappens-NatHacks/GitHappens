@@ -13,6 +13,9 @@ from accessshift.modules.gaze.controller import GAZE_IGNORE
 
 DOT_RADIUS = 12
 RING_RADIUS = 22
+# Dark pointer with a white edge: readable on the light booking screen and the green popup.
+POINTER = QColor(17, 17, 17)
+EDGE = QColor(255, 255, 255)
 
 
 class GazeOverlay(QWidget):
@@ -23,7 +26,9 @@ class GazeOverlay(QWidget):
             | Qt.WindowStaysOnTopHint
             | Qt.Tool
             | Qt.WindowTransparentForInput
-            | Qt.WindowDoesNotAcceptFocus,
+            | Qt.WindowDoesNotAcceptFocus
+            # No macOS window shadow: it keeps old pointer shapes as grey ghost lines and boxes.
+            | Qt.NoDropShadowWindowHint,
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -92,21 +97,25 @@ class GazeOverlay(QWidget):
             p.drawText(banner, Qt.AlignCenter, self._message)
         if not self._target.isNull():  # outline the button gaze will click (match gaze_style radius)
             p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(QColor(255, 170, 0), 4))
+            p.setPen(QPen(EDGE, 9))
+            p.drawRoundedRect(self._target, 12, 12)
+            p.setPen(QPen(POINTER, 5))
             p.drawRoundedRect(self._target, 12, 12)
         if self._point is None:
             p.end()
             return
         c = self._point
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(255, 170, 0, 200))
+        p.setPen(QPen(EDGE, 3))
+        p.setBrush(POINTER)
         p.drawEllipse(c, DOT_RADIUS, DOT_RADIUS)
 
         ring = QRectF(c.x() - RING_RADIUS, c.y() - RING_RADIUS, 2 * RING_RADIUS, 2 * RING_RADIUS)
         p.setBrush(Qt.NoBrush)
-        p.setPen(QPen(QColor(80, 80, 90, 180), 3))
+        p.setPen(QPen(EDGE, 7))  # light track under the ring
         p.drawEllipse(ring)
-        if self._dwell > 0:
-            p.setPen(QPen(QColor(60, 200, 110), 5, Qt.SolidLine, Qt.RoundCap))
-            p.drawArc(ring, 90 * 16, -int(360 * 16 * self._dwell))  # clockwise from the top
+        p.setPen(QPen(QColor(17, 17, 17, 90), 3))
+        p.drawEllipse(ring)
+        if self._dwell > 0:  # the dark ring fills clockwise from the top
+            p.setPen(QPen(POINTER, 6, Qt.SolidLine, Qt.RoundCap))
+            p.drawArc(ring, 90 * 16, -int(360 * 16 * self._dwell))
         p.end()
