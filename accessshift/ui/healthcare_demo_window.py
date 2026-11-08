@@ -22,8 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 
-PURPLE = '#6645D8'
-DARK = '#18223B'
+from accessshift.ui import theme as theme_mod
 
 
 class HealthcareDemoWindow(QDialog):
@@ -42,8 +41,11 @@ class HealthcareDemoWindow(QDialog):
         repo_root: Path,
         smart_interface_enabled: bool = True,
         parent: QWidget | None = None,
+        embedded: bool = False,
     ):
         super().__init__(parent)
+        self._embedded = bool(embedded)
+        self._compare_original = False
         self.repo_root = Path(repo_root)
         self._accessible = False
         self._simplify = True
@@ -54,7 +56,12 @@ class HealthcareDemoWindow(QDialog):
         self._targets: dict[str, QPushButton] = {}
         self._build_ui()
         self.set_accessible(False)  # start as original baseline, then listen for edits
-        self.setWindowTitle('AccessShift AI · SmartInterface Demo Lab')
+        self.setWindowTitle('AccessShift AI · SmartInterface demo')
+        if self._embedded:
+            # Lives inside the Demo Lab window, which supplies its own heading and instructions.
+            self.setWindowFlags(Qt.WindowType.Widget)
+            self.chrome.hide()
+            self.footer_note.hide()
         # Keep controls usable when the window is dragged smaller.
         # A narrow original portal scrolls instead of crushing form fields.
         self.resize(1170, 800)
@@ -95,24 +102,27 @@ class HealthcareDemoWindow(QDialog):
         outer.setSpacing(12)
 
         # Header clearly identifies this as a demonstration, not a patient app.
+        self.chrome = QWidget()
+        chrome_l = QVBoxLayout(self.chrome)
+        chrome_l.setContentsMargins(0, 0, 0, 0)
+        chrome_l.setSpacing(12)
         header = QHBoxLayout()
         headings = QVBoxLayout()
         headings.setSpacing(3)
-        headings.addWidget(self._label('SMARTINTERFACE  /  DEMO LAB', 'eyebrow'))
-        headings.addWidget(self._label('Live preview · same healthcare form', 'pageTitle'))
+        headings.addWidget(self._label('SmartInterface on a healthcare form', 'pageTitle'))
         headings.addWidget(self._label(
-            'Leave this window open. Change SmartInterface settings in AccessShift; this exact form updates live.',
+            'This form follows your AccessShift profile. Change a setting in AccessShift and it updates here instantly.',
             'subheading', True))
         header.addLayout(headings, 1)
-        tag = self._label('LOCAL SIMULATION  ·  NO DATA SENT', 'demoBadge')
+        tag = self._label('Sample data only', 'demoBadge')
         header.addWidget(tag, 0, Qt.AlignmentFlag.AlignTop)
-        outer.addLayout(header)
+        chrome_l.addLayout(header)
 
         # One display-only status strip: all switches and sliders live in the
         # FIRST window (AccessShift Settings), never in this demo.
         toggler, tlay = self._frame('toggleSurface', padding=12, spacing=8)
         live_row = QHBoxLayout()
-        live_row.addWidget(self._label('LIVE FROM ACCESS SHIFT SETTINGS', 'eyebrow'))
+        live_row.addWidget(self._label('Live from your AccessShift settings', 'liveHeading'))
         live_row.addStretch(1)
         self.mode_tag = self._label('ORIGINAL BASELINE', 'modeTag')
         live_row.addWidget(self.mode_tag)
@@ -121,7 +131,8 @@ class HealthcareDemoWindow(QDialog):
             'This is the complicated original form. Change a preference in the AccessShift window to transform it.',
             'modeDescription', True)
         tlay.addWidget(self.mode_status)
-        outer.addWidget(toggler)
+        chrome_l.addWidget(toggler)
+        outer.addWidget(self.chrome)
 
         # The comparison is narrated on screen, so judges see what changed.
         changes = QHBoxLayout()
@@ -152,7 +163,7 @@ class HealthcareDemoWindow(QDialog):
 
         top, top_l = self._frame('portalHeader', padding=17, spacing=6)
         topline = QHBoxLayout()
-        brand = self._label('✚  NORTHHEALTH', 'portalBrand')
+        brand = self._label('NorthHealth', 'portalBrand')
         topline.addWidget(brand)
         topline.addStretch(1)
         topline.addWidget(self._label('Patient portal  /  Appointments', 'portalPath'))
@@ -287,11 +298,11 @@ class HealthcareDemoWindow(QDialog):
         notes_l.addStretch(1)
         body.addWidget(self.notes)
 
-        bottom = self._label(
+        self.footer_note = self._label(
             'AccessShift changes the presentation of this same local form. No medical records, '
             'real appointments, browser extensions or third-party websites are involved.',
             'footerText', True)
-        outer.addWidget(bottom)
+        outer.addWidget(self.footer_note)
 
         # Install the scroll-area content AFTER its layout and child widgets
         # have been created. Qt documents that doing this in reverse can
@@ -389,8 +400,8 @@ class HealthcareDemoWindow(QDialog):
         self._simplify = True
         self.set_accessible(False)
         self.mode_status.setText(
-            'ORIGINAL FORM: Now use the first AccessShift window to change text size, colour, '
-            'target size, or toggle SmartInterface. This preview updates automatically.')
+            'Original form: change text size, colour or target size in AccessShift, '
+            'or turn SmartInterface on, and this form updates automatically.')
 
     def apply_preferences(self, settings: dict) -> None:
         """Called by MainWindow.preferences_changed on Qt's GUI thread.
@@ -401,7 +412,17 @@ class HealthcareDemoWindow(QDialog):
         self._preview_live = True
         self._visual_settings = dict(settings)
         self._simplify = bool(settings.get('reduce_complexity', True))
+        if self._compare_original:
+            return  # showing the original for comparison; the latest settings apply when it ends
         self.set_accessible(bool(settings.get('smart_interface', False)))
+
+    def show_original(self, original: bool) -> None:
+        """Compare: show the untouched original form, then switch back to the adapted one."""
+        self._compare_original = bool(original)
+        if original:
+            self.set_accessible(False)
+        else:
+            self.set_accessible(bool(self._visual_settings.get('smart_interface', False)))
 
     def set_accessible(self, enabled: bool):
         """Update the *same* form in place, not a different page."""
@@ -421,20 +442,19 @@ class HealthcareDemoWindow(QDialog):
             tone = str(self._visual_settings.get('color_profile', 'standard')).replace('_',' ')
             spacing = int(self._visual_settings.get('letter_spacing_px', 0))
             self.mode_status.setText(
-                'LIVE ADAPTATION: This is the same form: text ' + str(font_pct) + '%, '
+                'Adapted with your settings: text ' + str(font_pct) + '%, '
                 + 'targets ' + str(target_pct) + '%, ' + tone + ' colours, '
                 + str(spacing) + ' px letter spacing. '
                 + ('Guided steps and reduced clutter are on.' if guided else
                    'All sections stay visible (reduce complexity is off).'))
-            self.mode_tag.setText('SMARTINTERFACE ON')
+            self.mode_tag.setText('SmartInterface on')
             self.chip_clutter.setText('2 sidebars hidden' if guided else 'Sidebars visible')
             self.chip_size.setText('Targets ' + str(target_pct) + '%')
             self.chip_flow.setText('Guided steps' if guided else 'All sections visible')
         else:
             self.mode_status.setText(
-                'ORIGINAL PORTAL: SmartInterface is off. Toggle it on in the AccessShift '
-                'settings window, or change another preference while it is enabled.')
-            self.mode_tag.setText('ORIGINAL FORM')
+                'Original form: SmartInterface is off, so this is how the portal looks without AccessShift.')
+            self.mode_tag.setText('Original form')
             self.chip_clutter.setText('2 extra sidebars')
             self.chip_size.setText('Compact targets')
             self.chip_flow.setText('All sections visible')
@@ -464,12 +484,13 @@ class HealthcareDemoWindow(QDialog):
         self.submit.setVisible((not guided) or self._step == 3)
         self.consent.setVisible((not guided) or self._step == 3)
         self._update_summary()
+        t = theme_mod.theme(str(self._visual_settings.get('color_profile', 'standard')))
         for i, label in enumerate(self.step_labels):
             label.setProperty('stepState', 'current' if i == self._step else 'other')
             label.setStyleSheet(
-                'background:#ECE7FF; color:#4D31B4; border-radius:8px; padding:9px; '
+                f'background:{t.primary}; color:{t.on_primary}; border-radius:8px; padding:9px; '
                 'font-weight:700;' if i == self._step else
-                'background:#F3F4F9; color:#627088; border-radius:8px; padding:9px;'
+                f'background:{t.mint}; color:{t.heading}; border-radius:8px; padding:9px;'
             )
         self.scroll.verticalScrollBar().setValue(0)
 
@@ -514,93 +535,78 @@ class HealthcareDemoWindow(QDialog):
         return True
 
     def _styling(self, accessible: bool):
-        # Scoped at this dialog, without modifying the application's stylesheet.
+        """Original form: a plain, generic portal. Adapted form: the person's AccessShift theme."""
         fs = 16 if accessible else 12
         field_font = 16 if accessible else 12
         title_font = 21 if accessible else 17
-        style = '''
-QDialog#smartDemo { background: #F6F7FC; color: #18223B; }
-QWidget#portalRoot { background: #F5F7FB; color: #18223B; }
-QScrollArea#portalScroll { border:1px solid #DCE3F0; border-radius:12px; background:#F5F7FB; }
-QLabel { background:transparent; color:#243047; font-family:Arial, sans-serif; }
-QLabel#eyebrow { color:#6853CB; font-size:10px; font-weight:800; letter-spacing:1px; }
-QLabel#pageTitle { font-size:22px; font-weight:800; color:#1E2342; }
-QLabel#subheading { font-size:12px; color:#65718A; }
-QLabel#demoBadge { background:#E9F8EF; color:#176A48; border:1px solid #BEDFCB;
-    border-radius:8px; padding:8px 10px; font-size:10px; font-weight:800; }
-QFrame#toggleSurface { background:#FFFFFF; border:1px solid #E0E6F0; border-radius:12px; }
-QLabel#modeDescription { font-size:12px; color:#56627B; }
-QLabel#modeTag { background:#EDE9FF; color:#5635C0; border-radius:8px; padding:8px; font-weight:800; font-size:10px; }
-QLabel#changeChip { background:#FFFFFF; border:1px solid #DFE4F1; border-radius:8px;
-    padding:7px 12px; color:#41516B; font-size:11px; font-weight:600; }
-QFrame#portalHeader { background:#FFFFFF; border:1px solid #DFE5F1; border-radius:10px; }
-QLabel#portalBrand { color:#3E2ABB; font-size:15px; font-weight:900; }
-QLabel#portalPath { color:#7E8AA1; font-size:11px; }
-QLabel#portalTitle { color:#1F2B45; font-size:20px; font-weight:800; }
-QLabel#portalSub { color:#68778F; font-size:11px; }
-QFrame#sidePanel { background:#FFFFFF; border:1px solid #E1E6F0; border-radius:10px; }
-QLabel#sideHeading { font-size:10px; color:#78849A; font-weight:800; }
-QLabel#sideText { color:#586680; font-size:11px; }
-QFrame#sectionCard { background:#FFFFFF; border:1px solid #DAE1F0; border-radius:12px; }
-QLabel#sectionHint { color:#596780; font-size:12px; }
-QLabel#fieldLabel { color:#34425C; font-size:''' + str(fs) + '''px; font-weight:600; }
-QLabel#sectionTitle { color:#1D2943; font-size:''' + str(title_font) + '''px; font-weight:800; }
-QLineEdit, QTextEdit, QComboBox {
-    background:#FFFFFF; color:#1D2943; border:1px solid #B9C6DA; border-radius:8px;
-    padding:7px 10px; font-size:''' + str(field_font) + '''px;
-    selection-background-color:#6249D4; selection-color:#FFFFFF;
-}
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border:2px solid #6850D8; }
-QComboBox QAbstractItemView { background:#FFFFFF; color:#1D2943; selection-background-color:#EDE9FF; }
-QCheckBox { color:#34425C; font-size:''' + str(fs) + '''px; spacing:9px; }
-QPushButton { font-family:Arial,sans-serif; border-radius:9px; font-weight:700; }
-QPushButton#timeButton { color:#293A5B; background:#F6F8FD; border:1px solid #CDD7EB;
-    padding:5px; font-size:''' + str(field_font) + '''px; }
-QPushButton#timeButton:checked { color:#FFFFFF; background:#6043D1; border:2px solid #6043D1; }
-QPushButton#timeButton:hover { background:#E7E1FF; color:#33218A; }
-QPushButton#timeButton:checked:hover { color:#FFFFFF; background:#5134BE; }
-QPushButton#primaryButton { background:#5E40D0; border:1px solid #5E40D0;
-    color:#FFFFFF; padding:10px 16px; font-size:''' + str(fs) + '''px; }
-QPushButton#primaryButton:hover { background:#4930B1; }
-QPushButton#neutralButton { background:#FFFFFF; border:1px solid #C5CFE1;
-    color:#34425C; padding:10px 16px; font-size:''' + str(fs) + '''px; }
-QPushButton:focus { border:2px solid #1C3585; }
-QLabel#reviewSummary { background:#F1F3FF; border:1px solid #D8DDF7; border-radius:10px;
-    color:#253453; font-size:''' + str(fs) + '''px; padding:16px; }
-QLabel#successText { color:#136E4E; font-size:13px; font-weight:800; }
-QLabel#footerText { color:#748199; font-size:11px; }
-QScrollBar:vertical { background:#EEF0F6; width:10px; }
-QScrollBar::handle:vertical { background:#BFC7D8; border-radius:5px; min-height:30px; }
+        t = theme_mod.theme(str(self._visual_settings.get('color_profile', 'standard')) if accessible else 'standard')
+        # Chrome around the form always uses AccessShift colours; the portal itself changes.
+        style = f'''
+QDialog#smartDemo {{ background: {t.bg}; color: {t.text}; }}
+QLabel {{ background: transparent; color: {t.text}; }}
+QLabel#liveHeading {{ color: {t.heading}; font-size: 13px; font-weight: 800; }}
+QLabel#pageTitle {{ font-size: 22px; font-weight: 800; color: {t.heading}; }}
+QLabel#subheading {{ font-size: 13px; color: {t.muted}; }}
+QLabel#demoBadge {{ background: {t.mint}; color: {t.heading}; border-radius: 8px; padding: 8px 10px;
+    font-size: 11px; font-weight: 800; }}
+QFrame#toggleSurface {{ background: {t.card}; border: 1px solid {t.border}; border-radius: 12px; }}
+QLabel#modeDescription {{ font-size: 13px; color: {t.text}; }}
+QLabel#modeTag {{ background: {t.primary if accessible else t.mint}; color: {t.on_primary if accessible else t.heading};
+    border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 11px; }}
+QLabel#changeChip {{ background: {t.card}; border: 1px solid {t.border}; border-radius: 8px;
+    padding: 7px 12px; color: {t.text}; font-size: 12px; font-weight: 600; }}
+QLabel#footerText {{ color: {t.muted}; font-size: 11px; }}
 '''
+        if accessible:
+            portal = dict(bg=t.section, panel=t.card, fg=t.text, heading=t.heading, muted=t.muted,
+                          border=t.border, accent=t.primary, on_accent=t.on_primary, focus=t.active, soft=t.mint)
+        else:
+            portal = dict(bg='#F3F5F8', panel='#FFFFFF', fg='#2B3445', heading='#1F2A3C', muted='#6A7486',
+                          border='#CDD4DF', accent='#2C5A9E', on_accent='#FFFFFF', focus='#2C5A9E', soft='#EEF1F6')
+        style += '''
+QWidget#portalRoot {{ background: {bg}; color: {fg}; }}
+QScrollArea#portalScroll {{ border: 1px solid {border}; border-radius: 12px; background: {bg}; }}
+QWidget#portalRoot QLabel {{ color: {fg}; font-family: Arial, sans-serif; }}
+QFrame#portalHeader {{ background: {panel}; border: 1px solid {border}; border-radius: 10px; }}
+QLabel#portalBrand {{ color: {accent}; font-size: 15px; font-weight: 900; }}
+QLabel#portalPath {{ color: {muted}; font-size: 11px; }}
+QLabel#portalTitle {{ color: {heading}; font-size: 20px; font-weight: 800; }}
+QLabel#portalSub {{ color: {muted}; font-size: 11px; }}
+QFrame#sidePanel {{ background: {panel}; border: 1px solid {border}; border-radius: 10px; }}
+QLabel#sideHeading {{ font-size: 10px; color: {muted}; font-weight: 800; }}
+QLabel#sideText {{ color: {muted}; font-size: 11px; }}
+QFrame#sectionCard {{ background: {panel}; border: 1px solid {border}; border-radius: 12px; }}
+QLabel#sectionHint {{ color: {muted}; font-size: 12px; }}
+QLabel#fieldLabel {{ color: {fg}; font-size: FSpx; font-weight: 600; }}
+QLabel#sectionTitle {{ color: {heading}; font-size: TFpx; font-weight: 800; }}
+QLineEdit, QTextEdit, QComboBox {{
+    background: {panel}; color: {fg}; border: 1px solid {border}; border-radius: 8px;
+    padding: 7px 10px; font-size: FFpx; selection-background-color: {accent}; selection-color: {on_accent};
+}}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{ border: 2px solid {focus}; }}
+QComboBox QAbstractItemView {{ background: {panel}; color: {fg}; selection-background-color: {soft}; }}
+QCheckBox {{ color: {fg}; font-size: FSpx; spacing: 9px; }}
+QPushButton {{ font-family: Arial, sans-serif; border-radius: 9px; font-weight: 700; }}
+QPushButton#timeButton {{ color: {fg}; background: {soft}; border: 1px solid {border};
+    padding: 5px; font-size: FFpx; }}
+QPushButton#timeButton:checked {{ color: {on_accent}; background: {accent}; border: 2px solid {accent}; }}
+QPushButton#timeButton:hover {{ border: 2px solid {accent}; }}
+QPushButton#primaryButton {{ background: {accent}; border: 1px solid {accent};
+    color: {on_accent}; padding: 10px 16px; font-size: FSpx; }}
+QPushButton#neutralButton {{ background: {panel}; border: 1px solid {border};
+    color: {fg}; padding: 10px 16px; font-size: FSpx; }}
+QPushButton:focus {{ border: 2px solid {focus}; }}
+QLabel#reviewSummary {{ background: {soft}; border: 1px solid {border}; border-radius: 10px;
+    color: {fg}; font-size: FSpx; padding: 16px; }}
+QLabel#successText {{ color: {accent}; font-size: 13px; font-weight: 800; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; }}
+QScrollBar::handle:vertical {{ background: {border}; border-radius: 5px; min-height: 30px; }}
+'''.format(**portal).replace('FSpx', f'{fs}px').replace('TFpx', f'{title_font}px').replace('FFpx', f'{field_font}px')
         if accessible:
             pct = max(90, min(160, int(self._visual_settings.get('font_size_pct', 110))))
             style = re.sub(r'font-size:\s*(\d+)px',
                            lambda m: f'font-size:{max(10, round(int(m.group(1)) * pct / 100))}px',
                            style)
-            theme = str(self._visual_settings.get('color_profile', 'standard'))
-            palettes = {
-                'high_contrast': ('#090C14', '#151925', '#FFFFFF', '#FFD84D', '#030405', '#D6DDF2'),
-                'warm': ('#FFF7EA', '#FFFDF8', '#362819', '#8050BA', '#FFFFFF', '#D9C7AB'),
-                'cool': ('#EAF4FF', '#FFFFFF', '#16304A', '#2866CB', '#FFFFFF', '#B8D5F0'),
-            }
-            if theme in palettes:
-                bg, panel, fg, accent, on_accent, border = palettes[theme]
-                style += f'''
-                QDialog#smartDemo, QWidget#portalRoot, QScrollArea#portalScroll {{ background:{bg}; color:{fg}; }}
-                QFrame#portalHeader, QFrame#sidePanel, QFrame#sectionCard,
-                QFrame#toggleSurface {{ background:{panel}; border:1px solid {border}; }}
-                QLabel#portalBrand, QLabel#portalTitle, QLabel#sectionTitle,
-                QLabel#fieldLabel, QLabel#portalPath, QLabel#portalSub, QLabel#sectionHint,
-                QLabel#sideHeading, QLabel#sideText, QLabel#modeDescription,
-                QLabel#changeChip, QLabel#footerText {{ color:{fg}; }}
-                QLabel#changeChip, QLabel#modeTag {{ background:{panel}; border:1px solid {border}; color:{fg}; }}
-                QLineEdit, QTextEdit, QComboBox {{ background:{panel}; color:{fg}; border:2px solid {border}; }}
-                QComboBox QAbstractItemView {{ background:{panel}; color:{fg}; }}
-                QCheckBox {{ color:{fg}; }}
-                QPushButton#timeButton, QPushButton#neutralButton {{ background:{panel}; color:{fg}; border:2px solid {border}; }}
-                QPushButton#primaryButton, QPushButton#timeButton:checked {{ background:{accent}; color:{on_accent}; border:2px solid {accent}; }}
-                QLabel#reviewSummary {{ background:{panel}; color:{fg}; border:1px solid {border}; }}
-                '''
         self.setStyleSheet(style)
         spacing = int(self._visual_settings.get('letter_spacing_px', 0)) if accessible else 0
         for widget in self.portal.findChildren(QWidget):

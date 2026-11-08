@@ -15,8 +15,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from accessshift.modules.smartinterface.visual_controller import PALETTES
 from accessshift.ui import gaze_style
+from accessshift.ui import theme as theme_mod
 from accessshift.ui.gaze_grid import GazeGridPanel
 from accessshift.ui.gaze_mode import GazeMode
 from accessshift.ui.portal_view import PortalView
@@ -64,7 +64,7 @@ class GazeBookingWindow(QWidget):
 
     def apply_theme(self, color_profile: str) -> None:
         """Use the app's colour setting (Standard, High contrast, Warm, Cool)."""
-        p = PALETTES.get(color_profile, PALETTES["standard"])
+        p = theme_mod.gaze_palette(color_profile)
         styled = gaze_style.is_applied(self)
         if styled:
             gaze_style.restore(self)

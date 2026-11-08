@@ -26,6 +26,7 @@ class AccessibilitySettings:
     font_size_pct: int = 110
     color_profile: str = "standard"
     letter_spacing_px: int = 0
+    word_highlight: bool = False  # reading focus aid: highlight the word under the pointer
     tint_color: str = "warm"
     tint_opacity: int = 10
     speech_rate: int = 160

@@ -141,7 +141,9 @@ def test_blink_and_dwell_settings_drive_head_control(window):
 
 
 def test_gaze_window_uses_app_colours_and_follows_theme(window):
-    from accessshift.modules.smartinterface.visual_controller import PALETTES
+    from accessshift.ui.theme import gaze_palette
+
+    PALETTES = {name: gaze_palette(name) for name in ("standard", "high_contrast")}
 
     window._change_module("gaze_control", True)
     gw = window.gaze_window
@@ -197,11 +199,12 @@ def test_eyes_note_is_last_on_the_page(window):
     assert "Prefer to use your eyes?" in last_texts
 
 
-def test_demo_items_hidden_only_on_head_movement_page(window):
-    window._navigate("gaze")
-    assert not window._demo_shortcut.isVisible() and not window._top_badge.isVisible()
+def test_demo_items_hidden_only_on_hands_free_pages(window):
+    for page in ("gaze", "eyes"):
+        window._navigate(page)
+        assert not window._demo_shortcut.isVisible()
     window._navigate("overview")
-    assert window._demo_shortcut.isVisible() and window._top_badge.isVisible()
+    assert window._demo_shortcut.isVisible()
 
 
 def test_problem_returns_to_head_page_with_message(window):
