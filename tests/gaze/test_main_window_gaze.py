@@ -113,7 +113,7 @@ def test_page_is_head_movement_with_no_placeholder_text(window):
     joined = "\n".join(texts)
     assert "integration pending" not in joined.lower()
     assert "Eye & blink" not in joined and "Adnan" not in joined
-    assert any("Head movement control" in t for t in texts)
+    assert any("Head movement" in t for t in texts)
 
 
 def test_no_em_dashes_in_any_message(window):

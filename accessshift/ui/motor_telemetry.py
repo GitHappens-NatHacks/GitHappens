@@ -27,7 +27,7 @@ class MetricChip(QFrame):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 12, 14, 12)
         lay.setSpacing(2)
-        self.value = QLabel("—")
+        self.value = QLabel("n/a")
         self.value.setObjectName("cardTitle")
         self.value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.unit = QLabel(caption)
@@ -212,7 +212,7 @@ class TelemetryPanel(QWidget):
         row = m.latest
         if row:
             hz = row["dominant_hz"]
-            self.chip_hz.set_value(f"{hz:.1f} Hz" if hz else "—")
+            self.chip_hz.set_value(f"{hz:.1f} Hz" if hz else "n/a")
             self.chip_index.set_value(f"{row['tremor_index']:.0f}")
             off = row["medication_state_estimate"] == "OFF"
             self.chip_state.set_value("OFF" if off else "ON")
@@ -223,9 +223,9 @@ class TelemetryPanel(QWidget):
                 story = f"Quieter tremor ({source}). Aim is tracking closer to intention."
             self.summary.setText(story)
         else:
-            self.chip_hz.set_value("—")
-            self.chip_index.set_value("—")
-            self.chip_state.set_value("—")
+            self.chip_hz.set_value("n/a")
+            self.chip_index.set_value("n/a")
+            self.chip_state.set_value("n/a")
             self.summary.setText("Move in the canvas to fill the session chart.")
 
         counts = (m.spastic_drags_prevented, m.slip_clicks_rescued)
