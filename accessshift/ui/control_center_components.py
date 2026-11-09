@@ -188,9 +188,9 @@ class SwatchButton(QPushButton):
         n = max(1, len(self.colors))
         width = area.width() / n
         for i, color in enumerate(self.colors):
-            p.setPen(QPen(QColor(0, 0, 0, 40), 1))
+            p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(color))
-            p.drawRoundedRect(QRectF(area.x() + i * width, area.y(), width - (4 if i < n - 1 else 0), area.height()), 6, 6)
+            p.drawRoundedRect(QRectF(area.x() + i * width, area.y(), width - (4 if i < n - 1 else 0), area.height()), 4, 4)
         p.setPen(QColor(self.text_color))
         font = p.font()
         font.setBold(True)

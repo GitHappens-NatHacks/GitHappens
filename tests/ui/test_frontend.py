@@ -43,7 +43,7 @@ def test_home_is_only_the_logo_and_tagline(window):
     home = window._pages["home"]
     assert window.stack.currentWidget() is home
     assert not window.top_nav.isVisible()
-    assert [t for t in texts(home) if t] == ["Access Without Limits"]
+    assert [t for t in texts(home) if t] == ["Everyday access, quietly assisted"]
     assert not window.home_logo.pixmap().isNull()
 
 
@@ -83,8 +83,8 @@ def test_dashboard_heading_is_younify_and_quick_comfort_is_plain(window):
     assert any(t.startswith("Your profile:") for t in page_texts)
     for removed in ("Make every page easier to read.", "Changes apply to every"):
         assert not [t for t in page_texts if removed in t]
-    for _key, _icon, _title, description in control_center.FEATURES:  # no captions on the tool cards
-        assert description not in page_texts
+    for _key, _icon, _title, description in control_center.FEATURES:
+        assert description in page_texts
     assert not window.feature_cards["gaze"].meta.isVisibleTo(window.feature_cards["gaze"])
 
 

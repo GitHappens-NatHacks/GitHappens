@@ -40,22 +40,22 @@ class AccessibilitySettings:
 # IDs deliberately match accessshift/engine/profiles.py on the team's repo.
 PROFILES: dict[str, dict[str, Any]] = {
     "als": {
-        "label": "Hands-free control", "description": "Use head movement, blinking and speech.",
+        "label": "Hands-free control", "description": "Head movement, blink, and speech.",
         "gaze_control": True, "steady_hand": False, "smart_interface": True,
         "predictive_speech": True,
     },
     "parkinsons": {
-        "label": "Steadier pointing", "description": "Reduce tremor and make targets easier to reach.",
+        "label": "Steadier pointing", "description": "Tremor filter and larger targets.",
         "gaze_control": False, "steady_hand": True, "smart_interface": True,
         "predictive_speech": False,
     },
     "cognitive": {
-        "label": "Clearer interfaces", "description": "Fewer distractions in supported demo layouts.",
+        "label": "Clearer interfaces", "description": "Fewer distractions in demos.",
         "gaze_control": False, "steady_hand": False, "smart_interface": True,
         "predictive_speech": True,
     },
     "custom": {
-        "label": "Personalize everything", "description": "Choose any combination of assistance.",
+        "label": "Custom mix", "description": "Choose any combination.",
     },
 }
 

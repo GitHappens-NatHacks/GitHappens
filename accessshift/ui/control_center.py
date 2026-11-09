@@ -34,15 +34,14 @@ from accessshift.ui.steadyhand_panel import LABELS, SEQUENCE, SteadyHandTrialPan
 
 MODULE_KEYS = ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_speech')
 APP_NAME = 'Younify'
-TAGLINE = 'Access Without Limits'
+TAGLINE = 'Everyday access, quietly assisted'
 SPLASH_MS = 2000  # the Home splash, then the Dashboard
 
 # The three Younify features, in the order they appear everywhere.
 FEATURES = (
-    ('steady', 'steady', 'SteadyHand',
-     'Steady the pointer through Parkinsonian tremor and keep a simple motor session for clinic review.'),
-    ('gaze', 'head', 'Head movement', 'Point by turning your head, and blink to select. Only a webcam is needed.'),
-    ('interface', 'interface', 'SmartInterface', 'Bigger text, calmer colours and simpler, step-by-step screens.'),
+    ('steady', 'steady', 'SteadyHand', 'Pointer stabilization and a clinic-ready motor session.'),
+    ('gaze', 'head', 'Head movement', 'Point with your head. Blink to select. Webcam only.'),
+    ('interface', 'interface', 'SmartInterface', 'Larger text, calmer colour, simpler screens.'),
 )
 # One photograph per tab (team photo set in assets/ui).
 PHOTOS = {
@@ -119,7 +118,7 @@ class PhotoHeader(Photo):
     """Page header: the tab's photograph with its title (and optional line) on a soft shade."""
 
     def __init__(self, file_name: str, title: str, subtitle: str = ''):
-        super().__init__(file_name, height=168 if subtitle else 150, radius=20, shade=True)
+        super().__init__(file_name, height=168 if subtitle else 150, radius=10, shade=True)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(36, 28, 36, 28)
         lay.setSpacing(8)
@@ -128,7 +127,7 @@ class PhotoHeader(Photo):
         lay.addWidget(self.title)
         if subtitle:
             sub = label(subtitle, 'bannerText', True)
-            sub.setMaximumWidth(620)
+            sub.setWordWrap(True)
             lay.addWidget(sub)
         lay.addStretch(1)
 
@@ -164,7 +163,7 @@ class FeatureCard(QFrame):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(1, 1, 1, 1)
         outer.setSpacing(0)
-        self.photo = Photo(PHOTOS.get(icon_name, 'desk.jpg'), height=150, radius=15, top_only=True)
+        self.photo = Photo(PHOTOS.get(icon_name, 'desk.jpg'), height=150, radius=10, top_only=True)
         outer.addWidget(self.photo)
         body = QVBoxLayout()
         body.setContentsMargins(22, 18, 22, 18)
@@ -175,6 +174,8 @@ class FeatureCard(QFrame):
         self.status = label('Off', 'pill')
         top.addWidget(self.status, 0, Qt.AlignmentFlag.AlignVCenter)
         body.addLayout(top)
+        self.desc = label(description, 'featureDesc', True)
+        body.addWidget(self.desc)
         self.meta = label('', 'featureMeta', True)
         body.addWidget(self.meta)
         body.addStretch(1)
@@ -182,7 +183,7 @@ class FeatureCard(QFrame):
         actions.setSpacing(8)
         self.open_button = button('Open', 'secondaryButton')
         self.open_button.setAccessibleName(f'Open {title}')
-        self.demo_button = button('Try the demo', 'linkButton')
+        self.demo_button = button('Demo', 'linkButton')
         self.demo_button.setAccessibleName(f'Try the {title} demo')
         actions.addWidget(self.open_button)
         actions.addWidget(self.demo_button)
@@ -229,6 +230,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, repo_root: Path):
         super().__init__()
+        theme_mod.clear_pixmap_cache()
         self.repo_root = Path(repo_root)
         self.prefs = load_settings()
         self.engine = AdaptiveEngine(self)
@@ -449,13 +451,13 @@ class MainWindow(QMainWindow):
         texts.addWidget(self.overview_profile)
         texts.addWidget(self.overview_summary)
         row.addLayout(texts, 1)
-        edit = button('Edit my profile', 'primaryButton')
+        edit = button('Edit profile', 'primaryButton')
         edit.clicked.connect(lambda: self._navigate('personalize'))
         row.addWidget(edit, 0, Qt.AlignmentFlag.AlignVCenter)
         bl.addLayout(row)
         lay.addWidget(band)
 
-        self._section(lay, 'Your tools')
+        self._section(lay, 'Tools')
         grid = QGridLayout()
         grid.setSpacing(18)
         self.feature_cards: dict[str, FeatureCard] = {}
@@ -510,10 +512,12 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ Profile
     def _page_personalize(self):
-        page, lay = self._page('My accessibility profile',
-                               'Choose a starting point, then fine-tune it. These are preferences, not diagnoses, '
-                               'and everything is saved as you go.', icon_name='profile')
-        self._section(lay, 'Choose a starting point', 'Each profile switches on a set of tools. You can change any of them below.')
+        page, lay = self._page(
+            'My accessibility profile',
+            'Pick a starting point, then adjust. Preferences only. Saved as you go.',
+            icon_name='profile',
+        )
+        self._section(lay, 'Starting point')
         grid = QGridLayout()
         grid.setSpacing(14)
         for i, key in enumerate(k for k in PROFILE_ORDER if k in PROFILES):
@@ -525,19 +529,19 @@ class MainWindow(QMainWindow):
             self._preset_buttons[key] = cardw
         lay.addLayout(grid)
 
-        self._section(lay, 'Fine-tune your tools', 'Click a row or its switch to turn a tool on or off.')
+        self._section(lay, 'Tools')
         tools, tl = card(margins=8, spacing=0)
         rows = (
             ('module', 'steady_hand', 'SteadyHand',
-             'Smooth shaky pointer movement and make small targets easier to hit.'),
+             'Stabilize the pointer and widen click targets.'),
             ('module', 'gaze_control', 'Hands-free control',
-             'Point by turning your head, using your webcam. Turning this on starts the camera.'),
+             'Point with your head. Starts the camera when on.'),
             ('option', 'blink_select', 'Blink to select',
-             'In hands-free control, a slow blink chooses the option you are pointing at.'),
+             'A slow blink chooses the option under the pointer.'),
             ('module', 'smart_interface', 'SmartInterface',
-             'Use larger text, calmer colours and simpler layouts in the healthcare demo.'),
-            ('option', 'reduce_complexity', 'Simplified, step-by-step layout',
-             'Hide clutter and show forms one step at a time.'),
+             'Larger text and simpler layouts in the healthcare demo.'),
+            ('option', 'reduce_complexity', 'Step-by-step layout',
+             'Show forms one step at a time.'),
         )
         for i, (kind, key, heading, details) in enumerate(rows):
             if i:
@@ -548,7 +552,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(tools)
         actions = QHBoxLayout()
         actions.addStretch()
-        done = button('Save and go to my dashboard', 'primaryButton')
+        done = button('Save and continue', 'primaryButton')
         done.setMinimumHeight(48)
         done.clicked.connect(self._finish_setup)
         actions.addWidget(done)
@@ -585,39 +589,46 @@ class MainWindow(QMainWindow):
         return box
 
     def _page_gaze(self):
-        page, lay = self._page('Head movement control',
-                               'Point by turning your head. Hold still or blink slowly to choose. '
-                               'Only your webcam is needed.', icon_name='head')
+        page, lay = self._page(
+            'Head movement',
+            'Point with your head. Hold still or blink to choose. Webcam only.',
+            icon_name='head',
+        )
         self.gaze_notice = label('', 'warningPill', True)  # why hands-free stopped, if it did
         self.gaze_notice.hide()
         lay.addWidget(self.gaze_notice)
 
         start_box, sb = card(margins=24, spacing=12)
-        sb.addWidget(label('Try it now', 'sectionTitle'))
+        sb.addWidget(label('Try it', 'sectionTitle'))
         self.gaze_toggle = HeadStartButton('Start head control', 'Stop head control')
         self.gaze_toggle.clicked.connect(lambda: self._toggle_gaze('head'))
         sb.addWidget(self.gaze_toggle)
-        sb.addWidget(label('Opens the hands-free appointment booking demo full screen. Use Quit hands-free in its top '
-                           'bar to leave at any time, or close your eyes for 5 seconds.', 'bodyText', True))
+        sb.addWidget(label(
+            'Opens the booking demo full screen. Quit from the top bar, or close your eyes for 5 seconds.',
+            'bodyText', True,
+        ))
         lay.addWidget(start_box)
         lay.addWidget(self._steps_card('How it works', (
-            ('1', 'Set up', 'Face the screen, then turn your head when the arrows ask.'),
-            ('2', 'Choose', 'Point at an option. Hold still until the ring fills, or blink slowly to choose it.'),
-            ('3', 'Finish', 'After booking, choose Start over or Close. Or press Quit hands-free whenever you like.'),
+            ('1', 'Set up', 'Face the screen. Follow the calibration arrows.'),
+            ('2', 'Choose', 'Hold still until the ring fills, or blink slowly.'),
+            ('3', 'Finish', 'Start over, Close, or Quit hands-free anytime.'),
         )))
         speed, sp = card(spacing=10)
         sp.addWidget(label('Selection', 'sectionTitle'))
-        sp.addWidget(self._bind_row('option', 'blink_select', 'Blink to select',
-                                    'A slow, deliberate blink chooses the option you are pointing at.', framed=False))
-        sp.addWidget(label('Selection speed', 'cardTitle'))
-        sp.addWidget(label('How long to hold still before an option is chosen.', 'bodyText', True))
+        sp.addWidget(self._bind_row(
+            'option', 'blink_select', 'Blink to select',
+            'A slow blink chooses the option under the pointer.', framed=False,
+        ))
+        sp.addWidget(label('Hold time', 'cardTitle'))
         self._dwell_buttons = {}
         sp.addLayout(self._speed_choices(self._dwell_buttons))
         lay.addWidget(speed)
         tips, tp = card(name='innerCard')
-        tp.addWidget(label('For the best tracking', 'cardTitle'))
-        tp.addWidget(label('Sit about an arm\'s length from the screen and light your face from the front. If the '
-                           'pointer drifts, use Recalibrate in the full-screen view.', 'bodyText', True))
+        tp.addWidget(label('Tracking tip', 'cardTitle'))
+        tp.addWidget(label(
+            'Sit an arm\'s length away with light on your face. Recalibrate if the pointer drifts.',
+            'bodyText', True,
+        ))
         lay.addWidget(tips)
         lay.addStretch()
         return page
@@ -626,32 +637,18 @@ class MainWindow(QMainWindow):
     def _page_steady(self):
         page, lay = self._page(
             'SteadyHand',
-            'Softens Parkinsonian tremor on the pointer and quietly records a motor session you can share with a clinician.',
+            'Filters tremor on the pointer. Records a motor session for clinic review.',
             icon_name='steady',
         )
 
-        intro, il = card(spacing=10)
-        il.addWidget(label(
-            'Everyday portals ask for precise clicks that a 4 to 7 Hz tremor often cannot deliver, especially when '
-            'medication wears toward OFF. SteadyHand filters that motion, widens click targets, and guards against '
-            'accidental drags, using only the mouse you already have.',
-            'bodyText', True,
-        ))
-        lay.addWidget(intro)
-
         self.steady_toggle = self._bind_row(
             'module', 'steady_hand', 'Use SteadyHand',
-            'Applies stabilization across Younify while the session chart below keeps updating.',
+            'Stabilization on across Younify. Session chart updates below.',
         )
         lay.addWidget(self.steady_toggle)
 
         demo, dl = card(spacing=12)
-        dl.addWidget(label('Try it', 'sectionTitle'))
-        dl.addWidget(label(
-            'Work through the booking steps on the canvas, starting with Baseline and then Full assist so you can '
-            'feel the difference in accuracy and effort.',
-            'bodyText', True,
-        ))
+        dl.addWidget(label('Practice', 'sectionTitle'))
         self.steady_panel = SteadyHandTrialPanel(
             self.steady, self.prefs.target_size_pct, self.repo_root, self.prefs.as_dict(),
         )
@@ -662,26 +659,14 @@ class MainWindow(QMainWindow):
         config, cfg = card(spacing=8)
         cfg.addWidget(label('Assist settings', 'sectionTitle'))
         cfg.addWidget(label('Stabilization strength', 'cardTitle'))
-        cfg.addWidget(label(
-            'How firmly tremor-band motion is filtered. Values above 100% keep leaning harder on the smoother.',
-            'bodyText', True,
-        ))
         self.strength_slider, sr = self._slider(0, 200, 5, 'tremor_strength', '%', ('Light', 'Maximum'))
         cfg.addLayout(sr)
         cfg.addSpacing(8)
         cfg.addWidget(label('Simulated tremor intensity', 'cardTitle'))
-        cfg.addWidget(label(
-            'How strong the demo tremor feels on the canvas when simulation is on, from mild through intense.',
-            'bodyText', True,
-        ))
         self.intensity_slider, ir = self._slider(0, 100, 5, 'tremor_intensity', '%', ('Mild', 'Intense'))
         cfg.addLayout(ir)
         cfg.addSpacing(8)
         cfg.addWidget(label('Click zone size', 'cardTitle'))
-        cfg.addWidget(label(
-            'Expands how close the pointer needs to be before a booking step still counts.',
-            'bodyText', True,
-        ))
         self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%', ('Normal', 'Large'))
         cfg.addLayout(tr)
         lay.addWidget(config)
@@ -690,11 +675,15 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ SmartInterface
     def _page_interface(self):
-        page, lay = self._page('SmartInterface',
-                               'Make Younify easier to read and calmer to look at. Every change applies to all '
-                               'Younify windows instantly.', icon_name='interface')
-        self.interface_toggle = self._bind_row('module', 'smart_interface', 'Use SmartInterface on the healthcare form',
-                                               'Turn the busy sample appointment form into a simpler, clearer one.')
+        page, lay = self._page(
+            'SmartInterface',
+            'Reading comfort for every Younify window.',
+            icon_name='interface',
+        )
+        self.interface_toggle = self._bind_row(
+            'module', 'smart_interface', 'Use SmartInterface on the healthcare form',
+            'Simplify the sample appointment form.',
+        )
         lay.addWidget(self.interface_toggle)
 
         reading, rl = card(spacing=8)
@@ -708,14 +697,15 @@ class MainWindow(QMainWindow):
         rl.addLayout(spacing_row)
         rl.addSpacing(4)
         rl.addWidget(divider())
-        self.simple_row = self._bind_row('option', 'reduce_complexity', 'Simplified, step-by-step layout',
-                                         'Hide clutter and show the healthcare form one step at a time.', framed=False)
+        self.simple_row = self._bind_row(
+            'option', 'reduce_complexity', 'Step-by-step layout',
+            'Show the healthcare form one step at a time.', framed=False,
+        )
         rl.addWidget(self.simple_row)
         lay.addWidget(reading)
 
         colours, cl = card(spacing=10)
         cl.addWidget(label('Colour theme', 'sectionTitle'))
-        cl.addWidget(label('Pick the look that is most comfortable for your eyes.', 'bodyText', True))
         swatches = QHBoxLayout()
         swatches.setSpacing(12)
         self._theme_buttons = {}
@@ -735,8 +725,7 @@ class MainWindow(QMainWindow):
         ht = QVBoxLayout()
         ht.setSpacing(3)
         ht.addWidget(label('Screen tint', 'sectionTitle'))
-        ht.addWidget(label('A soft colour wash that can reduce glare and visual stress. Pick a colour to turn it on.',
-                           'bodyText', True))
+        ht.addWidget(label('Soft wash to reduce glare. Pick a colour to turn it on.', 'bodyText', True))
         head.addLayout(ht, 1)
         self.tint_switch = Switch('Screen tint')
         self.tint_switch.toggled.connect(self._set_screen_tint)
@@ -766,10 +755,9 @@ class MainWindow(QMainWindow):
         dt = QVBoxLayout()
         dt.setSpacing(4)
         dt.addWidget(label('SmartInterface demo', 'sectionTitle'))
-        dt.addWidget(label('See your settings reshape a busy healthcare appointment form. Keep the demo open next to '
-                           'this page and every change shows up there instantly.', 'bandText', True))
+        dt.addWidget(label('Apply these settings to a sample appointment form.', 'bandText', True))
         drow.addLayout(dt, 1)
-        open_demo = button('Open the demo', 'primaryButton')
+        open_demo = button('Open demo', 'primaryButton')
         open_demo.clicked.connect(lambda: self._open_demo_lab('interface'))
         drow.addWidget(open_demo, 0, Qt.AlignmentFlag.AlignVCenter)
         dl.addLayout(drow)
@@ -831,15 +819,15 @@ class MainWindow(QMainWindow):
             sw.setChecked(active and key == self.prefs.tint_color)
         names = {'warm': 'Warm amber', 'cool': 'Cool blue', 'rose': 'Soft rose'}
         self.tint_status.setText(
-            f'{names.get(self.prefs.tint_color, "Tint")} tint is on at {self.prefs.tint_opacity}% in all Younify '
-            'windows. Other apps are not affected.' if active else
-            'Screen tint is off. Other apps are never affected.')
+            f'{names.get(self.prefs.tint_color, "Tint")} tint on at {self.prefs.tint_opacity}% (Younify only).'
+            if active else 'Screen tint is off.'
+        )
 
     # ------------------------------------------------------------------ appearance
     def _apply_visual_preferences(self) -> None:
         t = theme_mod.theme(self.prefs.color_profile)
-        Switch.set_colors(t.active, '#8FA39C' if self.prefs.color_profile != 'high_contrast' else '#5B6B66',
-                          '#FFFFFF', t.primary)
+        off = '#5B6B66' if self.prefs.color_profile == 'high_contrast' else '#A8B8C8'
+        Switch.set_colors(t.active, off, '#FFFFFF', t.primary)
         self.setStyleSheet(theme_mod.stylesheet(self.prefs.font_size_pct, self.prefs.color_profile))
         theme_mod.apply_letter_spacing(self.prefs.letter_spacing_px)
         for tile in self._icon_tiles:
@@ -993,21 +981,23 @@ class MainWindow(QMainWindow):
         self.overview_profile.setText(f'Your profile: {name}')
         theme_name = dict(theme_mod.THEME_LABELS).get(self.prefs.color_profile, 'Standard')
         self.overview_summary.setText(
-            f'SteadyHand is {"on" if self.prefs.steady_hand else "off"}, SmartInterface is '
-            f'{"on" if self.prefs.smart_interface else "off"}, and text is at {self.prefs.font_size_pct}% '
-            f'with the {theme_name} colour theme.')
+            f'SteadyHand {"on" if self.prefs.steady_hand else "off"} · '
+            f'SmartInterface {"on" if self.prefs.smart_interface else "off"} · '
+            f'Text {self.prefs.font_size_pct}% · {theme_name}'
+        )
         cards = self.feature_cards
         running = bool(self.prefs.gaze_control)
         cards['gaze'].set_status('Running' if running else 'Ready', running)
         cards['gaze'].meta.hide()
         cards['steady'].set_status('On' if self.prefs.steady_hand else 'Off', self.prefs.steady_hand)
         cards['steady'].meta.setText(
-            f'Smoothing {self.prefs.tremor_strength}%, tremor intensity {self.prefs.tremor_intensity}, '
-            f'click zones {self.prefs.target_size_pct}%'
+            f'Strength {self.prefs.tremor_strength}% · Intensity {self.prefs.tremor_intensity} · '
+            f'Zones {self.prefs.target_size_pct}%'
         )
         cards['interface'].set_status('On' if self.prefs.smart_interface else 'Off', self.prefs.smart_interface)
         cards['interface'].meta.setText(
-            f'Text {self.prefs.font_size_pct}%, spacing {self.prefs.letter_spacing_px} px, {theme_name} colours')
+            f'Text {self.prefs.font_size_pct}% · Spacing {self.prefs.letter_spacing_px} px · {theme_name}'
+        )
         self.quick_font_value.setText(f'{self.prefs.font_size_pct} %')
         for kind, sw in self._quick_switches:
             value = {'contrast': self.prefs.color_profile == 'high_contrast',
