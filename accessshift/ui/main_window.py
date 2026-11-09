@@ -1,13 +1,11 @@
-"""AccessShift control center + the Demo Lab + GazeControl hands-free window.
+"""Younify control center + the Demo Lab + GazeControl hands-free window.
 
 The control center stays open. "Open Demo Lab" shows every feature in one
 independent window that follows preference changes live (via preferences_changed).
-The Head movement tab opens the full-screen hands-free booking window, pointing
-with the head or the eyes.
+The Head movement tab opens the full-screen hands-free booking window (head pointing).
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from accessshift.ui.control_center import MainWindow as ControlCenterWindow
@@ -29,7 +27,7 @@ class MainWindow(ControlCenterWindow):
     def _open_demo_lab(self, section: str = 'start') -> None:
         if self.demo_lab is None:
             self.demo_lab = DemoLabWindow(self, self.repo_root)
-            # Explicitly register this one extra AccessShift-owned window; never monitors.
+            # Explicitly register this one extra Younify-owned window; never monitors.
             self.tint_manager.register_window(self.demo_lab)
         self.demo_lab.apply_preferences(self.prefs.as_dict())
         self.demo_lab.show_section(section)
@@ -59,19 +57,10 @@ class MainWindow(ControlCenterWindow):
         return self.gaze_window
 
     def _gaze_source(self) -> str:
-        if self.gaze_window is not None:
-            return self.gaze_window.gaze.controller.source
-        source = os.getenv('GAZE_INPUT', 'head')
-        return source if source in ('head', 'eyes') else 'head'
+        return 'head'  # Younify points with the head only
 
-    def _start_gaze(self, source: str) -> None:
-        gw = self._ensure_gaze_window()
-        if gw.gaze.controller.source != source:
-            if gw.gaze.enabled:
-                gw.gaze.toggle_source()  # running already: switch and recalibrate
-            else:
-                gw.gaze.controller.set_source(source)
-                gw.gaze.source_changed.emit(source)
+    def _start_gaze(self, source: str = 'head') -> None:
+        self._ensure_gaze_window()  # head pointing only
         if not self.prefs.gaze_control:
             self._change_module('gaze_control', True)
         else:

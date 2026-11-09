@@ -1,33 +1,44 @@
-/* AccessShift visual system. Colour tokens are filled in by accessshift/ui/theme.py for each colour theme.
+/* Younify visual system. Colour tokens are filled in by accessshift/ui/theme.py for each colour theme.
    Font sizes scale with the person's text size setting (except navigation, which stays fixed). */
 QWidget#appRoot, QWidget#scrollContent, QWidget#labRoot { background: $bg; color: $text; }
 QWidget#homeRoot { background: $section; }
 QLabel { color: $text; background: transparent; }
 QToolTip { color: $on_primary; background: $heading; border: none; padding: 6px 8px; font-size: 12px; }
 
-/* Sidebar */
-QFrame#sidebar, QFrame#rail { background: $sidebar; border: none; }
-QLabel#brandName { color: $sidebar_text; font-size: 19px; font-weight: 800; }
-QLabel#brandSub { color: $sidebar_muted; font-size: 11px; font-weight: 600; }
-QLabel#sideSection { color: $sidebar_muted; font-size: 11px; font-weight: 700; padding-left: 12px; }
-QPushButton#navButton, QPushButton#railButton { color: $sidebar_text; background: transparent; border: none;
-    border-radius: 10px; text-align: left; padding: 10px 12px; font-size: 13px; font-weight: 600; }
-QPushButton#navButton:hover, QPushButton#railButton:hover { background: $sidebar_active; }
-QPushButton#navButton:checked, QPushButton#railButton:checked { background: $sidebar_active; font-weight: 800; }
-QPushButton#navButton:focus, QPushButton#railButton:focus { border: 2px solid $active; }
-QLabel#sidebarFoot { color: $sidebar_muted; font-size: 11px; }
-QLabel#railTitle { color: $sidebar_text; font-size: 18px; font-weight: 800; }
-QLabel#railText { color: $sidebar_muted; font-size: 12px; }
-
-/* Top bar and footer */
-QFrame#topBar { background: $bg; border: none; border-bottom: 1px solid $border; }
-QLabel#topBarTitle { color: $heading; font-size: 14px; font-weight: 700; }
+/* Top navigation */
+QFrame#topNav { background: $bg; border: none; border-bottom: 1px solid $border; }
+QPushButton#navBrand { color: $heading; background: transparent; border: none; padding: 4px 8px 4px 0;
+    font-size: 21px; font-weight: 800; text-align: left; }
+QPushButton#navTab { color: $heading; background: transparent; border: 1px solid transparent; border-radius: 20px;
+    padding: 9px 13px; font-size: 14px; font-weight: 650; }
+QPushButton#navTab:hover { background: $mint; }
+QPushButton#navTab:checked { color: $on_primary; background: $primary; border-color: $primary; font-weight: 750; }
+QPushButton#navTab:focus, QPushButton#navBrand:focus, QPushButton#navAction:focus { border: 2px solid $active; }
+QPushButton#navAction { color: $heading; background: $bg; border: 1px solid $border; border-radius: 20px;
+    padding: 9px 16px; font-size: 14px; font-weight: 700; }
+QPushButton#navAction:hover { border-color: $primary; background: $mint; }
 QPushButton#profileButton { color: $heading; background: $mint; border: 1px solid $mint;
-    border-radius: 19px; padding: 8px 16px 8px 12px; font-size: 13px; font-weight: 700; }
+    border-radius: 20px; padding: 9px 16px 9px 12px; font-size: 14px; font-weight: 700; }
 QPushButton#profileButton:hover { border-color: $primary; }
 QPushButton#profileButton:checked { background: $primary; color: $on_primary; border-color: $primary; }
 QFrame#footerBar { background: $bg; border: none; border-top: 1px solid $border; }
 QLabel#footerText { color: $muted; font-size: 11px; }
+
+/* Demo Lab rail */
+QFrame#rail { background: $sidebar; border: none; }
+QPushButton#railButton { color: $sidebar_text; background: transparent; border: none;
+    border-radius: 10px; text-align: left; padding: 10px 12px; font-size: 13px; font-weight: 600; }
+QPushButton#railButton:hover { background: $sidebar_active; }
+QPushButton#railButton:checked { background: $sidebar_active; font-weight: 800; }
+QPushButton#railButton:focus { border: 2px solid $active; }
+QLabel#railTitle { color: $sidebar_text; font-size: 18px; font-weight: 800; }
+QLabel#railText { color: $sidebar_muted; font-size: 12px; }
+
+/* Home splash and photo headers */
+QLabel#homeTagline { color: $heading; font-size: 26px; font-weight: 600; }
+QLabel#bannerTitle { color: #FFFFFF; font-size: 32px; font-weight: 800; }
+QLabel#bannerText { color: #F1F6F3; font-size: 15px; }
+QFrame#quickTile { background: $card; border: 1px solid $border; border-radius: 16px; }
 
 /* Typography */
 QLabel#pageTitle { color: $heading; font-size: 30px; font-weight: 800; }
@@ -83,24 +94,8 @@ QPushButton#swatchButton:checked { border: 3px solid $active; }
 QPushButton#segmentButton { color: $heading; background: $card; border: 1px solid $border; padding: 9px 16px;
     font-size: 13px; font-weight: 700; border-radius: 10px; }
 QPushButton#segmentButton:checked { color: $on_primary; background: $primary; border-color: $primary; }
-QPushButton#dotButton { background: $border; border: none; border-radius: 6px;
-    min-width: 12px; max-width: 12px; min-height: 12px; max-height: 12px; }
-QPushButton#dotButton:checked { background: $primary; min-width: 30px; max-width: 30px; }
 QPushButton:disabled { color: $muted; background: $bg; border: 1px solid $border; }
 QPushButton:focus { border: 2px solid $active; }
-
-/* Home and introduction */
-QLabel#homeBrand { color: $heading; font-size: 18px; font-weight: 800; }
-QLabel#homeTitle { color: $heading; font-size: 54px; font-weight: 800; }
-QLabel#homeLead { color: $text; font-size: 18px; }
-QLabel#homeNote { color: $muted; font-size: 13px; }
-QPushButton#featureLink { color: $heading; background: $card; border: 1px solid $border; border-radius: 18px;
-    padding: 9px 14px; font-size: 13px; font-weight: 700; }
-QPushButton#featureLink:hover { border-color: $primary; background: $mint; }
-QLabel#introStep { color: $primary; font-size: 14px; font-weight: 800; }
-QLabel#introTitle { color: $heading; font-size: 38px; font-weight: 800; }
-QLabel#introLead { color: $text; font-size: 17px; }
-QLabel#introPoint { color: $text; font-size: 15px; }
 
 /* Dashboard feature cards */
 QLabel#featureTitle { color: $heading; font-size: 18px; font-weight: 800; }

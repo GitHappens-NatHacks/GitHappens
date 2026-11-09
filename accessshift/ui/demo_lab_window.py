@@ -1,11 +1,11 @@
-"""AccessShift Demo Lab: every feature in one window, ready to present.
+"""Younify Demo Lab: every feature in one window, ready to present.
 
-A left rail lists Start here, SmartInterface, SteadyHand and Head movement (head or
-eyes). Each page explains what to show and holds the working demo:
+A left rail lists Start here, SteadyHand, Head movement and SmartInterface.
+Each page explains what to show and holds the working demo:
   - SmartInterface: the sample healthcare form, following the person's profile live,
     with an Original / With your settings comparison.
   - SteadyHand: the tremor practice canvas and 10-step accuracy trial.
-  - Head movement: start the full-screen hands-free booking demo with the head or the eyes.
+  - Head movement: start the full-screen hands-free booking demo.
 The window is independent of the control center, so both can stay open side by side.
 """
 from __future__ import annotations
@@ -21,22 +21,24 @@ from PySide6.QtWidgets import (
 from accessshift.modules.steadyhand.controller import SteadyHandController
 from accessshift.ui import icons
 from accessshift.ui import theme as theme_mod
+from accessshift.ui.control_center import PhotoHeader
 from accessshift.ui.control_center_components import button, card, label
 from accessshift.ui.healthcare_demo_window import HealthcareDemoWindow
 from accessshift.ui.steadyhand_panel import SteadyHandTrialPanel
 
 SECTIONS = (
     ('start', 'lab', 'Start here'),
-    ('interface', 'interface', 'SmartInterface'),
     ('steady', 'steady', 'SteadyHand'),
     ('gaze', 'head', 'Head movement'),
+    ('interface', 'interface', 'SmartInterface'),
 )
 
 RUN_ORDER = (
-    ('interface', 'interface', 'SmartInterface', 'Turn a busy appointment form into large, calm, step-by-step screens.', 'About 1 minute'),
     ('steady', 'steady', 'SteadyHand', 'Hit small targets with a simulated tremor, then compare accuracy with and without help.', 'About 1 minute'),
-    ('gaze', 'head', 'Head movement', 'Book an appointment hands-free with your head, then with your eyes.', 'About 3 minutes'),
+    ('gaze', 'head', 'Head movement', 'Book an appointment hands-free by turning your head.', 'About 2 minutes'),
+    ('interface', 'interface', 'SmartInterface', 'Turn a busy appointment form into large, calm, step-by-step screens.', 'About 1 minute'),
 )
+PHOTOS = {'lab': 'care-desk.jpg', 'steady': 'mouse-mat.jpg', 'head': 'webcam.jpg', 'interface': 'glasses-notes.jpg'}
 
 
 class DemoLabWindow(QWidget):
@@ -45,11 +47,13 @@ class DemoLabWindow(QWidget):
         self.host = host  # the control center: starts hands-free control, owns the settings
         self.repo_root = Path(repo_root)
         self.setObjectName('labRoot')
-        self.setWindowTitle('AccessShift Demo Lab')
+        self.setWindowTitle('Younify Demo Lab')
+        self.setWindowIcon(theme_mod.logo_icon())
         self.resize(1280, 860)
         self.setMinimumSize(980, 680)
         self._settings: dict = dict(host.prefs.as_dict())
         self._tiles: list[icons.IconTile] = []
+        self._headers: list[PhotoHeader] = []
         self._rail_buttons: dict[str, QPushButton] = {}
         self._pages: dict[str, QWidget] = {}
         self.steady = SteadyHandController()  # its own controller: the lab never disturbs the settings window
@@ -78,7 +82,7 @@ class DemoLabWindow(QWidget):
         top.addStretch(1)
         rl.addLayout(top)
         rl.addSpacing(8)
-        rl.addWidget(label('Every AccessShift feature, ready to show.', 'railText', True))
+        rl.addWidget(label('Every Younify feature, ready to show.', 'railText', True))
         rl.addSpacing(18)
         group = QButtonGroup(self)
         for key, icon_name, title in SECTIONS:
@@ -91,7 +95,7 @@ class DemoLabWindow(QWidget):
             rl.addWidget(b)
             self._rail_buttons[key] = b
         rl.addStretch(1)
-        back = button('Back to AccessShift', 'railButton')
+        back = button('Back to Younify', 'railButton')
         back.setProperty('iconName', 'back')
         back.clicked.connect(self._back_to_app)
         self.back_button = back
@@ -100,8 +104,8 @@ class DemoLabWindow(QWidget):
 
         self.stack = QStackedWidget()
         outer.addWidget(self.stack, 1)
-        for key, builder in (('start', self._page_start), ('interface', self._page_interface),
-                             ('steady', self._page_steady), ('gaze', self._page_gaze)):
+        for key, builder in (('start', self._page_start), ('steady', self._page_steady),
+                             ('gaze', self._page_gaze), ('interface', self._page_interface)):
             page = builder()
             self._pages[key] = page
             self.stack.addWidget(page)
@@ -120,15 +124,10 @@ class DemoLabWindow(QWidget):
         lay = QVBoxLayout(body)
         lay.setContentsMargins(40, 32, 40, 40)
         lay.setSpacing(18)
-        head = QHBoxLayout()
-        head.setSpacing(16)
-        head.addWidget(self._tile(icon_name, 56), 0, Qt.AlignmentFlag.AlignTop)
-        texts = QVBoxLayout()
-        texts.setSpacing(6)
-        texts.addWidget(label(title, 'pageTitle', True))
-        texts.addWidget(label(subtitle, 'pageDescription', True))
-        head.addLayout(texts, 1)
-        lay.addLayout(head)
+        header = PhotoHeader(PHOTOS.get(icon_name, 'care-desk.jpg'), title, subtitle)
+        self._headers.append(header)
+        lay.addWidget(header)
+        lay.addSpacing(6)
         scroller.setWidget(body)
         return scroller, lay
 
@@ -145,7 +144,7 @@ class DemoLabWindow(QWidget):
 
     # ------------------------------------------------------------------ pages
     def _page_start(self):
-        page, lay = self._page('lab', 'Show AccessShift in three short demos',
+        page, lay = self._page('lab', 'Show Younify in three short demos',
                                'Pick a demo on the left, or follow the suggested order below. Every demo uses the '
                                'settings from your accessibility profile.')
         before, bl = card(name='band', margins=24, spacing=10)
@@ -194,7 +193,7 @@ class DemoLabWindow(QWidget):
         lay.addWidget(self._steps((
             'With SmartInterface on, the form opens as two calm steps. Fill them in and press Finish demo.',
             'Press "View original form" to show every field at once, then "Try simplified" to switch back.',
-            'Change text size, spacing, colours or click target size in AccessShift. The form updates instantly '
+            'Change text size, spacing, colours or click target size in Younify. The form updates instantly '
             'and keeps what was typed.',
         )))
         bar, bl = card(spacing=10)
@@ -203,7 +202,7 @@ class DemoLabWindow(QWidget):
         self.interface_summary = label('', 'bodyText', True)
         row.addWidget(self.interface_summary, 1)
         adjust = button('Adjust settings', 'secondaryButton')
-        adjust.setToolTip('Open the SmartInterface page in AccessShift')
+        adjust.setToolTip('Open the SmartInterface page in Younify')
         adjust.clicked.connect(lambda: self._open_settings('interface'))
         row.addWidget(adjust, 0, Qt.AlignmentFlag.AlignVCenter)
         bl.addLayout(row)
@@ -242,32 +241,28 @@ class DemoLabWindow(QWidget):
 
     def _page_gaze(self):
         page, lay = self._page('head', 'Head movement',
-                               'Book an appointment hands-free, pointing with your head or with your eyes.')
+                               'Book an appointment hands-free by turning your head.')
         lay.addWidget(self._steps((
-            'Press Start with my head. Face the screen, then turn your head when the arrows ask (about 10 seconds).',
+            'Press Start. Face the screen, then turn your head when the arrows ask (about 10 seconds).',
             'Turn toward an option and hold still until the ring fills, or blink slowly once it starts.',
             'Book the appointment and choose Close, or press Quit hands-free in the top bar at any time.',
-            'Then try Start with my eyes: look at each dot to calibrate and book the same appointment.',
         )))
         start, sl = card(margins=24, spacing=12)
         row = QHBoxLayout()
         row.setSpacing(12)
-        self.head_button = button('Start with my head', 'primaryButton')
-        self.eye_button = button('Start with my eyes', 'secondaryButton')
-        for b, source in ((self.head_button, 'head'), (self.eye_button, 'eyes')):
-            b.setMinimumHeight(60)
-            b.setStyleSheet('QPushButton { font-size: 17px; }')
-            b.clicked.connect(lambda _=False, src=source: self._toggle_gaze(src))
-            row.addWidget(b)
+        self.head_button = button('Start the head movement demo', 'primaryButton')
+        self.head_button.setMinimumHeight(60)
+        self.head_button.setStyleSheet('QPushButton { font-size: 17px; }')
+        self.head_button.clicked.connect(lambda: self._toggle_gaze('head'))
+        row.addWidget(self.head_button)
         sl.addLayout(row)
         self.gaze_status = label('', 'bodyText', True)
         sl.addWidget(self.gaze_status)
         lay.addWidget(start)
         tips, tl = card(name='innerCard')
         tl.addWidget(label('Tip', 'cardTitle'))
-        tl.addWidget(label('Head pointing is the steadiest on most laptop webcams, so show it first. Eye pointing needs '
-                           'good light on your face; if it drifts, use Recalibrate in the full-screen view.',
-                           'bodyText', True))
+        tl.addWidget(label('Light your face from the front. If the pointer drifts, use Recalibrate in the '
+                           'full-screen view.', 'bodyText', True))
         lay.addWidget(tips)
         lay.addStretch(1)
         return page
@@ -314,11 +309,9 @@ class DemoLabWindow(QWidget):
 
     def _update_gaze_state(self) -> None:
         running = bool(self._settings.get('gaze_control', False))
-        source = self.host._gaze_source()
-        self.head_button.setText('Stop' if running and source == 'head' else 'Start with my head')
-        self.eye_button.setText('Stop' if running and source == 'eyes' else 'Start with my eyes')
+        self.head_button.setText('Stop the demo' if running else 'Start the head movement demo')
         self.gaze_status.setText(
-            f'Running with your {source} in the full-screen hands-free window.' if running else
+            'Running in the full-screen hands-free window.' if running else
             'Opens a full-screen hands-free booking window with large options.')
 
     def apply_preferences(self, settings: dict) -> None:
@@ -328,6 +321,8 @@ class DemoLabWindow(QWidget):
         self.setStyleSheet(theme_mod.stylesheet(int(settings.get('font_size_pct', 110)), profile))
         for tile in self._tiles:
             tile.set_colors(t.mint, t.primary)
+        for header in self._headers:
+            header.set_shade(t.sidebar)
         self.rail_mark.set_colors(t.primary, t.on_primary)
         for b in list(self._rail_buttons.values()) + [self.back_button]:
             b.setIcon(icons.icon(str(b.property('iconName')), t.sidebar_text, 20))

@@ -16,7 +16,7 @@ def run() -> int:
     load_dotenv(root / ".env")
 
     app = QApplication(sys.argv)
-    app.setApplicationName("AccessShift AI")
+    app.setApplicationName("Younify")
     app.setOrganizationName("GitHappens")
 
     window = MainWindow(repo_root=root)

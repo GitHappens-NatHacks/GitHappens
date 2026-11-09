@@ -10,7 +10,6 @@ import accessshift.ui.control_center as control_center
 from accessshift.ui import gaze_mode
 from accessshift.ui.control_center_settings import AccessibilitySettings
 from accessshift.ui.main_window import MainWindow
-from accessshift.ui.word_highlight import word_rect
 from tests.gaze.test_gaze_mode import FakeTracker
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,29 +37,62 @@ def texts(widget):
     return [w.text() for kind in (QLabel, QPushButton) for w in widget.findChildren(kind)]
 
 
-# --- Home and introduction ---------------------------------------------------------------------
+# --- Branding, Home splash and navigation ------------------------------------------------------
 
-def test_app_opens_on_the_home_page_not_the_dashboard(window):
-    assert window.stack.currentWidget() is window._pages["home"]
-    assert not window.sidebar.isVisible()
+def test_home_is_only_the_logo_and_tagline(window):
+    home = window._pages["home"]
+    assert window.stack.currentWidget() is home
+    assert not window.top_nav.isVisible()
+    assert [t for t in texts(home) if t] == ["Access Without Limits"]
+    assert not window.home_logo.pixmap().isNull()
 
 
-def test_explore_opens_the_introduction_then_the_dashboard(window):
-    window._explore_button.click()
-    assert window.stack.currentWidget() is window._pages["intro"]
-    for _ in range(len(control_center.INTRO_SLIDES)):
-        window.intro_next.click()
-    assert window.intro_actions.isVisible()
-    window._navigate("overview")
-    assert window.stack.currentWidget() is window._pages["overview"] and window.sidebar.isVisible()
+def test_home_moves_to_the_dashboard_after_about_two_seconds(window, qapp):
+    import time
+
+    assert control_center.SPLASH_MS == 2000
+    end = time.monotonic() + 2.6
+    while time.monotonic() < end and window.stack.currentWidget() is window._pages["home"]:
+        qapp.processEvents()
+        time.sleep(0.02)
+    assert window.stack.currentWidget() is window._pages["overview"]
+    assert window.top_nav.isVisible()
+
+
+def test_younify_name_everywhere(window):
+    window._open_demo_lab("start")
+    every = texts(window) + texts(window.demo_lab) + [window.windowTitle(), window.demo_lab.windowTitle()]
+    assert not [t for t in every if "AccessShift" in t]
+    assert window.windowTitle() == "Younify"
+
+
+def test_top_navigation_lists_features_in_order(window):
+    layout = window.top_bar_layout
+    tabs = [layout.itemAt(i).widget().text() for i in range(layout.count())
+            if layout.itemAt(i).widget() is not None and layout.itemAt(i).widget().objectName() == "navTab"]
+    assert tabs == ["Home", "Dashboard", "SteadyHand", "Head movement", "SmartInterface"]
+    assert [key for key, *_ in control_center.FEATURES] == ["steady", "gaze", "interface"]
+    assert list(window.feature_cards) == ["steady", "gaze", "interface"]
+    window._open_demo_lab("start")
+    assert list(window.demo_lab._rail_buttons) == ["start", "steady", "gaze", "interface"]
+
+
+def test_dashboard_heading_is_younify_and_quick_comfort_is_plain(window):
+    page_texts = texts(window._pages["overview"])
+    assert "Younify" in page_texts and "Dashboard" not in page_texts
+    assert any(t.startswith("Your profile:") for t in page_texts)
+    for removed in ("Make every page easier to read.", "Changes apply to every"):
+        assert not [t for t in page_texts if removed in t]
+    for _key, _icon, _title, description in control_center.FEATURES:  # no captions on the tool cards
+        assert description not in page_texts
+    assert not window.feature_cards["gaze"].meta.isVisibleTo(window.feature_cards["gaze"])
 
 
 def test_profile_is_in_the_top_right_corner(window):
-    assert window.home_profile_button.text() == "My accessibility profile"
     window._navigate("overview")
     layout = window.top_bar_layout
     assert layout.itemAt(layout.count() - 1).widget() is window.profile_button
-    assert "personalize" not in window._nav  # no longer in the sidebar
+    assert "personalize" not in window._nav
     window.profile_button.click()
     assert window.stack.currentWidget() is window._pages["personalize"]
 
@@ -90,15 +122,19 @@ def test_each_feature_tab_has_its_demo(window):
     assert window.gaze_toggle.text() == "Start head control"
 
 
-def test_eye_control_is_merged_into_head_movement(window):
-    assert "eyes" not in window._pages and "eyes" not in window._nav
-    window._pointing_cards["eyes"].click()
+def test_head_movement_points_with_the_head_only(window):
+    assert not [t for t in texts(window._pages["gaze"]) if "My eyes" in t]
     window.gaze_toggle.click()
     gw = window.gaze_window
-    assert gw.gaze.enabled and gw.gaze.controller.source == "eyes"
-    assert window.gaze_toggle.text() == "Stop eye control"
+    assert gw.gaze.enabled and gw.gaze.controller.source == "head"
+    assert not gw.btn_source.isVisible() and gw.gaze.allow_eyes is False
     window.gaze_toggle.click()
     assert not gw.gaze.enabled
+
+
+def test_word_highlighting_is_removed(window):
+    assert not [t for t in texts(window) if "highlight" in t.lower()]
+    assert not hasattr(window.prefs, "word_highlight")
 
 
 def test_hands_free_window_has_a_quit_button(window):
@@ -113,8 +149,8 @@ def test_letter_spacing_applies_across_pages_and_windows(window, qapp):
     window._change_option("letter_spacing_px", 3)
     window._open_demo_lab("start")
     qapp.processEvents()
-    dashboard_title = next(l for l in window._pages["overview"].findChildren(QLabel) if l.objectName() == "pageTitle")
-    lab_title = next(l for l in window.demo_lab.findChildren(QLabel) if l.objectName() == "pageTitle")
+    dashboard_title = next(l for l in window._pages["overview"].findChildren(QLabel) if l.objectName() == "bannerTitle")
+    lab_title = next(l for l in window.demo_lab.findChildren(QLabel) if l.objectName() == "bannerTitle")
     assert dashboard_title.font().letterSpacing() == 3
     assert lab_title.font().letterSpacing() == 3
 
@@ -122,30 +158,12 @@ def test_letter_spacing_applies_across_pages_and_windows(window, qapp):
 def test_text_size_applies_to_every_page(window, qapp):
     def title_size():
         qapp.processEvents()
-        title = next(l for l in window._pages["steady"].findChildren(QLabel) if l.objectName() == "pageTitle")
+        title = next(l for l in window._pages["steady"].findChildren(QLabel) if l.objectName() == "bannerTitle")
         return title.fontInfo().pixelSize()
 
     before = title_size()
     window._change_option("font_size_pct", 150)
     assert title_size() > before
-
-
-def test_word_highlighting_is_an_on_off_option(window):
-    assert not window.highlighter.enabled
-    window.highlight_row.switch.click()
-    assert window.prefs.word_highlight and window.highlighter.enabled
-    window.highlight_row.switch.click()
-    assert not window.highlighter.enabled
-
-
-def test_word_rect_finds_the_word_under_a_point(qapp):
-    lbl = QLabel("Book your appointment")
-    lbl.resize(400, 40)
-    lbl.show()
-    qapp.processEvents()
-    rect = word_rect(lbl, QPointF(5, 20))
-    assert rect is not None and rect.width() > 10
-    assert word_rect(lbl, QPointF(395, 20)) is None  # past the end of the text
 
 
 def test_choosing_a_tint_colour_turns_the_tint_on(window):
@@ -211,13 +229,12 @@ def test_demo_form_steps_finish_and_start_again(qapp):
     form.close()
 
 
-def test_demo_lab_starts_head_and_eye_demos(window):
+def test_demo_lab_starts_the_head_movement_demo(window):
     window._open_demo_lab("gaze")
     lab = window.demo_lab
+    assert not hasattr(lab, "eye_button")
     lab.head_button.click()
     assert window.gaze_window.gaze.enabled and window.gaze_window.gaze.controller.source == "head"
-    assert lab.head_button.text() == "Stop"
-    lab.eye_button.click()  # switches the running session to the eyes
-    assert window.gaze_window.gaze.controller.source == "eyes"
-    lab.eye_button.click()
+    assert lab.head_button.text() == "Stop the demo"
+    lab.head_button.click()
     assert not window.gaze_window.gaze.enabled

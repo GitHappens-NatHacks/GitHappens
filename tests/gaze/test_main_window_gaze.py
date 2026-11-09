@@ -86,14 +86,11 @@ def test_calibration_button_runs_gaze_calibration_not_a_placeholder(window, monk
     assert window.prefs.gaze_control and window.gaze_window.isVisible() and calls == [1]
 
 
-def test_head_eyes_switch_in_gaze_window(window, qapp):
+def test_gaze_window_points_with_the_head_only(window, qapp):
     window._change_module("gaze_control", True)
     gw = window.gaze_window
-    gw.resize(1200, 800)
     qapp.processEvents()
-    assert gw.gaze.controller.source == "head" and "Head" in gw.btn_source.text()
-    gw.btn_source.click()
-    assert gw.gaze.controller.source == "eyes" and "Eyes" in gw.btn_source.text()
+    assert gw.gaze.controller.source == "head" and not gw.btn_source.isVisible()
 
 
 def test_closing_main_window_releases_camera(window):
@@ -117,8 +114,6 @@ def test_page_is_head_movement_with_no_placeholder_text(window):
     assert "integration pending" not in joined.lower()
     assert "Eye & blink" not in joined and "Adnan" not in joined
     assert any("Head movement control" in t for t in texts)
-    page = "\n".join(visible_texts(window._pages["gaze"]))
-    assert "eye movement" in page.lower()  # tells people eyes work too
 
 
 def test_no_em_dashes_in_any_message(window):
@@ -188,13 +183,6 @@ def test_speed_choices_set_hold_time(window):
     assert window._dwell_buttons["relaxed"].isChecked() and not window._dwell_buttons["quick"].isChecked()
     window._dwell_buttons["quick"].click()
     assert window.prefs.gaze_dwell_ms == 800 and ctrl.dwell_ms == 800
-
-
-def test_head_page_offers_eyes_too(window):
-    window._pointing_cards["eyes"].click()
-    assert window.gaze_toggle.text() == "Start eye control"
-    window._pointing_cards["head"].click()
-    assert window.gaze_toggle.text() == "Start head control"
 
 
 def test_demo_items_hidden_only_on_hands_free_pages(window):
