@@ -91,3 +91,53 @@ class OneEuroFilter:
         self.last_raw = x
 
         return self.filtered
+
+
+class IntentionalHold:
+    """Latch a drag only after sustained, coherent movement."""
+    def __init__(self, metrics):
+        self.metrics = metrics
+        self.enabled = True
+        self.anchor = None
+
+    def press(self, stable, raw, now):
+        self.anchor = stable
+        self.origin = self.previous = raw
+        self.press_timestamp = self.last_motion = now
+        self.direction = None
+        self.blocked = self.dragging = self.exceeded_drag_threshold = False
+
+    def move(self, stable, raw, now):
+        if self.anchor is None or not self.enabled or self.dragging:
+            return stable
+        dx, dy = (a - b for a, b in zip(raw, self.previous))
+        length = math.hypot(dx, dy)
+        changed_direction = False
+        if length > 0.25:
+            direction = (dx / length, dy / length)
+            if (self.direction is None or now - self.last_motion > .08 or
+                    sum(a*b for a, b in zip(direction, self.direction)) < .85):
+                changed_direction = self.direction is not None
+                self.direction = direction
+                self.steady_since = now
+            self.previous = raw
+            self.last_motion = now
+            if now - self.steady_since > .3 and math.dist(raw, self.origin) > 35:
+                self.dragging = True
+                return stable
+        self.exceeded_drag_threshold |= math.dist(raw, self.origin) >= 8
+        if not self.blocked and self.exceeded_drag_threshold and changed_direction:
+            self.metrics.spastic_drags_prevented += 1
+            self.blocked = True
+        return self.anchor
+
+    def release(self, stable, slipped):
+        point = stable
+        if self.enabled and self.anchor is not None and not self.dragging:
+            if self.exceeded_drag_threshold and not self.blocked:
+                self.metrics.spastic_drags_prevented += 1
+            point = self.anchor
+            if slipped:
+                self.metrics.slip_clicks_rescued += 1
+        self.anchor = None
+        return point

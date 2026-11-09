@@ -11,11 +11,14 @@ import os
 import secrets
 import time
 
-from accessshift.modules.steadyhand.filter import OneEuroFilter
+from accessshift.modules.steadyhand.filter import OneEuroFilter, IntentionalHold
+from accessshift.modules.steadyhand.metrics import MotorTelemetry
 
 
 class SteadyHandController:
     def __init__(self, strength: float | None = None):
+        self.telemetry = MotorTelemetry()
+        self.hold = IntentionalHold(self.telemetry)
         self.fx = OneEuroFilter()
         self.fy = OneEuroFilter()
 
@@ -121,6 +124,8 @@ class SteadyHandController:
 
     def reset(self) -> None:
         """Clear smoothing history without clearing metrics."""
+        self.telemetry.reset_window()
+        self.hold.anchor = None
         self.fx.reset()
         self.fy.reset()
         self._last_timestamp = None
@@ -182,48 +187,12 @@ class SteadyHandController:
         if not math.isfinite(t):
             raise ValueError("Simulation time must be finite.")
 
-        block = math.floor(t / 0.45)
-        local = t / 0.45 - block
-
-        center = 0.25 + 0.5 * (
-            self._noise_value(block, 7) + 1.0
-        ) / 2.0
-
-        width = 0.035 + 0.10 * (
-            self._noise_value(block, 8) + 1.0
-        ) / 2.0
-
-        burst = 0.0
-
-        if self._noise_value(block, 9) > 0.05:
-            burst = math.exp(
-                -((local - center) / width) ** 2
-            )
-
-        envelope = 0.15 + 1.3 * (
-            (self._noise_at(t * 3.0, 2) + 1.0) / 2.0
-        ) ** 2
-
-        def offset(axis: int) -> float:
-            fast_jitter = (
-                0.85 * self._noise_at(t * 27.0, axis)
-                + 0.4 * self._noise_at(t * 61.0, axis + 3)
-            )
-
-            slower_motion = (
-                0.25 * self._noise_at(t * 5.0, axis + 12)
-            )
-
-            sudden_motion = (
-                1.6 * burst
-                * self._noise_value(block, axis + 20)
-            )
-
-            return self.tremor_amplitude * (
-                envelope * fast_jitter
-                + slower_motion
-                + sudden_motion
-            )
+        def offset(axis):
+            i = math.floor(t * 60)
+            u = max(1e-12, (self._noise_value(i, axis) + 1) / 2)
+            phase = math.pi * (1 + self._noise_value(i, axis + 2))
+            noise = math.sqrt(-2 * math.log(u)) * math.cos(phase)
+            return self.tremor_amplitude * (math.sin(2 * math.pi * 5.5 * t + axis) + .08 * noise)
 
         return offset(0), offset(1)
 
@@ -254,7 +223,9 @@ class SteadyHandController:
                 return self.last_stable
 
             if dt > self.reset_after_seconds:
-                self.reset()
+                self.fx.reset()
+                self.fy.reset()
+                self.telemetry.reset_window()
 
         self.last_input = (x, y)
 
@@ -271,7 +242,12 @@ class SteadyHandController:
 
         self.last_raw = (x, y)
 
+        self.telemetry.sample(x, y, now, self.simulate_tremor)
+        high = self.telemetry.latest and self.telemetry.latest["medication_state_estimate"] == "OFF"
         if self.enabled:
+            extra = max(1.0 if high else 0.0, self.strength - 1)
+            for axis in (self.fx, self.fy):
+                axis.configure(.65 * (.15 / .65) ** extra, .004 * .25 ** extra)
             filtered_x = self.fx.filter(x, now)
             filtered_y = self.fy.filter(y, now)
 
