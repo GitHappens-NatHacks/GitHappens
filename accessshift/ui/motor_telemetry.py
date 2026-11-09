@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from accessshift.ui import theme as theme_mod
+from accessshift.ui.movement_tests import MovementTests
 
 # Decision threshold used by MotorTelemetry for the ON/OFF software label.
 OFF_THRESHOLD = 50.0
@@ -170,6 +171,8 @@ class TelemetryPanel(QWidget):
 
         self.chart = TremorTrendChart(self.metrics)
         layout.addWidget(self.chart)
+        self.movement_tests = MovementTests()
+        layout.addWidget(self.movement_tests)
 
         self.summary = QLabel()
         self.summary.setObjectName("bodyText")

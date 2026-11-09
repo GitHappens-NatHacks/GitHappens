@@ -1,0 +1,3 @@
+timestamp,sample_time,tremor_index,dominant_hz,medication_state_estimate,simulated,trial_id,test,hand
+1794202786.5453138,7308.406,3.37,,,False,2,Straight line,Left hand
+1794202787.04688,7308.906,2.96,,,False,2,Straight line,Left hand
