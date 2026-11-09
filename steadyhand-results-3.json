@@ -1,0 +1,723 @@
+[
+  {
+    "mode": "Smoothing + target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 9.452754834,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 1.5001529589999998,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 88.63857987478976,
+        "y": 172.79272791176015,
+        "hit": true
+      },
+      {
+        "seconds": 2.2537634589999995,
+        "expected": "date",
+        "selected": "date",
+        "x": 218.27063411779162,
+        "y": 224.12660591512528,
+        "hit": true
+      },
+      {
+        "seconds": 3.1840982089999996,
+        "expected": "time",
+        "selected": "time",
+        "x": 387.9000053454494,
+        "y": 164.45319100391316,
+        "hit": true
+      },
+      {
+        "seconds": 3.9334561249999997,
+        "expected": "review",
+        "selected": "review",
+        "x": 512.6517995388095,
+        "y": 217.34879530496687,
+        "hit": true
+      },
+      {
+        "seconds": 4.783576209,
+        "expected": "book",
+        "selected": "book",
+        "x": 636.6613597495567,
+        "y": 168.33310587792172,
+        "hit": true
+      },
+      {
+        "seconds": 5.783736292,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 91.14102946233226,
+        "y": 153.33761046253144,
+        "hit": true
+      },
+      {
+        "seconds": 6.753488334,
+        "expected": "date",
+        "selected": "date",
+        "x": 246.9840101396345,
+        "y": 243.30627766410842,
+        "hit": true
+      },
+      {
+        "seconds": 7.633427584,
+        "expected": "time",
+        "selected": "time",
+        "x": 384.51123361671057,
+        "y": 158.12123049078986,
+        "hit": true
+      },
+      {
+        "seconds": 8.566666416999999,
+        "expected": "review",
+        "selected": "review",
+        "x": 525.5465908622311,
+        "y": 240.22425614332505,
+        "hit": true
+      },
+      {
+        "seconds": 9.452754834,
+        "expected": "book",
+        "selected": "book",
+        "x": 643.8745947929123,
+        "y": 157.15087729054306,
+        "hit": true
+      }
+    ]
+  },
+  {
+    "mode": "Target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 7.066353832999994,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 0.6999865410000012,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 78.74609375,
+        "y": 164.53125,
+        "hit": true
+      },
+      {
+        "seconds": 1.3333490830000017,
+        "expected": "date",
+        "selected": "date",
+        "x": 210.0859375,
+        "y": 223.2578125,
+        "hit": true
+      },
+      {
+        "seconds": 2.1163615829999998,
+        "expected": "time",
+        "selected": "time",
+        "x": 381.30078125,
+        "y": 174.9609375,
+        "hit": true
+      },
+      {
+        "seconds": 2.7000588749999963,
+        "expected": "review",
+        "selected": "review",
+        "x": 500.44140625,
+        "y": 230.90234375,
+        "hit": true
+      },
+      {
+        "seconds": 3.5664811660000026,
+        "expected": "book",
+        "selected": "book",
+        "x": 661.90625,
+        "y": 163.03125,
+        "hit": true
+      },
+      {
+        "seconds": 4.333036625000005,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 105.9296875,
+        "y": 162.97265625,
+        "hit": true
+      },
+      {
+        "seconds": 5.066765165999996,
+        "expected": "date",
+        "selected": "date",
+        "x": 244.05859375,
+        "y": 234.37109375,
+        "hit": true
+      },
+      {
+        "seconds": 5.666559540999998,
+        "expected": "time",
+        "selected": "time",
+        "x": 355.25,
+        "y": 161.6171875,
+        "hit": true
+      },
+      {
+        "seconds": 6.499742707999999,
+        "expected": "review",
+        "selected": "review",
+        "x": 526.3046875,
+        "y": 233.953125,
+        "hit": true
+      },
+      {
+        "seconds": 7.066353832999994,
+        "expected": "book",
+        "selected": "book",
+        "x": 653.38671875,
+        "y": 146.79296875,
+        "hit": true
+      }
+    ]
+  },
+  {
+    "mode": "Smoothing + target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 7.900705208000005,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 1.001341042000007,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 105.23725427408958,
+        "y": 163.34247103554748,
+        "hit": true
+      },
+      {
+        "seconds": 1.613336624999988,
+        "expected": "date",
+        "selected": "date",
+        "x": 195.88582808804833,
+        "y": 218.56780340821732,
+        "hit": true
+      },
+      {
+        "seconds": 2.4800272079999957,
+        "expected": "time",
+        "selected": "time",
+        "x": 373.93673172355926,
+        "y": 173.28538445824074,
+        "hit": true
+      },
+      {
+        "seconds": 3.3300433750000025,
+        "expected": "review",
+        "selected": "review",
+        "x": 495.59726309346786,
+        "y": 221.3217495724829,
+        "hit": true
+      },
+      {
+        "seconds": 3.9634349170000007,
+        "expected": "book",
+        "selected": "book",
+        "x": 642.5099617474046,
+        "y": 162.2594989070696,
+        "hit": true
+      },
+      {
+        "seconds": 5.068652749999984,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 84.790416530803,
+        "y": 159.30754793942822,
+        "hit": true
+      },
+      {
+        "seconds": 5.863648374999997,
+        "expected": "date",
+        "selected": "date",
+        "x": 226.78779507961522,
+        "y": 237.89093802923543,
+        "hit": true
+      },
+      {
+        "seconds": 6.513089541999989,
+        "expected": "time",
+        "selected": "time",
+        "x": 354.5541529893766,
+        "y": 170.55900762536535,
+        "hit": true
+      },
+      {
+        "seconds": 7.229707666999985,
+        "expected": "review",
+        "selected": "review",
+        "x": 532.2120385422966,
+        "y": 220.63455538686938,
+        "hit": true
+      },
+      {
+        "seconds": 7.900705208000005,
+        "expected": "book",
+        "selected": "book",
+        "x": 641.5419020792824,
+        "y": 153.5295614841457,
+        "hit": true
+      }
+    ]
+  },
+  {
+    "mode": "Smoothing + target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 7.766605292000008,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 0.7667380000000037,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 110.09980131033134,
+        "y": 156.98136421173976,
+        "hit": true
+      },
+      {
+        "seconds": 1.4204506250000009,
+        "expected": "date",
+        "selected": "date",
+        "x": 226.0887440038548,
+        "y": 242.05247149252614,
+        "hit": true
+      },
+      {
+        "seconds": 2.1331670000000145,
+        "expected": "time",
+        "selected": "time",
+        "x": 370.9576784066624,
+        "y": 165.2440467832613,
+        "hit": true
+      },
+      {
+        "seconds": 2.966719917000006,
+        "expected": "review",
+        "selected": "review",
+        "x": 495.60125715421634,
+        "y": 220.74413884804824,
+        "hit": true
+      },
+      {
+        "seconds": 3.9189257499999997,
+        "expected": "book",
+        "selected": "book",
+        "x": 660.7008092998558,
+        "y": 166.728880449222,
+        "hit": true
+      },
+      {
+        "seconds": 4.883137792000014,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 97.32556913828098,
+        "y": 168.81779208709904,
+        "hit": true
+      },
+      {
+        "seconds": 5.532920625000003,
+        "expected": "date",
+        "selected": "date",
+        "x": 225.3241613325914,
+        "y": 224.33950602644708,
+        "hit": true
+      },
+      {
+        "seconds": 6.219370958000013,
+        "expected": "time",
+        "selected": "time",
+        "x": 382.92141347900616,
+        "y": 175.0890580304569,
+        "hit": true
+      },
+      {
+        "seconds": 7.066675542000013,
+        "expected": "review",
+        "selected": "review",
+        "x": 524.4289596951674,
+        "y": 239.8735387432229,
+        "hit": true
+      },
+      {
+        "seconds": 7.766605292000008,
+        "expected": "book",
+        "selected": "book",
+        "x": 657.7624754017302,
+        "y": 170.0042067952582,
+        "hit": true
+      }
+    ]
+  },
+  {
+    "mode": "Target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 6.682719958000007,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 0.8826437920000103,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 111.07421875,
+        "y": 162.03515625,
+        "hit": true
+      },
+      {
+        "seconds": 1.452513582999984,
+        "expected": "date",
+        "selected": "date",
+        "x": 235.73828125,
+        "y": 235.25,
+        "hit": true
+      },
+      {
+        "seconds": 2.053055083000004,
+        "expected": "time",
+        "selected": "time",
+        "x": 364.1484375,
+        "y": 154.3515625,
+        "hit": true
+      },
+      {
+        "seconds": 2.665938667000006,
+        "expected": "review",
+        "selected": "review",
+        "x": 513.42578125,
+        "y": 219.44140625,
+        "hit": true
+      },
+      {
+        "seconds": 3.351759417000011,
+        "expected": "book",
+        "selected": "book",
+        "x": 669.328125,
+        "y": 164.375,
+        "hit": true
+      },
+      {
+        "seconds": 4.251944457999997,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 105.3359375,
+        "y": 157.50390625,
+        "hit": true
+      },
+      {
+        "seconds": 4.8327045000000055,
+        "expected": "date",
+        "selected": "date",
+        "x": 208.25,
+        "y": 229.04296875,
+        "hit": true
+      },
+      {
+        "seconds": 5.532694416999988,
+        "expected": "time",
+        "selected": "time",
+        "x": 377.26171875,
+        "y": 163.43359375,
+        "hit": true
+      },
+      {
+        "seconds": 6.099329082999986,
+        "expected": "review",
+        "selected": "review",
+        "x": 528.2265625,
+        "y": 232.62109375,
+        "hit": true
+      },
+      {
+        "seconds": 6.682719958000007,
+        "expected": "book",
+        "selected": "book",
+        "x": 619.97265625,
+        "y": 162.40625,
+        "hit": true
+      }
+    ]
+  },
+  {
+    "mode": "Target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 6.233238917000023,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 0.6543100420000201,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 70.90234375,
+        "y": 170.30078125,
+        "hit": true
+      },
+      {
+        "seconds": 1.3158969170000034,
+        "expected": "date",
+        "selected": "date",
+        "x": 201.9609375,
+        "y": 213.72265625,
+        "hit": true
+      },
+      {
+        "seconds": 1.952935334000017,
+        "expected": "time",
+        "selected": "time",
+        "x": 384.23046875,
+        "y": 151.71484375,
+        "hit": true
+      },
+      {
+        "seconds": 2.5535354590000168,
+        "expected": "review",
+        "selected": "review",
+        "x": 510.1953125,
+        "y": 221.2109375,
+        "hit": true
+      },
+      {
+        "seconds": 3.1161904170000128,
+        "expected": "book",
+        "selected": "book",
+        "x": 685.13671875,
+        "y": 145.875,
+        "hit": true
+      },
+      {
+        "seconds": 4.053986542000018,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 99.28515625,
+        "y": 158.25,
+        "hit": true
+      },
+      {
+        "seconds": 4.652391709,
+        "expected": "date",
+        "selected": "date",
+        "x": 212.66796875,
+        "y": 217.0234375,
+        "hit": true
+      },
+      {
+        "seconds": 5.183260417000014,
+        "expected": "time",
+        "selected": "time",
+        "x": 389.921875,
+        "y": 166.78515625,
+        "hit": true
+      },
+      {
+        "seconds": 5.683239917000009,
+        "expected": "review",
+        "selected": "review",
+        "x": 505.02734375,
+        "y": 233.53515625,
+        "hit": true
+      },
+      {
+        "seconds": 6.233238917000023,
+        "expected": "book",
+        "selected": "book",
+        "x": 642.33203125,
+        "y": 155.078125,
+        "hit": true
+      }
+    ]
+  },
+  {
+    "mode": "Smoothing + target assistance",
+    "completed": true,
+    "hits": 10,
+    "misses": 0,
+    "interactions": 10,
+    "accuracy": 1.0,
+    "seconds": 6.9832384169999955,
+    "sequence": [
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book",
+      "doctor",
+      "date",
+      "time",
+      "review",
+      "book"
+    ],
+    "clicks": [
+      {
+        "seconds": 0.6165044579999801,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 119.16051279994642,
+        "y": 162.83741509068182,
+        "hit": true
+      },
+      {
+        "seconds": 1.2164991249999844,
+        "expected": "date",
+        "selected": "date",
+        "x": 205.9253371636525,
+        "y": 223.32090544841367,
+        "hit": true
+      },
+      {
+        "seconds": 2.066498791999976,
+        "expected": "time",
+        "selected": "time",
+        "x": 374.4111270313375,
+        "y": 172.29574147978406,
+        "hit": true
+      },
+      {
+        "seconds": 2.7359581249999962,
+        "expected": "review",
+        "selected": "review",
+        "x": 491.9393486710524,
+        "y": 227.91066141888965,
+        "hit": true
+      },
+      {
+        "seconds": 3.466518624999992,
+        "expected": "book",
+        "selected": "book",
+        "x": 666.1351988298469,
+        "y": 155.86435207259532,
+        "hit": true
+      },
+      {
+        "seconds": 4.237078957999984,
+        "expected": "doctor",
+        "selected": "doctor",
+        "x": 93.42253890091601,
+        "y": 154.0878695531434,
+        "hit": true
+      },
+      {
+        "seconds": 4.999709416999991,
+        "expected": "date",
+        "selected": "date",
+        "x": 218.81198255349557,
+        "y": 241.19646771785568,
+        "hit": true
+      },
+      {
+        "seconds": 5.599723124999997,
+        "expected": "time",
+        "selected": "time",
+        "x": 365.1787434283078,
+        "y": 172.75322179461207,
+        "hit": true
+      },
+      {
+        "seconds": 6.31665641699999,
+        "expected": "review",
+        "selected": "review",
+        "x": 512.108710071096,
+        "y": 212.22244163301494,
+        "hit": true
+      },
+      {
+        "seconds": 6.9832384169999955,
+        "expected": "book",
+        "selected": "book",
+        "x": 638.490265458158,
+        "y": 165.3181500887961,
+        "hit": true
+      }
+    ]
+  }
+]

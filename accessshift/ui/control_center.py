@@ -28,7 +28,7 @@ from accessshift.ui.control_center_components import (
     ChoiceCard, PreferenceRow, Switch, SwatchButton, button, card, divider, label,
 )
 from accessshift.ui.control_center_settings import (
-    PROFILES, load_settings, save_settings,
+    PROFILES, AccessibilitySettings, load_settings, save_settings,
 )
 from accessshift.ui.steadyhand_panel import LABELS, SEQUENCE, SteadyHandTrialPanel, TremorPlayground  # noqa: F401
 
@@ -910,15 +910,27 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ preferences
     def _apply_profile(self, profile_id):
         p = PROFILES[profile_id]
+        was_steady = self.prefs.steady_hand
         if profile_id != 'custom':
             self.prefs.profile = profile_id
             for key in MODULE_KEYS:
                 setattr(self.prefs, key, bool(p[key]))
         else:
             self.prefs.profile = 'custom'
+        self._sync_steady_strength(was_steady)
         self._apply_preferences_to_engine()
         self._save()
         self._refresh()
+
+    def _sync_steady_strength(self, was_on: bool) -> None:
+        """SteadyHand off: stabilization strength goes to 0. Back on: the previous strength returns."""
+        on = bool(self.prefs.steady_hand)
+        if was_on and not on:
+            if self.prefs.tremor_strength > 0:
+                self._strength_before_off = self.prefs.tremor_strength
+            self.prefs.tremor_strength = 0
+        elif on and not was_on and self.prefs.tremor_strength == 0:
+            self.prefs.tremor_strength = getattr(self, '_strength_before_off', AccessibilitySettings().tremor_strength)
 
     def _apply_preferences_to_engine(self):
         previous = self._syncing_engine
@@ -945,7 +957,10 @@ class MainWindow(QMainWindow):
         self._refresh()
 
     def _change_module(self, key, value):
+        was_steady = self.prefs.steady_hand
         setattr(self.prefs, key, bool(value))
+        if key == 'steady_hand':
+            self._sync_steady_strength(was_steady)
         # A user can tweak a preset without losing its selected options.
         self.prefs.profile = 'custom'
         self._apply_preferences_to_engine()
