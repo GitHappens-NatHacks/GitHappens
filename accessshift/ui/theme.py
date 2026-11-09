@@ -17,16 +17,17 @@ from PySide6.QtWidgets import QApplication
 
 from accessshift.modules.smartinterface.visual_controller import Palette
 
-# Brand palette, tuned to the Younify logo (green #014A35, navy #01305A) with the cream theme.
+# Brand marks from the Younify logo. Standard mixes logo green with navy:
+# green for chrome and primary actions, navy for focus and selected accents.
 LOGO_GREEN = '#014A35'
 LOGO_NAVY = '#01305A'
-DEEP_TEAL = '#0B6B4F'        # primary buttons (the logo green, one step lighter)
-SOFT_MINT = '#E4F0EA'        # cards, highlights
-WARM_CREAM = '#FAF3E1'       # background sections
+DEEP_TEAL = '#0B6B4F'        # primary buttons (logo green, one step lighter)
+SOFT_MINT = '#E4F0EA'        # quiet green mist wash
+WARM_CREAM = '#FAF3E1'       # warm-reading section band
 FOREST_GREEN = LOGO_GREEN    # headings, branding
-ACCESSIBLE_BLUE = '#1F5FA8'  # links, active controls (the logo navy, brightened for contrast)
-PURE_WHITE = '#FFFFFF'       # main background
-CHARCOAL = '#22302B'         # main text
+ACCESSIBLE_BLUE = '#1F5FA8'  # cooler theme links
+PURE_WHITE = '#FFFFFF'
+CHARCOAL = '#22302B'         # ink on paper (green-leaning)
 MUTED_GREY_GREEN = '#5D6B66'  # secondary text
 
 
@@ -52,12 +53,13 @@ class Theme:
 
 
 THEMES: dict[str, Theme] = {
+    # Clinic Quiet Room: logo green chrome with navy focus accents.
     'standard': Theme(
-        bg=PURE_WHITE, section=WARM_CREAM, card=PURE_WHITE, mint=SOFT_MINT,
+        bg=PURE_WHITE, section='#F3F7F5', card=PURE_WHITE, mint=SOFT_MINT,
         sidebar=LOGO_GREEN, sidebar_text='#E8F2EE', sidebar_muted='#9FC2B4', sidebar_active='#0D5C45',
-        heading=FOREST_GREEN, text=CHARCOAL, muted=MUTED_GREY_GREEN,
+        heading=LOGO_GREEN, text=CHARCOAL, muted=MUTED_GREY_GREEN,
         primary=DEEP_TEAL, primary_hover=LOGO_GREEN, on_primary=PURE_WHITE,
-        active=ACCESSIBLE_BLUE, border='#D3E1DA', highlight='#FFE07A',
+        active=LOGO_NAVY, border='#D3E1DA', highlight='#FFE07A',
     ),
     'high_contrast': Theme(
         bg='#0B0F0E', section='#121A18', card='#121A18', mint='#1E2B28',
@@ -155,6 +157,10 @@ _PIXMAPS: dict[str, object] = {}
 
 def asset(*parts: str) -> Path:
     return Path(__file__).resolve().parents[2].joinpath('assets', *parts)
+
+
+def clear_pixmap_cache() -> None:
+    _PIXMAPS.clear()
 
 
 def pixmap(*parts: str):
