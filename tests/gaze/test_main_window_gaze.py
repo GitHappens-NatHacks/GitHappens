@@ -86,14 +86,11 @@ def test_calibration_button_runs_gaze_calibration_not_a_placeholder(window, monk
     assert window.prefs.gaze_control and window.gaze_window.isVisible() and calls == [1]
 
 
-def test_head_eyes_switch_in_gaze_window(window, qapp):
+def test_gaze_window_points_with_the_head_only(window, qapp):
     window._change_module("gaze_control", True)
     gw = window.gaze_window
-    gw.resize(1200, 800)
     qapp.processEvents()
-    assert gw.gaze.controller.source == "head" and "Head" in gw.btn_source.text()
-    gw.btn_source.click()
-    assert gw.gaze.controller.source == "eyes" and "Eyes" in gw.btn_source.text()
+    assert gw.gaze.controller.source == "head" and not gw.btn_source.isVisible()
 
 
 def test_closing_main_window_releases_camera(window):
@@ -117,8 +114,6 @@ def test_page_is_head_movement_with_no_placeholder_text(window):
     assert "integration pending" not in joined.lower()
     assert "Eye & blink" not in joined and "Adnan" not in joined
     assert any("Head movement control" in t for t in texts)
-    page = "\n".join(visible_texts(window._pages["gaze"]))
-    assert "eye movement" in page.lower()  # tells people eyes work too
 
 
 def test_no_em_dashes_in_any_message(window):
@@ -141,7 +136,9 @@ def test_blink_and_dwell_settings_drive_head_control(window):
 
 
 def test_gaze_window_uses_app_colours_and_follows_theme(window):
-    from accessshift.modules.smartinterface.visual_controller import PALETTES
+    from accessshift.ui.theme import gaze_palette
+
+    PALETTES = {name: gaze_palette(name) for name in ("standard", "high_contrast")}
 
     window._change_module("gaze_control", True)
     gw = window.gaze_window
@@ -188,20 +185,11 @@ def test_speed_choices_set_hold_time(window):
     assert window.prefs.gaze_dwell_ms == 800 and ctrl.dwell_ms == 800
 
 
-def test_eyes_note_is_last_on_the_page(window):
-    from PySide6.QtWidgets import QLabel
-
-    lay = window._pages["gaze"].widget().layout()
-    widgets = [lay.itemAt(i).widget() for i in range(lay.count()) if lay.itemAt(i).widget() is not None]
-    last_texts = [l.text() for l in widgets[-1].findChildren(QLabel)]
-    assert "Prefer to use your eyes?" in last_texts
-
-
-def test_demo_items_hidden_only_on_head_movement_page(window):
+def test_demo_items_hidden_only_on_hands_free_pages(window):
     window._navigate("gaze")
-    assert not window._demo_shortcut.isVisible() and not window._top_badge.isVisible()
+    assert not window._demo_shortcut.isVisible()
     window._navigate("overview")
-    assert window._demo_shortcut.isVisible() and window._top_badge.isVisible()
+    assert window._demo_shortcut.isVisible()
 
 
 def test_problem_returns_to_head_page_with_message(window):
@@ -246,10 +234,12 @@ def test_exit_brings_control_center_to_front(window, monkeypatch):
 
 # --- end of a booking ---------------------------------------------------------------------------
 
-def test_no_exit_button_in_the_hands_free_bar(window):
+def test_quit_button_leaves_hands_free_without_booking(window):
     window.gaze_toggle.click()
-    texts = [b.text() for b in window.gaze_window.bar.findChildren(type(window.gaze_toggle).__mro__[1])]
-    assert not any("Exit" in t for t in texts)
+    gw = window.gaze_window
+    assert gw.btn_quit.isVisible() and gw.btn_quit.parentWidget() is gw.bar
+    gw.btn_quit.click()  # mid-booking: no appointment needed to get out
+    assert not window.prefs.gaze_control and not gw.gaze.enabled and not gw.isVisible()
 
 
 def test_booking_popup_close_leaves_hands_free(window):

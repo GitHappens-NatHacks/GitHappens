@@ -1,289 +1,219 @@
-"""AccessShift control center: preferences-first desktop UI for macOS and Windows.
+"""Younify control center: preferences-first desktop UI for macOS and Windows.
 
-This replaces the booking-centric window without touching the demo portal.  It
-uses the existing AdaptiveEngine and SteadyHandController APIs.  Platform-side
-hooks (camera worker, system pointer, browser extension) are integration tasks,
-not capabilities claimed by the UI.
+A 3-second Home splash (logo and tagline) leads to the Dashboard. A horizontal top
+navigation bar holds Home, Dashboard and the three features in a fixed order
+(SteadyHand, Head movement, SmartInterface), plus the Demo Lab and the
+accessibility profile. It uses the existing AdaptiveEngine and SteadyHandController
+APIs unchanged.
 """
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor, QPainter, QPen
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-    QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget,
+    QApplication, QFrame, QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QLabel, QMainWindow,
+    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSlider, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 
 from accessshift.engine.adaptive_engine import AdaptiveEngine
-from accessshift.modules.smartinterface import (
-    ScreenTintManager, VisualPreview, apply_accessshift_appearance,
-)
+from accessshift.modules.smartinterface import ScreenTintManager
+from accessshift.modules.smartinterface.screen_overlay import TINT_COLORS
 from accessshift.modules.steadyhand.controller import SteadyHandController
-from accessshift.modules.steadyhand.metrics import Trial, save_results
-from accessshift.modules.steadyhand.targets import Target, TargetManager
+from accessshift.ui import icons
+from accessshift.ui import theme as theme_mod
 from accessshift.ui.control_center_components import (
-    PreferenceRow, StatCard, button, card, label,
+    ChoiceCard, PreferenceRow, Switch, SwatchButton, button, card, divider, label,
 )
 from accessshift.ui.control_center_settings import (
-    AccessibilitySettings, PROFILES, load_settings, save_settings,
+    PROFILES, load_settings, save_settings,
 )
+from accessshift.ui.steadyhand_panel import LABELS, SEQUENCE, SteadyHandTrialPanel, TremorPlayground  # noqa: F401
 
-SEQUENCE = ('doctor', 'date', 'time', 'review', 'book') * 2
-LABELS = {
-    'doctor': '1. Doctor',
-    'date': '2. Date',
-    'time': '3. Time',
-    'review': '4. Review',
-    'book': '5. Book',
+MODULE_KEYS = ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_speech')
+APP_NAME = 'Younify'
+TAGLINE = 'Access Without Limits'
+SPLASH_MS = 2000  # the Home splash, then the Dashboard
+
+# The three Younify features, in the order they appear everywhere.
+FEATURES = (
+    ('steady', 'steady', 'SteadyHand', 'Smooth shaky pointer movement and reach small targets.'),
+    ('gaze', 'head', 'Head movement', 'Point by turning your head, and blink to select. Only a webcam is needed.'),
+    ('interface', 'interface', 'SmartInterface', 'Bigger text, calmer colours and simpler, step-by-step screens.'),
+)
+# One photograph per tab (team photo set in assets/ui).
+PHOTOS = {
+    'overview': 'desk.jpg', 'profile': 'quiet-chair.jpg', 'steady': 'mouse-mat.jpg',
+    'head': 'webcam.jpg', 'interface': 'glasses-notes.jpg',
 }
 
+PROFILE_CHIPS = {
+    'als': ('Head movement', 'Blink to select', 'SmartInterface'),
+    'parkinsons': ('SteadyHand', 'SmartInterface'),
+    'cognitive': ('SmartInterface', 'Simplified layout'),
+    'custom': ('Any combination',),
+}
+PROFILE_ICONS = {'als': 'head', 'parkinsons': 'steady', 'cognitive': 'interface', 'custom': 'profile'}
+PROFILE_ORDER = ('parkinsons', 'als', 'cognitive', 'custom')  # SteadyHand, Head movement, SmartInterface, custom
 
-class TremorPlayground(QWidget):
-    """In-app tremor smoothing and target assistance evaluation canvas.
 
-    Supports baseline, smoothing, target assistance, and combined modes with
-    healthcare workflow targets, live accuracy metrics, and JSON trial export.
-    """
-    metrics_changed = Signal(int, int)
-    trial_progress = Signal(object, object)
-    trial_completed = Signal(object)
+class Photo(QWidget):
+    """A photograph, cropped to fill, with rounded corners and an optional shade for text."""
 
-    MODES = [
-        'Baseline (Raw input)',
-        'SteadyHand smoothing',
-        'Target assistance',
-        'Smoothing + Target assistance',
-    ]
-
-    def __init__(self, controller: SteadyHandController, target_padding: float = 16.0):
+    def __init__(self, file_name: str, *, height: int = 150, radius: int = 16, top_only: bool = False,
+                 shade: bool = False):
         super().__init__()
-        self.controller = controller
-        self.setMinimumHeight(300)
-        self.setMouseTracking(True)
-        self.setCursor(Qt.CursorShape.CrossCursor)
-        self.setAccessibleName('SteadyHand accuracy practice and evaluation canvas')
+        self.image = theme_mod.pixmap('ui', file_name)
+        self.radius = radius
+        self.top_only = top_only
+        self.shade = shade
+        self.shade_color = QColor(theme_mod.LOGO_GREEN)
+        self.setMinimumHeight(height)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed if not shade else QSizePolicy.Policy.Preferred)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
 
-        self.target_manager = TargetManager(padding=target_padding)
-        self._mode_index = 3
-        self.use_filter = True
-        self.assisted = True
-
-        self._inside = False
-        self._mouse = (150.0, 130.0)
-        self._raw = self._mouse
-        self._stable = self._mouse
-        self._hits = 0
-        self._misses = 0
-        self._simulated = True
-        self._sim_start = time.perf_counter()
-
-        self.trial: Trial | None = None
-        self.results: list[Trial] = []
-
-        self.timer = QTimer(self)
-        self.timer.setInterval(30)
-        self.timer.timeout.connect(self._tick)
-        self.timer.start()
-        self._rebuild_targets()
-
-    def set_target_padding(self, padding: float) -> None:
-        self.target_manager.padding = max(0.0, float(padding))
+    def set_shade(self, color: str) -> None:
+        self.shade_color = QColor(color)
         self.update()
-
-    def set_mode(self, mode_index: int) -> None:
-        self._mode_index = max(0, min(len(self.MODES) - 1, mode_index))
-        self.use_filter = self._mode_index in (1, 3)
-        self.assisted = self._mode_index in (2, 3)
-        self.controller.enabled = self.use_filter
-        self.controller.reset()
-        self.update()
-
-    def start_trial(self) -> None:
-        self.set_mode(self._mode_index)
-        self.trial = Trial(self.MODES[self._mode_index], SEQUENCE)
-        self.controller.reset()
-        self._sim_start = time.perf_counter()
-        self.update()
-        self.trial_progress.emit(self.trial.summary(), self.trial.expected)
-
-    def abort_trial(self) -> None:
-        if self.trial and not self.trial.complete:
-            self.trial = None
-            self.update()
-
-    def set_simulation(self, enabled: bool) -> None:
-        self._simulated = enabled
-        self._sim_start = time.perf_counter()
-        self.controller.simulate_tremor = False
-        self.update()
-
-    def reset_scores(self) -> None:
-        self._hits = 0
-        self._misses = 0
-        self.metrics_changed.emit(0, 0)
-        self.update()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._rebuild_targets()
-
-    def _rebuild_targets(self) -> None:
-        w = max(400, self.width())
-        h = max(200, self.height())
-        btn_w = max(80.0, min(120.0, (w - 70) / 5.0 - 10.0))
-        btn_h = max(36.0, min(48.0, h * 0.16))
-        margin = 35.0
-        avail_w = w - 2 * margin
-        step_x = (avail_w - btn_w) / 4.0 if avail_w > btn_w else 90.0
-        base_y = h * 0.46
-        targets = []
-        for i, key in enumerate(('doctor', 'date', 'time', 'review', 'book')):
-            x = margin + i * step_x
-            y = base_y + ((-1) ** i) * (btn_h * 0.42)
-            targets.append(Target(key, LABELS[key], x, y, btn_w, btn_h))
-        self.target_manager.set_targets(targets)
-
-    def _tick(self) -> None:
-        if not self.isVisible():
-            return
-        x, y = self._mouse
-        now = time.perf_counter()
-        if self._simulated:
-            dx, dy = self.controller.tremor_offset(now - self._sim_start)
-            x += dx
-            y += dy
-        self._raw = (x, y)
-        self._stable = self.controller.stabilize(x, y, now) if self.use_filter else (x, y)
-        self.update()
-
-    def mouseMoveEvent(self, event) -> None:
-        p = event.position()
-        self._mouse = (p.x(), p.y())
-        self._inside = True
-        super().mouseMoveEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self._inside = False
-        super().leaveEvent(event)
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            sx, sy = self._stable
-            target = self.target_manager.select(sx, sy, assisted=self.assisted)
-            if self.trial and not self.trial.complete:
-                hit = self.trial.record(target.id if target else None, sx, sy)
-                if hit:
-                    self._hits += 1
-                else:
-                    self._misses += 1
-                self.metrics_changed.emit(self._hits, self._misses)
-                self.trial_progress.emit(self.trial.summary(), self.trial.expected)
-                if self.trial.complete:
-                    self.results.append(self.trial)
-                    self.trial_completed.emit(self.trial)
-            else:
-                if target is not None:
-                    self._hits += 1
-                else:
-                    self._misses += 1
-                self.metrics_changed.emit(self._hits, self._misses)
-        super().mousePressEvent(event)
-
-    def hideEvent(self, event) -> None:
-        self.timer.stop()
-        super().hideEvent(event)
-
-    def showEvent(self, event) -> None:
-        if not self.timer.isActive():
-            self.timer.start()
-        super().showEvent(event)
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor('#F6F5FF'))
-        p.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 14, 14)
-        p.setPen(QPen(QColor('#E8E3FA'), 1))
-        for gx in range(25, self.width(), 30):
-            for gy in range(25, self.height(), 30):
-                p.drawPoint(gx, gy)
-
-        expected_id = self.trial.expected if (self.trial and not self.trial.complete) else None
-        sx, sy = self._stable
-        candidate = self.target_manager.select(sx, sy, assisted=self.assisted) if self._inside else None
-        pad = self.target_manager.padding
-
-        for t in self.target_manager.targets:
-            rect = QRectF(t.x, t.y, t.width, t.height)
-            if self.assisted and pad > 0:
-                p.setPen(QPen(QColor('#B9ACF7'), 1, Qt.PenStyle.DashLine))
-                p.setBrush(QColor('#ECE7FF'))
-                p.drawRoundedRect(rect.adjusted(-pad, -pad, pad, pad), 9, 9)
-            is_expected = t.id == expected_id
-            if is_expected:
-                p.setPen(QPen(QColor('#10B981'), 2))
-                p.setBrush(QColor('#E6F9F0'))
-            else:
-                p.setPen(QPen(QColor('#C8C0EE'), 1))
-                p.setBrush(QColor('#FFFFFF'))
-            p.drawRoundedRect(rect, 7, 7)
-            p.setPen(QColor('#065F46' if is_expected else '#312E5B'))
-            font = p.font()
-            font.setBold(is_expected)
-            font.setPointSize(10)
-            p.setFont(font)
-            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, t.label)
-            if candidate and candidate.id == t.id:
-                p.setPen(QPen(QColor('#F59E0B'), 2))
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), 9, 9)
-
-        if self._inside:
-            rx, ry = self._raw
-            if self._simulated or self.use_filter:
-                p.setPen(QPen(QColor('#FB8F7B'), 2))
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawEllipse(QPointF(rx, ry), 9, 9)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor('#674BE8'))
-            p.drawEllipse(QPointF(sx, sy), 5, 5)
-
-        p.setPen(QColor('#6B648C'))
-        font = p.font()
-        font.setPointSize(9)
-        font.setBold(False)
-        p.setFont(font)
-        status_text = f'EVALUATION PLAYGROUND  •  Mode: {self.MODES[self._mode_index]}'
-        if self.trial and not self.trial.complete:
-            status_text += f'  •  Target {self.trial.index + 1}/10: {LABELS.get(self.trial.expected, "")}'
-        p.drawText(16, 22, status_text)
-        p.drawText(
-            16,
-            self.height() - 12,
-            'Coral ring = Raw pointer with tremor   •   Purple dot = Stabilized / assisted pointer   •   Gold outline = Selected candidate',
-        )
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = QRectF(self.rect())
+        path = QPainterPath()
+        r = self.radius
+        if self.top_only:
+            path.moveTo(rect.left(), rect.bottom())
+            path.lineTo(rect.left(), rect.top() + r)
+            path.quadTo(rect.left(), rect.top(), rect.left() + r, rect.top())
+            path.lineTo(rect.right() - r, rect.top())
+            path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + r)
+            path.lineTo(rect.right(), rect.bottom())
+            path.closeSubpath()
+        else:
+            path.addRoundedRect(rect, r, r)
+        p.setClipPath(path)
+        if self.image.isNull():
+            p.fillRect(rect, QColor(theme_mod.SOFT_MINT))
+        else:
+            img = self.image
+            scale = max(rect.width() / img.width(), rect.height() / img.height())
+            sw, sh = rect.width() / scale, rect.height() / scale
+            src = QRectF((img.width() - sw) / 2, (img.height() - sh) / 2, sw, sh)
+            p.drawPixmap(rect, img, src)
+        if self.shade:
+            grad = QLinearGradient(rect.topLeft(), rect.topRight())
+            for stop, alpha in ((0.0, 0.92), (0.55, 0.62), (1.0, 0.05)):
+                c = QColor(self.shade_color)
+                c.setAlphaF(alpha)
+                grad.setColorAt(stop, c)
+            p.fillRect(rect, grad)
         p.end()
 
 
-class HeadStartButton(QPushButton):
-    """Big Start/Stop button for head movement control (keeps the toggle's set_value API)."""
+class PhotoHeader(Photo):
+    """Page header: the tab's photograph with its title (and optional line) on a soft shade."""
 
-    def __init__(self):
+    def __init__(self, file_name: str, title: str, subtitle: str = ''):
+        super().__init__(file_name, height=168 if subtitle else 150, radius=20, shade=True)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(36, 28, 36, 28)
+        lay.setSpacing(8)
+        lay.addStretch(1)
+        self.title = label(title, 'bannerTitle', True)
+        lay.addWidget(self.title)
+        if subtitle:
+            sub = label(subtitle, 'bannerText', True)
+            sub.setMaximumWidth(620)
+            lay.addWidget(sub)
+        lay.addStretch(1)
+
+
+class HeadStartButton(QPushButton):
+    """Big Start/Stop button for hands-free control (keeps the toggle's set_value API)."""
+
+    def __init__(self, start_text: str = 'Start head control', stop_text: str = 'Stop head control'):
         super().__init__()
+        self._texts = (start_text, stop_text)
         self.setMinimumHeight(64)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet('QPushButton { font-size: 18px; }')  # colours still come from the app theme
         self.set_value(False)
 
+    def set_texts(self, start_text: str, stop_text: str) -> None:
+        self._texts = (start_text, stop_text)
+
     def set_value(self, on: bool) -> None:
-        self.setText('Stop head control' if on else 'Start head control')
+        self.setText(self._texts[1] if on else self._texts[0])
         self.setObjectName('secondaryButton' if on else 'primaryButton')
         self.style().unpolish(self)
         self.style().polish(self)
+
+
+class FeatureCard(QFrame):
+    """Dashboard entry for one feature: its photo, what it does, live status and two actions."""
+
+    def __init__(self, key: str, icon_name: str, title: str, description: str):
+        super().__init__()
+        self.setObjectName('card')
+        self.key = key
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(1, 1, 1, 1)
+        outer.setSpacing(0)
+        self.photo = Photo(PHOTOS.get(icon_name, 'desk.jpg'), height=150, radius=15, top_only=True)
+        outer.addWidget(self.photo)
+        body = QVBoxLayout()
+        body.setContentsMargins(22, 18, 22, 18)
+        body.setSpacing(10)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        top.addWidget(label(title, 'featureTitle', True), 1, Qt.AlignmentFlag.AlignVCenter)
+        self.status = label('Off', 'pill')
+        top.addWidget(self.status, 0, Qt.AlignmentFlag.AlignVCenter)
+        body.addLayout(top)
+        self.meta = label('', 'featureMeta', True)
+        body.addWidget(self.meta)
+        body.addStretch(1)
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        self.open_button = button('Open', 'secondaryButton')
+        self.open_button.setAccessibleName(f'Open {title}')
+        self.demo_button = button('Try the demo', 'linkButton')
+        self.demo_button.setAccessibleName(f'Try the {title} demo')
+        actions.addWidget(self.open_button)
+        actions.addWidget(self.demo_button)
+        actions.addStretch(1)
+        body.addLayout(actions)
+        outer.addLayout(body, 1)
+        self.tile = icons.IconTile(icon_name, 44)  # kept for theming code; not shown on the card
+
+    def set_status(self, text: str, good: bool) -> None:
+        self.status.setText(text)
+        self.status.setObjectName('goodPill' if good else 'pill')
+        self.status.style().unpolish(self.status)
+        self.status.style().polish(self.status)
+
+
+class QuickTile(QFrame):
+    """Quick comfort control: an icon, the setting's name and its control. No extra text."""
+
+    def __init__(self, icon_name: str, title: str, control: QWidget):
+        super().__init__()
+        self.setObjectName('quickTile')
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 18, 20, 18)
+        lay.setSpacing(14)
+        top = QHBoxLayout()
+        top.setSpacing(12)
+        self.tile = icons.IconTile(icon_name, 38)
+        top.addWidget(self.tile)
+        top.addWidget(label(title, 'cardTitle', True), 1)
+        lay.addLayout(top)
+        lay.addStretch(1)
+        lay.addWidget(control, 0, Qt.AlignmentFlag.AlignLeft)
 
 
 class MainWindow(QMainWindow):
@@ -293,20 +223,30 @@ class MainWindow(QMainWindow):
     calibration_requested = Signal()  # gaze team can connect worker/controller
     assistance_changed = Signal(bool)
 
+    # Hands-free selection speed: Relaxed 1.6 s, Normal 1.1 s, Quick 0.8 s.
+    HEAD_SPEEDS = (('relaxed', 'Relaxed', 1600), ('normal', 'Normal', 1100), ('quick', 'Quick', 800))
+
     def __init__(self, repo_root: Path):
         super().__init__()
         self.repo_root = Path(repo_root)
         self.prefs = load_settings()
         self.engine = AdaptiveEngine(self)
         self.steady = SteadyHandController()
-        self.speech = None  # instantiated only when the user presses Speak
+        self.speech = None
         self._nav = {}
         self._pages = {}
-        self._toggle_rows = {}
+        self._bound_rows: list[tuple[str, str, PreferenceRow]] = []  # (kind, key, row)
+        self._quick_switches: list[tuple[str, Switch]] = []
         self._sliders = {}
         self._preset_buttons = {}
-        self._base_qss = Path(__file__).with_name('control_center_styles.qss').read_text(encoding='utf-8')
+        self._icon_tiles: list[icons.IconTile] = []
+        self._photo_headers: list[PhotoHeader] = []
+        self._nav_icons: list[tuple[QPushButton, str]] = []
+        self._animations: list = []
         self.tint_manager = ScreenTintManager(QApplication.instance())
+        self._splash_timer = QTimer(self)
+        self._splash_timer.setSingleShot(True)
+        self._splash_timer.timeout.connect(self._leave_splash)
         self._syncing_engine = True
         self._build_ui()
         self.tint_manager.register_window(self)  # Restrict tint to this application window
@@ -314,561 +254,629 @@ class MainWindow(QMainWindow):
         self._apply_preferences_to_engine()
         self._syncing_engine = False
         self._refresh()
-        self._navigate('overview' if self.prefs.initial_setup_complete else 'personalize')
-        self.resize(1220, 810)
-        self.setMinimumSize(940, 650)
-        self.setWindowTitle('AccessShift AI  ·  Accessibility Settings')
-        self._apply_visual_preferences()
+        self._navigate('home')
+        self.resize(1280, 840)
+        self.setMinimumSize(1040, 680)
+        self.setWindowTitle(APP_NAME)
+        self.setWindowIcon(theme_mod.logo_icon())
 
+    # ------------------------------------------------------------------ shell
     def _build_ui(self):
         root = QWidget()
         root.setObjectName('appRoot')
         self.setCentralWidget(root)
-        outer = QHBoxLayout(root)
+        outer = QVBoxLayout(root)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        side = QFrame()
-        side.setObjectName('sidebar')
-        side.setFixedWidth(246)
-        self.sidebar = side
-        side_l = QVBoxLayout(side)
-        side_l.setContentsMargins(18, 28, 18, 20)
-        side_l.setSpacing(5)
-        brand = QHBoxLayout()
-        mark = label('✦', 'logoMark')
-        mark.setFixedSize(43, 43)
-        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand.addWidget(mark)
-        text_l = QVBoxLayout()
-        text_l.setSpacing(2)
-        text_l.addWidget(label('AccessShift', 'brandName'))
-        text_l.addWidget(label('ACCESSIBILITY ASSISTANT', 'brandSub'))
-        brand.addLayout(text_l)
-        side_l.addLayout(brand)
-        side_l.addSpacing(24)
-        nav_sections = [
-            ('WORKSPACE', [('overview', '▦   Dashboard'), ('personalize', '◈   My accessibility profile')]),
-            ('ACCESSIBILITY TOOLS', [
-                ('gaze', '◎   Head movement control'),
-                ('steady', '⌁   SteadyHand'),
-                ('interface', '◐   SmartInterface'),
-                ('speech', '◌   Communication'),
-            ]),
-            ('TRY IT OUT', [('test', '▣   Demo Lab & tests')]),
-        ]
-        for section, entries in nav_sections:
-            side_l.addWidget(label(section, 'sideSection'))
-            side_l.addSpacing(3)
-            for key, text in entries:
-                nav_button = button(text, 'navButton')
-                nav_button.setCheckable(True)
-                nav_button.setMinimumHeight(40)
-                nav_button.clicked.connect(lambda _, k=key: self._navigate(k))
-                nav_button.setAccessibleName(text.strip())
-                side_l.addWidget(nav_button)
-                self._nav[key] = nav_button
-            side_l.addSpacing(10)
-        side_l.addStretch()
-        info, info_l = card(name='innerCard', margins=12, spacing=5)
-        info_l.addWidget(label('●  PRIVATE BY DESIGN', 'goodPill'))
-        info_l.addWidget(label('Your settings stay on this computer.', 'micro', True))
-        side_l.addWidget(info)
-        side_l.addSpacing(8)
-        side_l.addWidget(label('GitHappens  ·  natHacks 2026', 'sidebarFoot'))
-        outer.addWidget(side)
 
-        right = QWidget()
-        self.workspace = right
-        right_l = QVBoxLayout(right)
-        right_l.setContentsMargins(0, 0, 0, 0)
-        right_l.setSpacing(0)
-        top_bar = QFrame()
-        top_bar.setObjectName('topBar')
-        top_l = QHBoxLayout(top_bar)
-        top_l.setContentsMargins(33, 14, 33, 14)
-        top_l.setSpacing(12)
-        top_l.addWidget(label('ACCESSIBILITY WORKSPACE', 'topBarTitle'))
-        top_l.addStretch()
-        top_l.addWidget(label('●  LOCAL DEMO', 'topBarBadge'))
-        self.top_bar_layout = top_l
-        right_l.addWidget(top_bar)
+        nav = QFrame()
+        nav.setObjectName('topNav')
+        self.top_nav = nav
+        self.top_bar = nav
+        nl = QHBoxLayout(nav)
+        nl.setContentsMargins(24, 12, 20, 12)
+        nl.setSpacing(4)
+        brand = QPushButton(APP_NAME)
+        brand.setObjectName('navBrand')
+        brand.setCursor(Qt.CursorShape.PointingHandCursor)
+        brand.setIcon(theme_mod.logo_icon())
+        brand.setIconSize(QSize(40, 29))
+        brand.setAccessibleName(f'{APP_NAME} dashboard')
+        brand.clicked.connect(lambda: self._navigate('overview'))
+        self.brand_button = brand
+        nl.addWidget(brand)
+        nl.addSpacing(12)
+        tabs = [('home', 'home', 'Home'), ('overview', 'dashboard', 'Dashboard')]
+        tabs += [(key, icon_name, title) for key, icon_name, title, _ in FEATURES]
+        for key, icon_name, text in tabs:
+            tab = button(text, 'navTab')
+            tab.setCheckable(True)
+            tab.setMinimumHeight(40)
+            tab.setAccessibleName(text)
+            tab.clicked.connect(lambda _=False, k=key: self._navigate(k))
+            self._nav_icons.append((tab, icon_name))
+            nl.addWidget(tab)
+            self._nav[key] = tab
+        nl.addStretch(1)
+        self._demo_shortcut = button('Demo Lab', 'navAction')
+        self._demo_shortcut.setAccessibleName('Open Demo Lab')
+        self._demo_shortcut.setToolTip(f'Open the Demo Lab: every {APP_NAME} feature in one window')
+        self._demo_shortcut.setMinimumHeight(40)
+        self._demo_shortcut.clicked.connect(lambda: self._open_demo_lab('start'))
+        self._nav_icons.append((self._demo_shortcut, 'lab'))
+        nl.addWidget(self._demo_shortcut)
+        nl.addSpacing(6)
+        self.profile_button = self._make_profile_button()
+        nl.addWidget(self.profile_button)
+        self.top_bar_layout = nl
+        outer.addWidget(nav)
+
         self.stack = QStackedWidget()
-        right_l.addWidget(self.stack, 1)
+        outer.addWidget(self.stack, 1)
         for key, method in [
+            ('home', self._page_home),
             ('overview', self._page_overview),
             ('personalize', self._page_personalize),
-            ('gaze', self._page_gaze),
             ('steady', self._page_steady),
+            ('gaze', self._page_gaze),
             ('interface', self._page_interface),
-            ('speech', self._page_communication),
-            ('test', self._page_test),
         ]:
             page = method()
             self._pages[key] = page
             self.stack.addWidget(page)
         foot = QFrame()
         foot.setObjectName('footerBar')
+        self.footer = foot
         fl = QHBoxLayout(foot)
-        fl.setContentsMargins(33, 11, 33, 11)
-        fl.addWidget(label('AccessShift AI  ·  Local accessibility prototype', 'footerText'))
+        fl.setContentsMargins(32, 8, 32, 8)
+        fl.addWidget(label(APP_NAME, 'footerText'))
         fl.addStretch()
-        self.footer_status = label('Preferences saved locally', 'footerText')
+        self.footer_status = label('Settings saved on this device', 'footerText')
         fl.addWidget(self.footer_status)
-        right_l.addWidget(foot)
-        outer.addWidget(right, 1)
+        outer.addWidget(foot)
 
-    def _page(self, eyebrow, title, subtitle):
+    def _make_profile_button(self) -> QPushButton:
+        b = button('My profile', 'profileButton')
+        b.setCheckable(True)
+        b.setMinimumHeight(40)
+        b.setAccessibleName('My accessibility profile')
+        b.setToolTip('My accessibility profile')
+        b.clicked.connect(lambda: self._navigate('personalize'))
+        self._nav_icons.append((b, 'profile'))
+        return b
+
+    def _tile(self, name: str, size: int = 44) -> icons.IconTile:
+        tile = icons.IconTile(name, size)
+        self._icon_tiles.append(tile)
+        return tile
+
+    def _page(self, title, subtitle, *, icon_name: str | None = None, photo: str | None = None):
         scroller = QScrollArea()
         scroller.setWidgetResizable(True)
         scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         container = QWidget()
         container.setObjectName('scrollContent')
         content = QVBoxLayout(container)
-        content.setContentsMargins(34, 29, 34, 38)
+        content.setContentsMargins(48, 32, 48, 48)
         content.setSpacing(18)
-        content.addWidget(label(eyebrow, 'eyebrow'))
-        content.addWidget(label(title, 'pageTitle'))
-        desc = label(subtitle, 'pageDescription', True)
-        content.addWidget(desc)
-        content.addSpacing(5)
+        header = PhotoHeader(photo or PHOTOS.get(icon_name or '', 'desk.jpg'), title, subtitle)
+        self._photo_headers.append(header)
+        content.addWidget(header)
+        content.addSpacing(10)
         scroller.setWidget(container)
         return scroller, content
 
     def _section(self, lay, title, subtitle=None):
+        lay.addSpacing(14)
         lay.addWidget(label(title, 'sectionTitle'))
         if subtitle:
             lay.addWidget(label(subtitle, 'bodyText', True))
 
+    def _bind_row(self, kind: str, key: str, heading: str, details: str, *, framed: bool = True) -> PreferenceRow:
+        """A toggle row bound to a module ('module') or a boolean option ('option')."""
+        row = PreferenceRow(heading, details, framed=framed)
+        if kind == 'module':
+            row.changed.connect(lambda value, k=key: self._change_module(k, value))
+        elif kind == 'option':
+            row.changed.connect(lambda value, k=key: self._change_option(k, bool(value)))
+        else:  # 'tint'
+            row.changed.connect(self._set_screen_tint)
+        self._bound_rows.append((kind, key, row))
+        return row
+
+    # ------------------------------------------------------------------ Home (splash)
+    def _page_home(self):
+        page = QWidget()
+        page.setObjectName('homeRoot')
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(48, 48, 48, 48)
+        lay.setSpacing(0)
+        lay.addStretch(1)
+        self.home_logo = QLabel()
+        self.home_logo.setObjectName('homeLogo')
+        self.home_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.home_logo.setAccessibleName(f'{APP_NAME} logo')
+        lay.addWidget(self.home_logo, 0, Qt.AlignmentFlag.AlignHCenter)
+        lay.addSpacing(34)
+        self.home_tagline = label(TAGLINE, 'homeTagline')
+        self.home_tagline.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self.home_tagline, 0, Qt.AlignmentFlag.AlignHCenter)
+        lay.addStretch(1)
+        self._set_home_logo(300)
+        page.mousePressEvent = lambda _e: self._leave_splash()  # a click skips the wait
+        return page
+
+    def _set_home_logo(self, height: int) -> None:
+        ratio = self.devicePixelRatioF() or 1.0
+        logo = theme_mod.pixmap('brand', 'younify-logo.png')
+        if logo.isNull():
+            self.home_logo.setText(APP_NAME)
+            return
+        scaled = logo.scaledToHeight(round(height * ratio), Qt.TransformationMode.SmoothTransformation)
+        scaled.setDevicePixelRatio(ratio)
+        self.home_logo.setPixmap(scaled)
+
+    def _leave_splash(self) -> None:
+        self._splash_timer.stop()
+        if self.stack.currentWidget() is self._pages['home']:
+            self._navigate('overview')
+            self._fade_in(self.stack.currentWidget(), 450)
+
+    def _fade_in(self, widget: QWidget, ms: int) -> None:
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(effect, b'opacity', self)
+        anim.setDuration(ms)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.finished.connect(lambda w=widget: w.setGraphicsEffect(None))
+        anim.finished.connect(lambda a=anim: self._animations.remove(a) if a in self._animations else None)
+        self._animations.append(anim)
+        anim.start()
+
+    # ------------------------------------------------------------------ Dashboard
     def _page_overview(self):
-        page, lay = self._page('WELCOME TO ACCESS SHIFT', 'Accessibility, your way.',
-                               'Configure your tools, preview your changes, and return whenever you need.')
-        hero, hl = card(name='hero', margins=27, spacing=12)
-        hl.addWidget(label('PERSONALIZED DIGITAL ACCESS', 'heroEyebrow'))
-        hl.addWidget(label('Make every interaction easier.', 'heroTitle'))
-        hl.addWidget(label('Fine-tune eye control, mouse stabilization, visual accessibility and communication in one place.',
-                           'heroDescription', True))
-        hr = QHBoxLayout()
-        self.overview_profile = label('Your setup: Custom', 'heroBadge')
-        hr.addWidget(self.overview_profile)
-        hr.addStretch()
-        edit = button('Customize profile  →', 'heroButton')
-        edit.clicked.connect(lambda: self._navigate('personalize'))
-        hr.addWidget(edit)
-        hl.addLayout(hr)
-        lay.addWidget(hero)
+        page, lay = self._page(APP_NAME, '', photo=PHOTOS['overview'])
+        band, bl = card(name='band', margins=26, spacing=8)
         row = QHBoxLayout()
-        self.stat_modules = StatCard('SELECTED FEATURES', '0 / 4', 'Selected in your profile')
-        self.stat_profile = StatCard('CURRENT PROFILE', 'Custom', 'Edit whenever you like')
-        self.stat_platform = StatCard('DEMO ENVIRONMENT', 'Local only', 'macOS + Windows interface')
-        for w in (self.stat_modules, self.stat_profile, self.stat_platform):
-            row.addWidget(w, 1)
-        lay.addLayout(row)
-        self._section(lay, 'Your accessibility toolkit', 'Your chosen settings are saved automatically. Feature availability depends on module integration.')
+        row.setSpacing(20)
+        texts = QVBoxLayout()
+        texts.setSpacing(6)
+        self.overview_profile = label('Your profile: Custom mix', 'bandTitle', True)
+        self.overview_summary = label('', 'bandText', True)
+        texts.addWidget(self.overview_profile)
+        texts.addWidget(self.overview_summary)
+        row.addLayout(texts, 1)
+        edit = button('Edit my profile', 'primaryButton')
+        edit.clicked.connect(lambda: self._navigate('personalize'))
+        row.addWidget(edit, 0, Qt.AlignmentFlag.AlignVCenter)
+        bl.addLayout(row)
+        lay.addWidget(band)
+
+        self._section(lay, 'Your tools')
         grid = QGridLayout()
-        grid.setSpacing(13)
-        self.overview_module_labels = {}
-        for i, (key, title, desc) in enumerate([
-            ('gaze_control', 'Head movement control', 'Webcam head pointing · ready to use'),
-            ('steady_hand', 'SteadyHand', 'Mouse smoothing · in-app test ready'),
-            ('smart_interface', 'SmartInterface', 'Visual adaptation in the healthcare demo'),
-            ('predictive_speech', 'Communication', 'Text-to-speech · backend dependent'),
-        ]):
-            item, item_l = card(margins=18, spacing=7)
-            title_row = QHBoxLayout()
-            title_row.addWidget(label(title, 'cardTitle'))
-            title_row.addStretch()
-            pill = label('Off', 'pill')
-            title_row.addWidget(pill)
-            item_l.addLayout(title_row)
-            item_l.addWidget(label(desc, 'bodyText', True))
-            grid.addWidget(item, i // 2, i % 2)
-            self.overview_module_labels[key] = pill
+        grid.setSpacing(18)
+        self.feature_cards: dict[str, FeatureCard] = {}
+        for i, (key, icon_name, title, desc) in enumerate(FEATURES):
+            fc = FeatureCard(key, icon_name, title, desc)
+            fc.open_button.clicked.connect(lambda _=False, k=key: self._navigate(k))
+            fc.demo_button.clicked.connect(lambda _=False, k=key: self._open_demo_lab(k))
+            grid.addWidget(fc, 0, i)
+            self.feature_cards[key] = fc
         lay.addLayout(grid)
-        note, nl = card(name='innerCard', margins=15)
-        nl.addWidget(label('Prototype status', 'cardTitle'))
-        nl.addWidget(label('Your settings and local demos work inside AccessShift. Webcam navigation and OS-level pointer control '
-                           'are separate team integrations. SmartInterface adapts only the bundled healthcare Demo Lab, '
-                           'not third-party websites.', 'bodyText', True))
-        lay.addWidget(note)
+
+        self._section(lay, 'Quick comfort')
+        quick = QGridLayout()
+        quick.setSpacing(18)
+        size = QWidget()
+        sl = QHBoxLayout(size)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setSpacing(8)
+        smaller = button('A-', 'secondaryButton')
+        smaller.setAccessibleName('Smaller text')
+        smaller.setFixedWidth(50)
+        smaller.clicked.connect(lambda: self._step_font(-10))
+        bigger = button('A+', 'secondaryButton')
+        bigger.setAccessibleName('Larger text')
+        bigger.setFixedWidth(50)
+        bigger.clicked.connect(lambda: self._step_font(10))
+        self.quick_font_value = label('110 %', 'valuePill')
+        self.quick_font_value.setMinimumWidth(66)
+        self.quick_font_value.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sl.addWidget(smaller)
+        sl.addWidget(self.quick_font_value)
+        sl.addWidget(bigger)
+        tiles = [QuickTile('text', 'Text size', size)]
+        for kind, icon_name, title in (('contrast', 'interface', 'High contrast'),
+                                       ('tint', 'tint', 'Screen tint')):
+            sw = Switch(title)
+            if kind == 'contrast':
+                sw.toggled.connect(lambda on: self._change_option('color_profile', 'high_contrast' if on else 'standard'))
+            else:
+                sw.toggled.connect(self._set_screen_tint)
+            self._quick_switches.append((kind, sw))
+            tiles.append(QuickTile(icon_name, title, sw))
+        for i, tile in enumerate(tiles):
+            self._icon_tiles.append(tile.tile)
+            quick.addWidget(tile, 0, i)
+        lay.addLayout(quick)
         lay.addStretch()
         return page
 
+    def _step_font(self, delta: int) -> None:
+        self._change_option('font_size_pct', max(90, min(160, self.prefs.font_size_pct + delta)))
+
+    # ------------------------------------------------------------------ Profile
     def _page_personalize(self):
-        page, lay = self._page('PERSONALIZATION', 'My accessibility profile',
-                               'Start from a preset or choose a custom mix. These are preferences, not diagnoses.')
-        self._section(lay, 'Start with a setup')
+        page, lay = self._page('My accessibility profile',
+                               'Choose a starting point, then fine-tune it. These are preferences, not diagnoses, '
+                               'and everything is saved as you go.', icon_name='profile')
+        self._section(lay, 'Choose a starting point', 'Each profile switches on a set of tools. You can change any of them below.')
         grid = QGridLayout()
-        grid.setSpacing(12)
-        for i, (key, p) in enumerate(PROFILES.items()):
-            name = p['label']
-            description = p['description']
-            btn = button(f'{name}\n\n{description}', 'presetButton')
-            btn.setCheckable(True)
-            btn.setMinimumHeight(91)
-            btn.clicked.connect(lambda _, k=key: self._apply_profile(k))
-            grid.addWidget(btn, i // 2, i % 2)
-            self._preset_buttons[key] = btn
+        grid.setSpacing(14)
+        for i, key in enumerate(k for k in PROFILE_ORDER if k in PROFILES):
+            p = PROFILES[key]
+            tile = self._tile(PROFILE_ICONS.get(key, 'profile'), 44)
+            cardw = ChoiceCard(p['label'], p['description'], PROFILE_CHIPS.get(key, ()), tile)
+            cardw.clicked.connect(lambda _=False, k=key: self._apply_profile(k))
+            grid.addWidget(cardw, i // 2, i % 2)
+            self._preset_buttons[key] = cardw
         lay.addLayout(grid)
-        self._section(lay, 'Fine-tune your assistance')
-        options = [
-            ('gaze_control', 'Head movement navigation', 'Choose options by turning your head, using only your webcam.'),
-            ('steady_hand', 'Stabilize my mouse', 'Smooth shaky cursor movements and help with small targets.'),
-            ('smart_interface', 'SmartInterface demo', 'Enable the simpler layout in the bundled healthcare demo.'),
-            ('predictive_speech', 'Communication support', 'Prepare text-to-speech and predictive text options.'),
-        ]
-        for key, name, desc in options:
-            r = PreferenceRow(name, desc)
-            r.changed.connect(lambda value, k=key: self._change_module(k, value))
-            self._toggle_rows[key] = r
-            lay.addWidget(r)
+
+        self._section(lay, 'Fine-tune your tools', 'Click a row or its switch to turn a tool on or off.')
+        tools, tl = card(margins=8, spacing=0)
+        rows = (
+            ('module', 'steady_hand', 'SteadyHand',
+             'Smooth shaky pointer movement and make small targets easier to hit.'),
+            ('module', 'gaze_control', 'Hands-free control',
+             'Point by turning your head, using your webcam. Turning this on starts the camera.'),
+            ('option', 'blink_select', 'Blink to select',
+             'In hands-free control, a slow blink chooses the option you are pointing at.'),
+            ('module', 'smart_interface', 'SmartInterface',
+             'Use larger text, calmer colours and simpler layouts in the healthcare demo.'),
+            ('option', 'reduce_complexity', 'Simplified, step-by-step layout',
+             'Hide clutter and show forms one step at a time.'),
+        )
+        for i, (kind, key, heading, details) in enumerate(rows):
+            if i:
+                tl.addWidget(divider())
+            r = self._bind_row(kind, key, heading, details, framed=False)
+            r.layout().setContentsMargins(14, 12, 12, 12)
+            tl.addWidget(r)
+        lay.addWidget(tools)
         actions = QHBoxLayout()
         actions.addStretch()
-        done = button('Save profile & return to dashboard  →', 'primaryButton')
+        done = button('Save and go to my dashboard', 'primaryButton')
+        done.setMinimumHeight(48)
         done.clicked.connect(self._finish_setup)
         actions.addWidget(done)
         lay.addLayout(actions)
         lay.addStretch()
         return page
 
-    # Head movement control: one Start button, three steps, a speed choice, an eyes note.
-    HEAD_SPEEDS = (('relaxed', 'Relaxed', 1600), ('normal', 'Normal', 1100), ('quick', 'Quick', 800))
-
-    def _page_gaze(self):
-        page, lay = self._page('HANDS-FREE NAVIGATION', 'Head movement control',
-                               'Choose options by turning your head. Only your webcam is needed.')
-        self.gaze_notice = label('', 'warningPill', True)  # why hands-free stopped, if it did
-        self.gaze_notice.setStyleSheet('font-size: 14px; padding: 12px 16px;')
-        self.gaze_notice.hide()
-        lay.addWidget(self.gaze_notice)
-        start_box, sb = card(margins=24, spacing=10)
-        self.gaze_toggle = HeadStartButton()
-        self.gaze_toggle.clicked.connect(lambda: self._change_module('gaze_control', not self.prefs.gaze_control))
-        sb.addWidget(self.gaze_toggle)
-        sb.addWidget(label('Opens a full-screen view with large options. Setup takes about 10 seconds.',
-                           'bodyText', True))
-        lay.addWidget(start_box)
-
-        steps, st = card(spacing=14)
-        st.addWidget(label('How it works', 'sectionTitle'))
-        for number, title, text in (
-            ('1', 'Set up', 'Face the screen, then turn your head when the arrows ask.'),
-            ('2', 'Choose', 'Turn your head toward an option. Hold still, or blink slowly, to choose it.'),
-            ('3', 'Finish', 'After booking, choose Start over or Close. To stop early, close your eyes for 5 seconds.'),
-        ):
-            row = QHBoxLayout()
-            row.setSpacing(14)
-            row.addWidget(label(number, 'number'))
-            text_col = QVBoxLayout()
-            text_col.setSpacing(2)
-            text_col.addWidget(label(title, 'cardTitle'))
-            text_col.addWidget(label(text, 'bodyText', True))
-            row.addLayout(text_col, 1)
-            st.addLayout(row)
-        lay.addWidget(steps)
-
-        speed, sp = card(spacing=10)
-        sp.addWidget(label('Selection speed', 'sectionTitle'))
-        sp.addWidget(label('How long to hold still before an option is chosen.', 'bodyText', True))
+    # ------------------------------------------------------------------ Head movement
+    def _speed_choices(self, store: dict) -> QHBoxLayout:
         choices = QHBoxLayout()
         choices.setSpacing(12)
-        self._dwell_buttons = {}
         for key, name, ms in self.HEAD_SPEEDS:
             b = button(f'{name}  ·  {ms / 1000:g} s', 'presetButton')
             b.setCheckable(True)
             b.setMinimumHeight(54)
             b.clicked.connect(lambda _=False, ms=ms: self._change_option('gaze_dwell_ms', ms))
-            self._dwell_buttons[key] = b
+            store[key] = b
             choices.addWidget(b)
-        sp.addLayout(choices)
-        lay.addWidget(speed)
+        return choices
 
-        eyes, en = card(name='innerCard')
-        en.addWidget(label('Prefer to use your eyes?', 'cardTitle'))
-        en.addWidget(label('You can switch to eye movement at any time with the "Pointing with" button '
-                           'in the full-screen view. Head movement is steadier on most laptop webcams.',
-                           'bodyText', True))
-        lay.addWidget(eyes)
+    def _steps_card(self, title: str, steps) -> QFrame:
+        box, st = card(spacing=14)
+        st.addWidget(label(title, 'sectionTitle'))
+        for number, step_title, text in steps:
+            row = QHBoxLayout()
+            row.setSpacing(14)
+            row.addWidget(label(number, 'number'), 0, Qt.AlignmentFlag.AlignTop)
+            text_col = QVBoxLayout()
+            text_col.setSpacing(2)
+            text_col.addWidget(label(step_title, 'cardTitle'))
+            text_col.addWidget(label(text, 'bodyText', True))
+            row.addLayout(text_col, 1)
+            st.addLayout(row)
+        return box
+
+    def _page_gaze(self):
+        page, lay = self._page('Head movement control',
+                               'Point by turning your head. Hold still or blink slowly to choose. '
+                               'Only your webcam is needed.', icon_name='head')
+        self.gaze_notice = label('', 'warningPill', True)  # why hands-free stopped, if it did
+        self.gaze_notice.hide()
+        lay.addWidget(self.gaze_notice)
+
+        start_box, sb = card(margins=24, spacing=12)
+        sb.addWidget(label('Try it now', 'sectionTitle'))
+        self.gaze_toggle = HeadStartButton('Start head control', 'Stop head control')
+        self.gaze_toggle.clicked.connect(lambda: self._toggle_gaze('head'))
+        sb.addWidget(self.gaze_toggle)
+        sb.addWidget(label('Opens the hands-free appointment booking demo full screen. Use Quit hands-free in its top '
+                           'bar to leave at any time, or close your eyes for 5 seconds.', 'bodyText', True))
+        lay.addWidget(start_box)
+        lay.addWidget(self._steps_card('How it works', (
+            ('1', 'Set up', 'Face the screen, then turn your head when the arrows ask.'),
+            ('2', 'Choose', 'Point at an option. Hold still until the ring fills, or blink slowly to choose it.'),
+            ('3', 'Finish', 'After booking, choose Start over or Close. Or press Quit hands-free whenever you like.'),
+        )))
+        speed, sp = card(spacing=10)
+        sp.addWidget(label('Selection', 'sectionTitle'))
+        sp.addWidget(self._bind_row('option', 'blink_select', 'Blink to select',
+                                    'A slow, deliberate blink chooses the option you are pointing at.', framed=False))
+        sp.addWidget(label('Selection speed', 'cardTitle'))
+        sp.addWidget(label('How long to hold still before an option is chosen.', 'bodyText', True))
+        self._dwell_buttons = {}
+        sp.addLayout(self._speed_choices(self._dwell_buttons))
+        lay.addWidget(speed)
+        tips, tp = card(name='innerCard')
+        tp.addWidget(label('For the best tracking', 'cardTitle'))
+        tp.addWidget(label('Sit about an arm\'s length from the screen and light your face from the front. If the '
+                           'pointer drifts, use Recalibrate in the full-screen view.', 'bodyText', True))
+        lay.addWidget(tips)
         lay.addStretch()
         return page
 
+    # ------------------------------------------------------------------ SteadyHand
     def _page_steady(self):
-        page, lay = self._page('PRECISION INPUT', 'SteadyHand · Mouse assistance',
-                               'Reduce pointer jitter and make small targets easier to select in supported experiences.')
-        row = PreferenceRow('Enable SteadyHand', 'Use adaptive smoothing when the pointer integration is active.')
-        row.changed.connect(lambda v: self._change_module('steady_hand', v))
-        self.steady_toggle = row
-        lay.addWidget(row)
-        config, cfg = card()
-        cfg.addWidget(label('Stabilization strength', 'sectionTitle'))
-        cfg.addWidget(label('Higher values smooth more movement but may feel slower.', 'bodyText', True))
-        self.strength_slider, sr = self._slider(0, 100, 5, 'tremor_strength', '%')
+        page, lay = self._page('SteadyHand',
+                               'Reduce pointer jitter and make small targets easier to select.', icon_name='steady')
+        self.steady_toggle = self._bind_row('module', 'steady_hand', 'Use SteadyHand',
+                                            'Smooth your pointer inside Younify and its demos.')
+        lay.addWidget(self.steady_toggle)
+        config, cfg = card(spacing=8)
+        cfg.addWidget(label('Stabilization strength', 'cardTitle'))
+        cfg.addWidget(label('Higher values smooth more movement but can feel slower.', 'bodyText', True))
+        self.strength_slider, sr = self._slider(0, 100, 5, 'tremor_strength', '%', ('Light', 'Strong'))
         cfg.addLayout(sr)
-        cfg.addSpacing(5)
-        cfg.addWidget(label('Clickable target size', 'cardTitle'))
-        cfg.addWidget(label('Preference for supported overlays and adapted interfaces.', 'bodyText'))
-        self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%')
+        cfg.addSpacing(8)
+        cfg.addWidget(label('Click zone size', 'cardTitle'))
+        cfg.addWidget(label('How far around a button a click still counts.', 'bodyText', True))
+        self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%', ('Normal', 'Large'))
         cfg.addLayout(tr)
         lay.addWidget(config)
-        test_btn = button('Open live in-app tremor test  →', 'primaryButton')
-        test_btn.clicked.connect(lambda: self._navigate('test'))
-        lay.addWidget(test_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        info, il = card(name='innerCard')
-        il.addWidget(label('About system-wide control', 'cardTitle'))
-        il.addWidget(label('The current team controller supports in-app stabilization. '
-                           'Moving the system pointer requires separate macOS/Windows adapters and permissions. '
-                           'The settings here do not silently take over your OS cursor.', 'bodyText', True))
-        lay.addWidget(info)
+
+        demo, dl = card(spacing=12)
+        dl.addWidget(label('SteadyHand demo', 'sectionTitle'))
+        dl.addWidget(label('Move into the canvas and click the steps in order. Compare Baseline with Smoothing + '
+                           'Target assistance to see how much easier it gets.', 'bodyText', True))
+        self.steady_panel = SteadyHandTrialPanel(self.steady, self.prefs.target_size_pct, self.repo_root,
+                                                 self.prefs.as_dict())
+        self.playground = self.steady_panel.playground
+        dl.addWidget(self.steady_panel)
+        lay.addWidget(demo)
         lay.addStretch()
         return page
 
+    # ------------------------------------------------------------------ SmartInterface
     def _page_interface(self):
-        page, lay = self._page('VISUAL ACCESSIBILITY', 'SmartInterface',
-                               'Personalize AccessShift and the live healthcare demo. No changes are made to other applications.')
-        row = PreferenceRow('Enable SmartInterface in Demo Lab', 'Turn the bundled healthcare form into a simpler, more accessible interface.')
-        row.changed.connect(lambda v: self._change_module('smart_interface', v))
-        self.interface_toggle = row
-        lay.addWidget(row)
-        options, ol = card()
-        ol.addWidget(label('Live appearance settings', 'sectionTitle'))
-        self.simple_row = PreferenceRow('Guided, distraction-free layout', 'Reduce clutter and display the healthcare form in clear steps.')
-        self.simple_row.changed.connect(lambda v: self._change_option('reduce_complexity', v))
-        ol.addWidget(self.simple_row)
-        ol.addWidget(label('Text size · AccessShift and Demo Lab', 'cardTitle'))
-        self.font_slider, fr = self._slider(90, 160, 10, 'font_size_pct', '%')
-        ol.addLayout(fr)
-        ol.addWidget(label('Letter spacing · Demo Lab', 'cardTitle'))
-        self.spacing_slider, spacing_row = self._slider(0, 4, 1, 'letter_spacing_px', 'px')
-        ol.addLayout(spacing_row)
-        ol.addWidget(label('Colour theme · both windows', 'cardTitle'))
-        self.color_combo = QComboBox()
-        for text, value in [
-            ('Standard', 'standard'), ('High contrast', 'high_contrast'),
-            ('Warm reading', 'warm'), ('Cool blue', 'cool'),
-        ]:
-            self.color_combo.addItem(text, value)
-        self.color_combo.setAccessibleName('Colour theme')
-        self.color_combo.currentIndexChanged.connect(
-            lambda _: self._change_option('color_profile', self.color_combo.currentData()))
-        ol.addWidget(self.color_combo)
-        ol.addWidget(label('Live preview', 'cardTitle'))
-        self.visual_preview = VisualPreview()
-        ol.addWidget(self.visual_preview)
-        ol.addWidget(label('Visual preferences update AccessShift immediately and the healthcare form while Demo Lab is open. '
-                           'They do not alter system fonts or unrelated applications.', 'bodyText', True))
-        lay.addWidget(options)
+        page, lay = self._page('SmartInterface',
+                               'Make Younify easier to read and calmer to look at. Every change applies to all '
+                               'Younify windows instantly.', icon_name='interface')
+        self.interface_toggle = self._bind_row('module', 'smart_interface', 'Use SmartInterface on the healthcare form',
+                                               'Turn the busy sample appointment form into a simpler, clearer one.')
+        lay.addWidget(self.interface_toggle)
 
-        tint, tl = card()
-        tl.addWidget(label('Optional colour tint · local windows only', 'sectionTitle'))
-        tl.addWidget(label('Add a subtle overlay to the AccessShift control center and its healthcare demo window. '
-                           'The desktop, browser and all other applications remain untouched.', 'bodyText', True))
-        self.tint_color_combo = QComboBox()
-        for text, value in [
-            ('Warm amber', 'warm'), ('Cool blue', 'cool'), ('Soft rose', 'rose'),
-        ]:
-            self.tint_color_combo.addItem(text, value)
-        self.tint_color_combo.setAccessibleName('AccessShift window tint colour')
-        self.tint_color_combo.currentIndexChanged.connect(
-            lambda _: self._change_option('tint_color', self.tint_color_combo.currentData()))
-        tl.addWidget(self.tint_color_combo)
-        tl.addWidget(label('Tint intensity (0–20%)', 'cardTitle'))
-        self.tint_slider, tint_row = self._slider(0, 20, 1, 'tint_opacity', '%')
+        reading, rl = card(spacing=8)
+        rl.addWidget(label('Reading', 'sectionTitle'))
+        rl.addWidget(label('Text size', 'cardTitle'))
+        self.font_slider, fr = self._slider(90, 160, 10, 'font_size_pct', '%', ('Smaller', 'Larger'))
+        rl.addLayout(fr)
+        rl.addSpacing(6)
+        rl.addWidget(label('Letter spacing', 'cardTitle'))
+        self.spacing_slider, spacing_row = self._slider(0, 4, 1, 'letter_spacing_px', 'px', ('Normal', 'Wide'))
+        rl.addLayout(spacing_row)
+        rl.addSpacing(4)
+        rl.addWidget(divider())
+        self.simple_row = self._bind_row('option', 'reduce_complexity', 'Simplified, step-by-step layout',
+                                         'Hide clutter and show the healthcare form one step at a time.', framed=False)
+        rl.addWidget(self.simple_row)
+        lay.addWidget(reading)
+
+        colours, cl = card(spacing=10)
+        cl.addWidget(label('Colour theme', 'sectionTitle'))
+        cl.addWidget(label('Pick the look that is most comfortable for your eyes.', 'bodyText', True))
+        swatches = QHBoxLayout()
+        swatches.setSpacing(12)
+        self._theme_buttons = {}
+        for key, name in theme_mod.THEME_LABELS:
+            t = theme_mod.THEMES[key]
+            sw = SwatchButton(name, (t.bg, t.primary, t.mint if key != 'high_contrast' else t.text))
+            sw.clicked.connect(lambda _=False, k=key: self._change_option('color_profile', k))
+            self._theme_buttons[key] = sw
+            swatches.addWidget(sw)
+        cl.addLayout(swatches)
+        lay.addWidget(colours)
+
+        tint, tl = card(spacing=10)
+        head = QHBoxLayout()
+        head.setSpacing(14)
+        head.addWidget(self._tile('tint', 40), 0, Qt.AlignmentFlag.AlignTop)
+        ht = QVBoxLayout()
+        ht.setSpacing(3)
+        ht.addWidget(label('Screen tint', 'sectionTitle'))
+        ht.addWidget(label('A soft colour wash that can reduce glare and visual stress. Pick a colour to turn it on.',
+                           'bodyText', True))
+        head.addLayout(ht, 1)
+        self.tint_switch = Switch('Screen tint')
+        self.tint_switch.toggled.connect(self._set_screen_tint)
+        head.addWidget(self.tint_switch, 0, Qt.AlignmentFlag.AlignVCenter)
+        tl.addLayout(head)
+        tint_swatches = QHBoxLayout()
+        tint_swatches.setSpacing(12)
+        self._tint_buttons = {}
+        for key, name in (('warm', 'Warm amber'), ('cool', 'Cool blue'), ('rose', 'Soft rose')):
+            sw = SwatchButton(name, (TINT_COLORS[key],))
+            sw.setMinimumHeight(76)
+            sw.clicked.connect(lambda _=False, k=key: self._pick_tint(k))
+            self._tint_buttons[key] = sw
+            tint_swatches.addWidget(sw)
+        tl.addLayout(tint_swatches)
+        tl.addWidget(label('Strength', 'cardTitle'))
+        self.tint_slider, tint_row = self._slider(0, 20, 1, 'tint_opacity', '%', ('Subtle', 'Strong'))
         tl.addLayout(tint_row)
-        self.tint_row = PreferenceRow('Tint only AccessShift windows',
-                                      'Apply only to these two app-owned windows; no full-screen overlays.')
-        self.tint_row.changed.connect(self._set_screen_tint)
-        tl.addWidget(self.tint_row)
-        self.tint_status = label('Window tint is off', 'bodyText')
+        self.tint_status = label('Screen tint is off.', 'bodyText', True)
         tl.addWidget(self.tint_status)
         lay.addWidget(tint)
+
+        demo, dl = card(name='band', margins=24, spacing=10)
+        drow = QHBoxLayout()
+        drow.setSpacing(18)
+        drow.addWidget(self._tile('lab', 48), 0, Qt.AlignmentFlag.AlignTop)
+        dt = QVBoxLayout()
+        dt.setSpacing(4)
+        dt.addWidget(label('SmartInterface demo', 'sectionTitle'))
+        dt.addWidget(label('See your settings reshape a busy healthcare appointment form. Keep the demo open next to '
+                           'this page and every change shows up there instantly.', 'bandText', True))
+        drow.addLayout(dt, 1)
+        open_demo = button('Open the demo', 'primaryButton')
+        open_demo.clicked.connect(lambda: self._open_demo_lab('interface'))
+        drow.addWidget(open_demo, 0, Qt.AlignmentFlag.AlignVCenter)
+        dl.addLayout(drow)
+        lay.addWidget(demo)
         lay.addStretch()
         return page
 
-    def _page_communication(self):
-        page, lay = self._page('COMMUNICATION & AAC', 'Speech & text assistance',
-                               'Write a message and speak it aloud. Predictive suggestions are connected by Avneet’s module.')
-        speak, spl = card()
-        spl.addWidget(label('Text-to-speech settings', 'sectionTitle'))
-        self.speech_row = PreferenceRow('Enable communication support',
-                                        'Allow supported speech and predictive-text functionality.')
-        self.speech_row.changed.connect(lambda v: self._change_module('predictive_speech', v))
-        spl.addWidget(self.speech_row)
-        spl.addWidget(label('Speaking speed', 'cardTitle'))
-        self.speech_slider, srl = self._slider(100, 220, 10, 'speech_rate', 'wpm')
-        spl.addLayout(srl)
-        spl.addWidget(label('Test message', 'cardTitle'))
-        self.speech_input = QLineEdit('Hello, I am using AccessShift to communicate.')
-        self.speech_input.setAccessibleName('Message to speak')
-        spl.addWidget(self.speech_input)
-        speak_button = button('Speak message  ▶', 'primaryButton')
-        speak_button.clicked.connect(self._speak)
-        spl.addWidget(speak_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        lay.addWidget(speak)
-        info, il = card(name='innerCard')
-        il.addWidget(label('Module ownership', 'cardTitle'))
-        il.addWidget(label('Avneet owns the speech engine and predictive text. This page exposes the controls; '
-                           'text-to-speech is available only if its Python backend is installed and working.',
-                           'bodyText', True))
-        lay.addWidget(info)
-        lay.addStretch()
-        return page
+    def _slider(self, minimum, maximum, step, key, suffix, captions: tuple[str, str] | None = None):
+        widget = QSlider(Qt.Orientation.Horizontal)
+        widget.setRange(minimum, maximum)
+        widget.setSingleStep(step)
+        widget.setPageStep(step)
+        widget.setCursor(Qt.CursorShape.PointingHandCursor)
+        widget.setAccessibleName(key.replace('_', ' '))
+        widget.valueChanged.connect(lambda value, k=key: self._change_option(k, value))
+        value_label = label('', 'valuePill')
+        value_label.setMinimumWidth(64)
+        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        if captions:
+            row.addWidget(label(captions[0], 'micro'))
+        row.addWidget(widget, 1)
+        if captions:
+            row.addWidget(label(captions[1], 'micro'))
+        row.addWidget(value_label)
+        self._sliders[key] = (widget, value_label, suffix)
+        return widget, row
+
+    # ------------------------------------------------------------------ tint
+    def _pick_tint(self, color: str) -> None:
+        self._change_option('tint_color', color)
+        if not self.tint_manager.active:
+            self._set_screen_tint(True)
 
     def _set_screen_tint(self, enabled: bool) -> None:
         try:
             if enabled:
+                if self.prefs.tint_opacity == 0:
+                    self.prefs.tint_opacity = 10
+                    self._save()
                 self.tint_manager.update(color=self.prefs.tint_color, opacity=self.prefs.tint_opacity)
                 self.tint_manager.enable()
             else:
                 self.tint_manager.disable()
         except Exception as exc:
             self.tint_manager.disable()
-            QMessageBox.warning(self, 'Window tint unavailable',
-                                'The local window overlay could not be applied.\n\n' + str(exc))
-        self.tint_row.set_value(self.tint_manager.active)
-        self.tint_status.setText('Tint on · AccessShift and Demo Lab only.' if self.tint_manager.active
-                                 else 'Window tint is off · other applications are unaffected.')
+            QMessageBox.warning(self, 'Screen tint unavailable',
+                                'The tint could not be applied.\n\n' + str(exc))
+        self._refresh()
 
+    def _sync_tint_controls(self) -> None:
+        active = self.tint_manager.active
+        self.tint_switch.blockSignals(True)
+        self.tint_switch.setChecked(active)
+        self.tint_switch.blockSignals(False)
+        self.tint_switch.update()
+        for key, sw in self._tint_buttons.items():
+            sw.setChecked(active and key == self.prefs.tint_color)
+        names = {'warm': 'Warm amber', 'cool': 'Cool blue', 'rose': 'Soft rose'}
+        self.tint_status.setText(
+            f'{names.get(self.prefs.tint_color, "Tint")} tint is on at {self.prefs.tint_opacity}% in all Younify '
+            'windows. Other apps are not affected.' if active else
+            'Screen tint is off. Other apps are never affected.')
+
+    # ------------------------------------------------------------------ appearance
     def _apply_visual_preferences(self) -> None:
-        apply_accessshift_appearance(self, self._base_qss, self.prefs.font_size_pct, self.prefs.color_profile)
-        if hasattr(self, 'visual_preview'):
-            self.visual_preview.set_preferences(self.prefs.font_size_pct, self.prefs.color_profile,
-                                                self.prefs.letter_spacing_px)
-        if hasattr(self, 'color_combo'):
-            self.color_combo.blockSignals(True)
-            self.color_combo.setCurrentIndex(max(0, self.color_combo.findData(self.prefs.color_profile)))
-            self.color_combo.blockSignals(False)
-        if hasattr(self, 'tint_color_combo'):
-            self.tint_color_combo.blockSignals(True)
-            self.tint_color_combo.setCurrentIndex(max(0, self.tint_color_combo.findData(self.prefs.tint_color)))
-            self.tint_color_combo.blockSignals(False)
+        t = theme_mod.theme(self.prefs.color_profile)
+        Switch.set_colors(t.active, '#8FA39C' if self.prefs.color_profile != 'high_contrast' else '#5B6B66',
+                          '#FFFFFF', t.primary)
+        self.setStyleSheet(theme_mod.stylesheet(self.prefs.font_size_pct, self.prefs.color_profile))
+        theme_mod.apply_letter_spacing(self.prefs.letter_spacing_px)
+        for tile in self._icon_tiles:
+            tile.set_colors(t.mint, t.primary)
+        for header in self._photo_headers:
+            header.set_shade(t.sidebar)
+        self._update_nav_icons()
+        for key, sw in getattr(self, '_theme_buttons', {}).items():
+            sw.setChecked(key == self.prefs.color_profile)
+            sw.set_caption_color(t.heading)
+        for sw in getattr(self, '_tint_buttons', {}).values():
+            sw.set_caption_color(t.heading)
+        if hasattr(self, 'steady_panel'):
+            self.steady_panel.set_theme(t)
+        for sw in self.findChildren(Switch):
+            sw.update()
         self.tint_manager.update(color=self.prefs.tint_color, opacity=self.prefs.tint_opacity)
-        if hasattr(self, 'tint_row'):
-            self.tint_row.set_value(self.tint_manager.active)
-        if hasattr(self, 'tint_status'):
-            self.tint_status.setText('Tint on · AccessShift and Demo Lab only.' if self.tint_manager.active
-                                     else 'Window tint is off · other applications are unaffected.')
 
     def closeEvent(self, event):
         self.tint_manager.disable()
         super().closeEvent(event)
 
-    def _page_test(self):
-        page, lay = self._page(
-            'INTERACTIVE PROTOTYPES',
-            'Demo Lab & tests',
-            'Preview SmartInterface on a fictional healthcare form and run SteadyHand accuracy trials.',
-        )
-        test, tl = card()
-        tl.addWidget(label('SteadyHand • accuracy & benchmark suite', 'sectionTitle'))
-        tl.addWidget(label(
-            'Select a test mode and run a 10-step simulated healthcare booking trial. '
-            'Compare raw movement against One-Euro smoothing and target expansion.',
-            'bodyText',
-            True,
-        ))
-
-        ctrl_row = QHBoxLayout()
-        self.test_mode_combo = QComboBox()
-        for mode in TremorPlayground.MODES:
-            self.test_mode_combo.addItem(mode)
-        self.test_mode_combo.setCurrentIndex(3)
-        self.test_mode_combo.currentIndexChanged.connect(self._on_test_mode_changed)
-        ctrl_row.addWidget(self.test_mode_combo, 2)
-
-        self.btn_start_trial = button('Start trial', 'primaryButton')
-        self.btn_start_trial.clicked.connect(self._start_trial)
-        ctrl_row.addWidget(self.btn_start_trial)
-
-        self.btn_abort_trial = button('Abort trial', 'secondaryButton')
-        self.btn_abort_trial.setEnabled(False)
-        self.btn_abort_trial.clicked.connect(self._abort_trial)
-        ctrl_row.addWidget(self.btn_abort_trial)
-
-        self.btn_export_results = button('Export JSON', 'secondaryButton')
-        self.btn_export_results.clicked.connect(self._export_trial_results)
-        ctrl_row.addWidget(self.btn_export_results)
-
-        reset = button('Reset scores', 'secondaryButton')
-        reset.clicked.connect(self._reset_test_scores)
-        ctrl_row.addWidget(reset)
-        tl.addLayout(ctrl_row)
-
-        self.playground = TremorPlayground(
-            self.steady,
-            target_padding=16.0 * (self.prefs.target_size_pct / 100.0),
-        )
-        tl.addWidget(self.playground)
-        self.test_score = label(
-            'Mode: Smoothing + Target assistance  •  Status: Ready for trial',
-            'cardTitle',
-        )
-        tl.addWidget(self.test_score)
-        self.playground.metrics_changed.connect(self._update_test_score)
-        self.playground.trial_progress.connect(self._on_trial_progress)
-        self.playground.trial_completed.connect(self._on_trial_completed)
-
-        self.simulation_row = PreferenceRow(
-            'Simulate shaky movement',
-            'Applies multi-frequency tremor inside this test only.',
-        )
-        self.simulation_row.set_value(True)
-        self.simulation_row.changed.connect(self.playground.set_simulation)
-        tl.addWidget(self.simulation_row)
-        lay.addWidget(test)
-
-        hist_card, hl = card()
-        hl.addWidget(label('Completed Trial Benchmarks', 'sectionTitle'))
-        self.trial_history_label = label(
-            'No completed trials yet. Choose a mode and click Start trial to benchmark accuracy.',
-            'bodyText',
-            True,
-        )
-        hl.addWidget(self.trial_history_label)
-        lay.addWidget(hist_card)
-
-        info, il = card(name='innerCard')
-        il.addWidget(label('Evaluation protocol', 'cardTitle'))
-        il.addWidget(label(
-            'Each trial walks a 10-step sequence (Doctor → Date → Time → Review → Book × 2). '
-            'Metrics record click latency, hits, misses, and accuracy for judging verification.',
-            'bodyText',
-            True,
-        ))
-        lay.addWidget(info)
-        lay.addStretch()
-        return page
-
-    def _slider(self, minimum, maximum, step, key, suffix):
-        widget = QSlider(Qt.Orientation.Horizontal)
-        widget.setRange(minimum, maximum)
-        widget.setSingleStep(step)
-        widget.setPageStep(step)
-        widget.setAccessibleName(key.replace('_', ' '))
-        widget.valueChanged.connect(lambda value, k=key: self._change_option(k, value))
-        value_label = label('', 'pill')
-        row = QHBoxLayout()
-        row.addWidget(widget, 1)
-        row.addWidget(value_label)
-        self._sliders[key] = (widget, value_label, suffix)
-        return widget, row
-
+    # ------------------------------------------------------------------ navigation
     def _navigate(self, key):
-        if hasattr(self, 'playground') and self.playground.trial and not self.playground.trial.complete and key != 'test':
-            self.playground.abort_trial()
-            self._abort_trial()
+        if hasattr(self, 'steady_panel') and self.steady_panel.trial_running and key != 'steady':
+            self.steady_panel.abort_trial()
         self.stack.setCurrentWidget(self._pages[key])
         for k, btn in self._nav.items():
             btn.setChecked(k == key)
+        splash = key == 'home'
+        self.top_nav.setVisible(not splash)
+        self.footer.setVisible(not splash)
+        self.profile_button.setChecked(key == 'personalize')
+        self._update_nav_icons()
+        if splash:
+            self._fade_in(self.home_logo, 700)
+            self._splash_timer.start(SPLASH_MS)
+        else:
+            self._splash_timer.stop()
+
+    def _update_nav_icons(self) -> None:
+        t = theme_mod.theme(self.prefs.color_profile)
+        for b, name in self._nav_icons:
+            on = b.isCheckable() and b.isChecked()
+            b.setIcon(icons.icon(name, t.on_primary if on else t.heading, 18))
 
     def _finish_setup(self):
         self.prefs.initial_setup_complete = True
         self._save()
         self._navigate('overview')
 
+    # ------------------------------------------------------------------ demos and hands-free hooks
+    def _open_demo_lab(self, section: str = 'start') -> None:
+        """Opens the Demo Lab window (provided by accessshift.ui.main_window.MainWindow)."""
+
+    def _gaze_source(self) -> str:
+        return 'head'
+
+    def _start_gaze(self, source: str) -> None:
+        self._change_module('gaze_control', True)
+
+    def _toggle_gaze(self, source: str) -> None:
+        if self.prefs.gaze_control and self._gaze_source() == source:
+            self._change_module('gaze_control', False)
+        else:
+            self._start_gaze(source)
+
+    # ------------------------------------------------------------------ preferences
     def _apply_profile(self, profile_id):
         p = PROFILES[profile_id]
         if profile_id != 'custom':
             self.prefs.profile = profile_id
-            for key in ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_speech'):
+            for key in MODULE_KEYS:
                 setattr(self.prefs, key, bool(p[key]))
         else:
             self.prefs.profile = 'custom'
@@ -881,7 +889,7 @@ class MainWindow(QMainWindow):
         self._syncing_engine = True
         try:
             self.engine.set_profile(self.prefs.profile)
-            for key in ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_speech'):
+            for key in MODULE_KEYS:
                 self.engine.set_module(key, getattr(self.prefs, key))
         finally:
             self._syncing_engine = previous
@@ -893,7 +901,7 @@ class MainWindow(QMainWindow):
         if self._syncing_engine:
             return
         self.prefs.profile = self.engine.profile.id
-        for key in ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_speech'):
+        for key in MODULE_KEYS:
             setattr(self.prefs, key, bool(getattr(flags, key)))
         self.steady.enabled = self.prefs.steady_hand and self.prefs.assistance_enabled
         self._save()
@@ -911,37 +919,49 @@ class MainWindow(QMainWindow):
         setattr(self.prefs, key, int(value) if isinstance(value, int) and not isinstance(value, bool) else value)
         if key == 'tremor_strength':
             self.steady.strength = self.prefs.tremor_strength / 100.0
-        if key == 'target_size_pct' and hasattr(self, 'playground'):
-            self.playground.set_target_padding(16.0 * (self.prefs.target_size_pct / 100.0))
+        if key == 'target_size_pct' and hasattr(self, 'steady_panel'):
+            self.steady_panel.set_target_size(self.prefs.target_size_pct)
         self._save()
+        if key == 'tint_opacity' and value and not self.tint_manager.active:
+            self._set_screen_tint(True)  # moving the strength slider turns the tint on
+            return
         self._refresh()
 
     def _save(self):
         save_settings(self.prefs)
+        if hasattr(self, 'steady_panel'):
+            self.steady_panel.set_extra(self.prefs.as_dict())
         self.preferences_changed.emit(self.prefs.as_dict())
 
     def _refresh(self):
-        flags = ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_speech')
-        active = sum(bool(getattr(self.prefs, k)) for k in flags)
-        name = PROFILES.get(self.prefs.profile, PROFILES['custom'])['label']
-        self.overview_profile.setText('Your setup: ' + name)
-        self.stat_modules.value.setText(f'{active} / 4')
-        self.stat_profile.value.setText('Personal' if self.prefs.profile == 'custom' else 'Preset')
-        for k, lbl in self.overview_module_labels.items():
-            enabled = getattr(self.prefs, k)
-            lbl.setText('Selected' if enabled else 'Off')
-            lbl.setObjectName('goodPill' if enabled else 'pill')
-            lbl.style().unpolish(lbl)
-            lbl.style().polish(lbl)
+        name = 'Custom mix' if self.prefs.profile == 'custom' else PROFILES.get(self.prefs.profile, PROFILES['custom'])['label']
+        self.overview_profile.setText(f'Your profile: {name}')
+        theme_name = dict(theme_mod.THEME_LABELS).get(self.prefs.color_profile, 'Standard')
+        self.overview_summary.setText(
+            f'SteadyHand is {"on" if self.prefs.steady_hand else "off"}, SmartInterface is '
+            f'{"on" if self.prefs.smart_interface else "off"}, and text is at {self.prefs.font_size_pct}% '
+            f'with the {theme_name} colour theme.')
+        cards = self.feature_cards
+        running = bool(self.prefs.gaze_control)
+        cards['gaze'].set_status('Running' if running else 'Ready', running)
+        cards['gaze'].meta.hide()
+        cards['steady'].set_status('On' if self.prefs.steady_hand else 'Off', self.prefs.steady_hand)
+        cards['steady'].meta.setText(f'Smoothing {self.prefs.tremor_strength}%, click zones {self.prefs.target_size_pct}%')
+        cards['interface'].set_status('On' if self.prefs.smart_interface else 'Off', self.prefs.smart_interface)
+        cards['interface'].meta.setText(
+            f'Text {self.prefs.font_size_pct}%, spacing {self.prefs.letter_spacing_px} px, {theme_name} colours')
+        self.quick_font_value.setText(f'{self.prefs.font_size_pct} %')
+        for kind, sw in self._quick_switches:
+            value = {'contrast': self.prefs.color_profile == 'high_contrast',
+                     'tint': self.tint_manager.active}[kind]
+            sw.blockSignals(True)
+            sw.setChecked(value)
+            sw.blockSignals(False)
         for k, btn in self._preset_buttons.items():
             btn.setChecked(k == self.prefs.profile)
-        for k, row in self._toggle_rows.items():
-            row.set_value(getattr(self.prefs, k))
-        self.gaze_toggle.set_value(self.prefs.gaze_control)
-        self.steady_toggle.set_value(self.prefs.steady_hand)
-        self.interface_toggle.set_value(self.prefs.smart_interface)
-        self.speech_row.set_value(self.prefs.predictive_speech)
-        self.simple_row.set_value(self.prefs.reduce_complexity)
+        for kind, key, row in self._bound_rows:
+            row.set_value(self.tint_manager.active if kind == 'tint' else bool(getattr(self.prefs, key, False)))
+        self.gaze_toggle.set_value(running)
         for key, _name, ms in self.HEAD_SPEEDS:
             self._dwell_buttons[key].setChecked(self.prefs.gaze_dwell_ms == ms)
         for k, (slider, text, suffix) in self._sliders.items():
@@ -950,125 +970,9 @@ class MainWindow(QMainWindow):
             slider.setValue(value)
             slider.blockSignals(False)
             text.setText(f'{value} {suffix}')
-        self.footer_status.setText('✓  Settings saved on this device')
+        self._sync_tint_controls()
+        self.footer_status.setText('Settings saved on this device')
         self._apply_visual_preferences()
 
     def _request_calibration(self):
         self.calibration_requested.emit()
-        QMessageBox.information(
-            self, 'Gaze calibration integration',
-            'The calibration screen is not connected to the webcam worker yet.\n\n'
-            'Your teammate can connect a handler to MainWindow.calibration_requested '
-            'and then display the live calibration widget.',
-        )
-
-    def _speak(self):
-        msg = self.speech_input.text().strip()
-        if not msg:
-            QMessageBox.information(self, 'Speech', 'Enter a phrase to speak first.')
-            return
-        if not self.prefs.predictive_speech:
-            QMessageBox.information(self, 'Speech', 'Enable communication support first.')
-            return
-        try:
-            if self.speech is None:
-                from accessshift.modules.speech.tts import SpeechEngine
-                self.speech = SpeechEngine()
-            if not self.speech.enabled:
-                raise RuntimeError('The speech engine could not initialize on this device.')
-            if callable(getattr(self.speech, 'set_rate', None)):
-                self.speech.set_rate(self.prefs.speech_rate)
-            elif getattr(self.speech, '_engine', None) is not None:
-                self.speech._engine.setProperty('rate', self.prefs.speech_rate)
-            self.speech.speak(msg)
-        except Exception as exc:
-            QMessageBox.warning(self, 'Speech unavailable', str(exc))
-
-    def _on_test_mode_changed(self, index: int) -> None:
-        self.playground.set_mode(index)
-        self.test_score.setText(f'Mode: {self.playground.MODES[index]}  •  Status: Ready for trial')
-
-    def _start_trial(self) -> None:
-        self.playground.start_trial()
-        self.test_mode_combo.setEnabled(False)
-        self.btn_start_trial.setEnabled(False)
-        self.btn_abort_trial.setEnabled(True)
-
-    def _abort_trial(self) -> None:
-        self.playground.abort_trial()
-        self.test_mode_combo.setEnabled(True)
-        self.btn_start_trial.setEnabled(True)
-        self.btn_abort_trial.setEnabled(False)
-        self.test_score.setText('Trial aborted. Ready to start again.')
-
-    def _reset_test_scores(self) -> None:
-        self.playground.reset_scores()
-        self.test_score.setText('Scores reset.')
-
-    def _on_trial_progress(self, summary: dict, expected: str | None) -> None:
-        if expected is None:
-            return
-        lbl = LABELS.get(expected, expected)
-        hits = summary['hits']
-        misses = summary['misses']
-        total = summary['interactions']
-        acc = f"{summary['accuracy']:.0%}" if total > 0 else 'n/a'
-        elapsed = f"{summary['seconds']:.1f}s"
-        self.test_score.setText(
-            f'Target {hits + 1}/10: [{lbl}]  •  Hits: {hits}  •  Misses: {misses}  •  Accuracy: {acc}  •  Time: {elapsed}'
-        )
-
-    def _on_trial_completed(self, trial: Trial) -> None:
-        self.test_mode_combo.setEnabled(True)
-        self.btn_start_trial.setEnabled(True)
-        self.btn_abort_trial.setEnabled(False)
-        s = trial.summary()
-        self.test_score.setText(
-            f"Trial completed. Mode: {trial.mode}  •  Accuracy: {s['accuracy']:.0%}  •  Time: {s['seconds']:.1f}s"
-        )
-        self._refresh_trial_history()
-
-    def _refresh_trial_history(self) -> None:
-        if not self.playground.results:
-            self.trial_history_label.setText('No completed trials yet.')
-            return
-        lines = []
-        for i, t in enumerate(self.playground.results, 1):
-            s = t.summary()
-            lines.append(
-                f"Trial #{i}  •  {s['mode']}: {s['accuracy']:.0%} accuracy  |  "
-                f"{s['hits']} hits, {s['misses']} misses  |  {s['seconds']:.1f}s"
-            )
-        self.trial_history_label.setText('\n'.join(lines))
-
-    def _export_trial_results(self) -> None:
-        if not self.playground.results:
-            QMessageBox.information(
-                self,
-                'Export Results',
-                'No completed trials to export yet. Run at least one trial first.',
-            )
-            return
-        default_name = f'steadyhand-results-{int(time.time())}.json'
-        default_path = str(self.repo_root / default_name)
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            'Export Trial Results JSON',
-            default_path,
-            'JSON Files (*.json)',
-        )
-        if file_path:
-            save_results(file_path, self.playground.results, extra=self.prefs.as_dict())
-            QMessageBox.information(
-                self,
-                'Export Successful',
-                f'Exported {len(self.playground.results)} trial records to:\n{file_path}',
-            )
-
-    def _update_test_score(self, hits, misses):
-        n = hits + misses
-        accuracy = f'{hits / n:.0%}' if n else 'n/a'
-        if not (self.playground.trial and not self.playground.trial.complete):
-            self.test_score.setText(
-                f'Free practice  •  Hits: {hits}  •  Misses: {misses}  •  Accuracy: {accuracy}'
-            )

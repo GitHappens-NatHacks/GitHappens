@@ -66,6 +66,7 @@ class GazeMode(QObject):
         super().__init__(parent)
         self._tracker_factory = tracker_factory
         self._calibrate_on_start = calibrate_on_start
+        self.allow_eyes = True  # False: head pointing only, no Head/Eyes chooser before calibrating
         self._camera_index = int(os.getenv("GAZE_CAMERA_INDEX", "0"))
         source = os.getenv("GAZE_INPUT", "head")
         self._window = parent if isinstance(parent, QWidget) else None  # gets the big-button style
@@ -160,7 +161,8 @@ class GazeMode(QObject):
         self.overlay.hide()  # keep the cursor and camera window off the calibration screen
         self.preview.hide()
         try:
-            chosen = GazeCalibrationDialog.choose_source(self.controller.source, palette=self.palette)
+            chosen = (GazeCalibrationDialog.choose_source(self.controller.source, palette=self.palette)
+                      if self.allow_eyes else "head")
             if chosen is not None and chosen != self.controller.source:
                 self.controller.set_source(chosen)
                 self.source_changed.emit(chosen)

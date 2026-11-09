@@ -1,4 +1,4 @@
-"""Persistent, cross-platform user preferences for the AccessShift control center.
+"""Persistent, cross-platform user preferences for the Younify control center.
 
 Kept independent of camera/mouse/AI modules so the UI can be developed alone.
 """

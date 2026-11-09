@@ -1,8 +1,8 @@
 """Full-screen hands-free booking window for GazeControl.
 
-Opened by the control center when "Use eye navigation" (or the Hands-free profile)
+Opened by the control center when head movement control (or the Hands-free profile)
 is turned on. It holds:
-  - a gaze bar: Recalibrate · Head/Eyes switch · status · Exit gaze control
+  - a gaze bar: Recalibrate · status · Quit hands-free (Younify points with the head only)
   - the 2x2 gaze grid, mirroring the step-by-step booking portal (all buttons, no typing)
 GazeMode (camera, cursor, preview, big high-contrast style) is attached to this window.
 """
@@ -15,8 +15,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from accessshift.modules.smartinterface.visual_controller import PALETTES
 from accessshift.ui import gaze_style
+from accessshift.ui import theme as theme_mod
 from accessshift.ui.gaze_grid import GazeGridPanel
 from accessshift.ui.gaze_mode import GazeMode
 from accessshift.ui.portal_view import PortalView
@@ -28,7 +28,7 @@ class GazeBookingWindow(QWidget):
 
     def __init__(self, repo_root: Path, parent: QWidget | None = None):
         super().__init__(parent, Qt.Window)
-        self.setWindowTitle("AccessShift AI  ·  Hands-free booking")
+        self.setWindowTitle("Younify  ·  Hands-free booking")
         self.resize(1100, 760)
         self._repo_root = Path(repo_root)
         self._stopping = False
@@ -38,11 +38,14 @@ class GazeBookingWindow(QWidget):
         bar.setContentsMargins(0, 0, 0, 0)
         self.btn_recalibrate = QPushButton("Recalibrate")
         self.btn_source = QPushButton()
+        self.btn_quit = QPushButton("Quit hands-free")
+        self.btn_quit.setAccessibleName("Quit hands-free control and go back to Younify")
         self.status = QLabel()
         self.status.setWordWrap(True)
         bar.addWidget(self.btn_recalibrate, 1)
         bar.addWidget(self.btn_source, 1)
-        bar.addWidget(self.status, 2)  # to leave: Close on the booked popup, or eyes closed 5 s
+        bar.addWidget(self.status, 2)
+        bar.addWidget(self.btn_quit, 1)  # leave at any time: no booking needed (also: eyes closed 5 s)
 
         self.portal = self._new_portal()
         self.grid = GazeGridPanel(self.portal)
@@ -58,13 +61,18 @@ class GazeBookingWindow(QWidget):
         self.gaze.problem.connect(self.problem)
         self.btn_recalibrate.clicked.connect(self.gaze.request_recalibrate)
         self.btn_source.clicked.connect(self.gaze.toggle_source)
+        self.btn_quit.clicked.connect(self.exit_requested)
+        # Younify points with the head only: no eyes option in the bar or before calibrating.
+        self.gaze.allow_eyes = False
+        self.gaze.controller.set_source("head")
+        self.btn_source.hide()
         self._show_source(self.gaze.controller.source)
         self.setObjectName("gazeRoot")
         self.apply_theme("standard")
 
     def apply_theme(self, color_profile: str) -> None:
         """Use the app's colour setting (Standard, High contrast, Warm, Cool)."""
-        p = PALETTES.get(color_profile, PALETTES["standard"])
+        p = theme_mod.gaze_palette(color_profile)
         styled = gaze_style.is_applied(self)
         if styled:
             gaze_style.restore(self)
