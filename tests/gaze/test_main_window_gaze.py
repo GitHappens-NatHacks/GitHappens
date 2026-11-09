@@ -190,19 +190,16 @@ def test_speed_choices_set_hold_time(window):
     assert window.prefs.gaze_dwell_ms == 800 and ctrl.dwell_ms == 800
 
 
-def test_eyes_note_is_last_on_the_page(window):
-    from PySide6.QtWidgets import QLabel
-
-    lay = window._pages["gaze"].widget().layout()
-    widgets = [lay.itemAt(i).widget() for i in range(lay.count()) if lay.itemAt(i).widget() is not None]
-    last_texts = [l.text() for l in widgets[-1].findChildren(QLabel)]
-    assert "Prefer to use your eyes?" in last_texts
+def test_head_page_offers_eyes_too(window):
+    window._pointing_cards["eyes"].click()
+    assert window.gaze_toggle.text() == "Start eye control"
+    window._pointing_cards["head"].click()
+    assert window.gaze_toggle.text() == "Start head control"
 
 
 def test_demo_items_hidden_only_on_hands_free_pages(window):
-    for page in ("gaze", "eyes"):
-        window._navigate(page)
-        assert not window._demo_shortcut.isVisible()
+    window._navigate("gaze")
+    assert not window._demo_shortcut.isVisible()
     window._navigate("overview")
     assert window._demo_shortcut.isVisible()
 
@@ -249,10 +246,12 @@ def test_exit_brings_control_center_to_front(window, monkeypatch):
 
 # --- end of a booking ---------------------------------------------------------------------------
 
-def test_no_exit_button_in_the_hands_free_bar(window):
+def test_quit_button_leaves_hands_free_without_booking(window):
     window.gaze_toggle.click()
-    texts = [b.text() for b in window.gaze_window.bar.findChildren(type(window.gaze_toggle).__mro__[1])]
-    assert not any("Exit" in t for t in texts)
+    gw = window.gaze_window
+    assert gw.btn_quit.isVisible() and gw.btn_quit.parentWidget() is gw.bar
+    gw.btn_quit.click()  # mid-booking: no appointment needed to get out
+    assert not window.prefs.gaze_control and not gw.gaze.enabled and not gw.isVisible()
 
 
 def test_booking_popup_close_leaves_hands_free(window):

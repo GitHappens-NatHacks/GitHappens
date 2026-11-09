@@ -2,8 +2,8 @@
 
 The control center stays open. "Open Demo Lab" shows every feature in one
 independent window that follows preference changes live (via preferences_changed).
-Head movement and Eye and blink control both open the same full-screen hands-free
-booking window, pointing with the head or the eyes.
+The Head movement tab opens the full-screen hands-free booking window, pointing
+with the head or the eyes.
 """
 from __future__ import annotations
 
@@ -45,8 +45,8 @@ class MainWindow(ControlCenterWindow):
 
     def _navigate(self, key):
         super()._navigate(key)
-        # Keep the hands-free pages uncluttered.
-        self._demo_shortcut.setVisible(key not in ('gaze', 'eyes'))
+        # Keep the hands-free page uncluttered.
+        self._demo_shortcut.setVisible(key != 'gaze')
 
     # --- GazeControl ------------------------------------------------------------------------
     def _ensure_gaze_window(self) -> GazeBookingWindow:
@@ -87,7 +87,6 @@ class MainWindow(ControlCenterWindow):
             self.gaze_window.apply_settings(settings.get('gaze_dwell_ms', 1100), settings.get('blink_select', True))
         if settings.get('gaze_control'):
             self.gaze_notice.hide()  # starting again clears any old message
-            self.eyes_notice.hide()
             self.gaze_window.start()  # no-op if already running: other settings never restart the camera
         elif self.gaze_window is not None:
             self.gaze_window.stop()
@@ -108,11 +107,9 @@ class MainWindow(ControlCenterWindow):
         self._exit_gaze()
         if self.gaze_window is not None:
             self.gaze_window.stop()
-        eyes = self._gaze_source() == 'eyes'
-        self._navigate('eyes' if eyes else 'gaze')
-        notice = self.eyes_notice if eyes else self.gaze_notice
-        notice.setText(message)
-        notice.show()
+        self._navigate('gaze')
+        self.gaze_notice.setText(message)
+        self.gaze_notice.show()
         self._bring_to_front()
 
     def _request_calibration(self) -> None:

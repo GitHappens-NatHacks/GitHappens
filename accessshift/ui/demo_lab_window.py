@@ -1,11 +1,11 @@
 """AccessShift Demo Lab: every feature in one window, ready to present.
 
-A left rail lists Start here, SmartInterface, SteadyHand, Head movement and Eye and
-blink control. Each page explains what to show and holds the working demo:
+A left rail lists Start here, SmartInterface, SteadyHand and Head movement (head or
+eyes). Each page explains what to show and holds the working demo:
   - SmartInterface: the sample healthcare form, following the person's profile live,
     with an Original / With your settings comparison.
   - SteadyHand: the tremor practice canvas and 10-step accuracy trial.
-  - Head movement / Eye and blink: start the full-screen hands-free booking demo.
+  - Head movement: start the full-screen hands-free booking demo with the head or the eyes.
 The window is independent of the control center, so both can stay open side by side.
 """
 from __future__ import annotations
@@ -30,14 +30,12 @@ SECTIONS = (
     ('interface', 'interface', 'SmartInterface'),
     ('steady', 'steady', 'SteadyHand'),
     ('gaze', 'head', 'Head movement'),
-    ('eyes', 'eye', 'Eye and blink control'),
 )
 
 RUN_ORDER = (
     ('interface', 'interface', 'SmartInterface', 'Turn a busy appointment form into large, calm, step-by-step screens.', 'About 1 minute'),
     ('steady', 'steady', 'SteadyHand', 'Hit small targets with a simulated tremor, then compare accuracy with and without help.', 'About 1 minute'),
-    ('gaze', 'head', 'Head movement', 'Book an appointment hands-free by turning your head.', 'About 2 minutes'),
-    ('eyes', 'eye', 'Eye and blink control', 'Book the same appointment by looking and blinking.', 'About 2 minutes'),
+    ('gaze', 'head', 'Head movement', 'Book an appointment hands-free with your head, then with your eyes.', 'About 3 minutes'),
 )
 
 
@@ -80,7 +78,7 @@ class DemoLabWindow(QWidget):
         top.addStretch(1)
         rl.addLayout(top)
         rl.addSpacing(8)
-        rl.addWidget(label('All four AccessShift features, ready to show.', 'railText', True))
+        rl.addWidget(label('Every AccessShift feature, ready to show.', 'railText', True))
         rl.addSpacing(18)
         group = QButtonGroup(self)
         for key, icon_name, title in SECTIONS:
@@ -103,7 +101,7 @@ class DemoLabWindow(QWidget):
         self.stack = QStackedWidget()
         outer.addWidget(self.stack, 1)
         for key, builder in (('start', self._page_start), ('interface', self._page_interface),
-                             ('steady', self._page_steady), ('gaze', self._page_gaze), ('eyes', self._page_eyes)):
+                             ('steady', self._page_steady), ('gaze', self._page_gaze)):
             page = builder()
             self._pages[key] = page
             self.stack.addWidget(page)
@@ -147,7 +145,7 @@ class DemoLabWindow(QWidget):
 
     # ------------------------------------------------------------------ pages
     def _page_start(self):
-        page, lay = self._page('lab', 'Show AccessShift in four short demos',
+        page, lay = self._page('lab', 'Show AccessShift in three short demos',
                                'Pick a demo on the left, or follow the suggested order below. Every demo uses the '
                                'settings from your accessibility profile.')
         before, bl = card(name='band', margins=24, spacing=10)
@@ -192,33 +190,23 @@ class DemoLabWindow(QWidget):
 
     def _page_interface(self):
         page, lay = self._page('interface', 'SmartInterface',
-                               'The same healthcare form, before and after AccessShift. It follows your profile live.')
+                               'A practice appointment form, simplified or original. It follows your profile live.')
         lay.addWidget(self._steps((
-            'Show the original form: small text, two busy sidebars and every section at once.',
-            'Switch to "With your settings": larger text, calmer colours and one step at a time.',
-            'Change text size, spacing or colours in AccessShift. The form updates instantly and keeps what was typed.',
+            'With SmartInterface on, the form opens as two calm steps. Fill them in and press Finish demo.',
+            'Press "View original form" to show every field at once, then "Try simplified" to switch back.',
+            'Change text size, spacing, colours or click target size in AccessShift. The form updates instantly '
+            'and keeps what was typed.',
         )))
         bar, bl = card(spacing=10)
         row = QHBoxLayout()
-        row.setSpacing(8)
-        self.compare_original = button('Original form', 'segmentButton')
-        self.compare_adapted = button('With your settings', 'segmentButton')
-        group = QButtonGroup(self)
-        for b in (self.compare_original, self.compare_adapted):
-            b.setCheckable(True)
-            group.addButton(b)
-            row.addWidget(b)
-        self.compare_adapted.setChecked(True)
-        self.compare_original.clicked.connect(lambda: self._compare(True))
-        self.compare_adapted.clicked.connect(lambda: self._compare(False))
-        row.addStretch(1)
+        row.setSpacing(12)
+        self.interface_summary = label('', 'bodyText', True)
+        row.addWidget(self.interface_summary, 1)
         adjust = button('Adjust settings', 'secondaryButton')
         adjust.setToolTip('Open the SmartInterface page in AccessShift')
         adjust.clicked.connect(lambda: self._open_settings('interface'))
-        row.addWidget(adjust)
+        row.addWidget(adjust, 0, Qt.AlignmentFlag.AlignVCenter)
         bl.addLayout(row)
-        self.interface_summary = label('', 'bodyText', True)
-        bl.addWidget(self.interface_summary)
         lay.addWidget(bar)
 
         self.smart_off_notice, nl = card(name='notice', margins=16, spacing=8)
@@ -232,7 +220,7 @@ class DemoLabWindow(QWidget):
         lay.addWidget(self.smart_off_notice)
 
         self.healthcare = HealthcareDemoWindow(self.repo_root, smart_interface_enabled=False, parent=self, embedded=True)
-        self.healthcare.setMinimumHeight(620)
+        self.healthcare.setMinimumHeight(760)
         lay.addWidget(self.healthcare, 1)
         return page
 
@@ -252,42 +240,36 @@ class DemoLabWindow(QWidget):
         lay.addStretch(1)
         return page
 
-    def _gaze_page(self, source: str, icon_name: str, title: str, subtitle: str, steps, tip: str):
-        page, lay = self._page(icon_name, title, subtitle)
-        lay.addWidget(self._steps(steps))
-        start, sl = card(margins=24, spacing=10)
-        noun = 'head movement' if source == 'head' else 'eye and blink'
-        go = button(f'Start the {noun} demo', 'primaryButton')
-        go.setMinimumHeight(60)
-        go.setStyleSheet('QPushButton { font-size: 17px; }')
-        go.clicked.connect(lambda _=False, s=source: self._toggle_gaze(s))
-        sl.addWidget(go)
-        status = label('', 'bodyText', True)
-        sl.addWidget(status)
+    def _page_gaze(self):
+        page, lay = self._page('head', 'Head movement',
+                               'Book an appointment hands-free, pointing with your head or with your eyes.')
+        lay.addWidget(self._steps((
+            'Press Start with my head. Face the screen, then turn your head when the arrows ask (about 10 seconds).',
+            'Turn toward an option and hold still until the ring fills, or blink slowly once it starts.',
+            'Book the appointment and choose Close, or press Quit hands-free in the top bar at any time.',
+            'Then try Start with my eyes: look at each dot to calibrate and book the same appointment.',
+        )))
+        start, sl = card(margins=24, spacing=12)
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        self.head_button = button('Start with my head', 'primaryButton')
+        self.eye_button = button('Start with my eyes', 'secondaryButton')
+        for b, source in ((self.head_button, 'head'), (self.eye_button, 'eyes')):
+            b.setMinimumHeight(60)
+            b.setStyleSheet('QPushButton { font-size: 17px; }')
+            b.clicked.connect(lambda _=False, src=source: self._toggle_gaze(src))
+            row.addWidget(b)
+        sl.addLayout(row)
+        self.gaze_status = label('', 'bodyText', True)
+        sl.addWidget(self.gaze_status)
         lay.addWidget(start)
         tips, tl = card(name='innerCard')
         tl.addWidget(label('Tip', 'cardTitle'))
-        tl.addWidget(label(tip, 'bodyText', True))
+        tl.addWidget(label('Head pointing is the steadiest on most laptop webcams, so show it first. Eye pointing needs '
+                           'good light on your face; if it drifts, use Recalibrate in the full-screen view.',
+                           'bodyText', True))
         lay.addWidget(tips)
         lay.addStretch(1)
-        return page, go, status
-
-    def _page_gaze(self):
-        page, self.head_button, self.head_status = self._gaze_page(
-            'head', 'head', 'Head movement', 'Book an appointment hands-free by turning your head.',
-            ('Press Start. Face the screen, then turn your head when the arrows ask (about 10 seconds).',
-             'Turn toward an option and hold still until the ring fills, or blink slowly once it starts.',
-             'Book the appointment, then choose Close. To stop at any time, close your eyes for 5 seconds.'),
-            'Head movement is the steadiest option on most laptop webcams, so it is a good one to show first.')
-        return page
-
-    def _page_eyes(self):
-        page, self.eye_button, self.eye_status = self._gaze_page(
-            'eyes', 'eye', 'Eye and blink control', 'Book the same appointment by looking and blinking.',
-            ('Press Start. Keep your head still and look at each dot as it appears.',
-             'Look at an option until the ring fills, or blink slowly to choose it straight away.',
-             'Book the appointment, then choose Close. To stop at any time, close your eyes for 5 seconds.'),
-            'Eye tracking needs good light on your face. If the pointer drifts, use Recalibrate in the full-screen view.')
         return page
 
     # ------------------------------------------------------------------ behaviour
@@ -300,10 +282,6 @@ class DemoLabWindow(QWidget):
             b.setChecked(k == key)
         if self.isVisible() and QApplication.focusWidget() in self._rail_buttons.values():
             self._rail_buttons[key].setFocus()  # keep the focus ring on the open section
-
-    def _compare(self, original: bool) -> None:
-        self.healthcare.show_original(original)
-        self._update_interface_summary()
 
     def _toggle_gaze(self, source: str) -> None:
         self.host._toggle_gaze(source)
@@ -325,27 +303,23 @@ class DemoLabWindow(QWidget):
         s = self._settings
         smart = bool(s.get('smart_interface', False))
         self.smart_off_notice.setVisible(not smart)
-        if self.compare_original.isChecked():
-            self.interface_summary.setText('Showing the original form, without AccessShift.')
-            return
         theme_name = dict(theme_mod.THEME_LABELS).get(str(s.get('color_profile', 'standard')), 'Standard')
         if smart:
             self.interface_summary.setText(
-                f"Showing your settings: text {s.get('font_size_pct', 110)}%, letter spacing "
+                f"Using your settings: text {s.get('font_size_pct', 110)}%, letter spacing "
                 f"{s.get('letter_spacing_px', 0)} px, {theme_name} colours, click targets {s.get('target_size_pct', 140)}%, "
-                + ('step-by-step layout.' if s.get('reduce_complexity', True) else 'all sections visible.'))
+                + ('step-by-step layout.' if s.get('reduce_complexity', True) else 'all fields at once.'))
         else:
             self.interface_summary.setText('Your settings would apply here once SmartInterface is on.')
 
     def _update_gaze_state(self) -> None:
         running = bool(self._settings.get('gaze_control', False))
         source = self.host._gaze_source()
-        for src, b, status, noun in ((('head', self.head_button, self.head_status, 'head movement')),
-                                     (('eyes', self.eye_button, self.eye_status, 'eye and blink'))):
-            on = running and source == src
-            b.setText(f'Stop the {noun} demo' if on else f'Start the {noun} demo')
-            status.setText('Running in the full-screen hands-free window.' if on else
-                           'Opens a full-screen hands-free booking window with large options.')
+        self.head_button.setText('Stop' if running and source == 'head' else 'Start with my head')
+        self.eye_button.setText('Stop' if running and source == 'eyes' else 'Start with my eyes')
+        self.gaze_status.setText(
+            f'Running with your {source} in the full-screen hands-free window.' if running else
+            'Opens a full-screen hands-free booking window with large options.')
 
     def apply_preferences(self, settings: dict) -> None:
         self._settings = dict(settings)

@@ -2,7 +2,7 @@
 
 Pages: an introductory Home page and guided introduction, the Dashboard, the
 accessibility profile (top-right corner), and one tab per feature (Head movement,
-Eye and blink control, SteadyHand, SmartInterface), each with its own demo.
+which also covers eye and blink control, SteadyHand, SmartInterface), each with its own demo.
 It uses the existing AdaptiveEngine and SteadyHandController APIs unchanged.
 """
 from __future__ import annotations
@@ -37,15 +37,14 @@ MODULE_KEYS = ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_spe
 
 # The four AccessShift features, in the order they appear everywhere.
 FEATURES = (
-    ('gaze', 'head', 'Head movement', 'Point by turning your head. Only a webcam is needed.'),
-    ('eyes', 'eye', 'Eye and blink control', 'Point with your eyes and select with a slow blink.'),
+    ('gaze', 'head', 'Head movement', 'Point with your head or your eyes, and blink to select. Only a webcam is needed.'),
     ('steady', 'steady', 'SteadyHand', 'Smooth shaky pointer movement and reach small targets.'),
     ('interface', 'interface', 'SmartInterface', 'Bigger text, calmer colours and simpler, step-by-step screens.'),
 )
 
 PAGE_TITLES = {
     'overview': 'Dashboard', 'personalize': 'My accessibility profile', 'gaze': 'Head movement',
-    'eyes': 'Eye and blink control', 'steady': 'SteadyHand', 'interface': 'SmartInterface',
+    'steady': 'SteadyHand', 'interface': 'SmartInterface',
 }
 
 PROFILE_CHIPS = {
@@ -63,11 +62,9 @@ INTRO_SLIDES = (
      ('Works with the webcam you already have', 'Every setting can be changed at any time',
       'Try each feature safely on a sample healthcare form')),
     ('head', 'Head movement',
-     'Turn your head toward an option to point at it. Hold still for a moment, or blink slowly, to choose it.',
-     ('Large options in a calm, full-screen view', 'About ten seconds to set up', 'Close your eyes for five seconds to stop')),
-    ('eye', 'Eye and blink control',
-     'Look at an option to point at it and blink slowly to select. Your eyes become the mouse.',
-     ('Follow a few dots once to calibrate', 'A ring fills while you hold your gaze', 'Blink to select, or simply wait')),
+     'Point by turning your head, or with your eyes. Hold still for a moment, or blink slowly, to choose.',
+     ('Large options in a calm, full-screen view', 'Head or eyes: pick whichever feels easier',
+      'Quit at any time with the Quit hands-free button')),
     ('steady', 'SteadyHand',
      'Smooths out tremor so the pointer goes where you mean it to, and makes small buttons easier to hit.',
      ('Adjustable smoothing strength', 'Bigger click zones around buttons', 'Measure your accuracy with a 10-step trial')),
@@ -195,6 +192,9 @@ class HeadStartButton(QPushButton):
         self.setStyleSheet('QPushButton { font-size: 18px; }')  # colours still come from the app theme
         self.set_value(False)
 
+    def set_texts(self, start_text: str, stop_text: str) -> None:
+        self._texts = (start_text, stop_text)
+
     def set_value(self, on: bool) -> None:
         self.setText(self._texts[1] if on else self._texts[0])
         self.setObjectName('secondaryButton' if on else 'primaryButton')
@@ -215,15 +215,12 @@ class FeatureCard(QFrame):
         top = QHBoxLayout()
         top.setSpacing(14)
         self.tile = icons.IconTile(icon_name, 48)
-        top.addWidget(self.tile, 0, Qt.AlignmentFlag.AlignTop)
-        texts = QVBoxLayout()
-        texts.setSpacing(3)
-        texts.addWidget(label(title, 'featureTitle'))
-        texts.addWidget(label(description, 'featureDesc', True))
-        top.addLayout(texts, 1)
+        top.addWidget(self.tile, 0, Qt.AlignmentFlag.AlignVCenter)
+        top.addWidget(label(title, 'featureTitle', True), 1, Qt.AlignmentFlag.AlignVCenter)
         self.status = label('Off', 'pill')
-        top.addWidget(self.status, 0, Qt.AlignmentFlag.AlignTop)
+        top.addWidget(self.status, 0, Qt.AlignmentFlag.AlignVCenter)
         lay.addLayout(top)
+        lay.addWidget(label(description, 'featureDesc', True))
         self.meta = label('', 'featureMeta', True)
         lay.addWidget(self.meta)
         lay.addStretch(1)
@@ -309,8 +306,7 @@ class MainWindow(QMainWindow):
         text_l.setSpacing(0)
         text_l.addWidget(label('AccessShift', 'brandName'))
         text_l.addWidget(label('Accessibility, your way', 'brandSub', True))
-        brand.addLayout(text_l)
-        brand.addStretch(1)
+        brand.addLayout(text_l, 1)
         side_l.addLayout(brand)
         side_l.addSpacing(26)
         nav_sections = [
@@ -367,7 +363,6 @@ class MainWindow(QMainWindow):
             ('overview', self._page_overview),
             ('personalize', self._page_personalize),
             ('gaze', self._page_gaze),
-            ('eyes', self._page_eyes),
             ('steady', self._page_steady),
             ('interface', self._page_interface),
         ]:
@@ -497,7 +492,7 @@ class MainWindow(QMainWindow):
             b.setMinimumHeight(40)
             b.clicked.connect(lambda _=False, n=i + 1: self._start_intro(n))
             self._home_feature_links.append((b, icon_name))
-            chips.addWidget(b, i // 2, i % 2)
+            chips.addWidget(b, 0, i)
         left.addLayout(chips)
         body.addLayout(left, 11)
         self.hero_art = HeroArt()
@@ -661,7 +656,7 @@ class MainWindow(QMainWindow):
             self._icon_tiles.append(fc.tile)
             fc.open_button.clicked.connect(lambda _=False, k=key: self._navigate(k))
             fc.demo_button.clicked.connect(lambda _=False, k=key: self._open_demo_lab(k))
-            grid.addWidget(fc, i // 2, i % 2)
+            grid.addWidget(fc, 0, i)
             self.feature_cards[key] = fc
         lay.addLayout(grid)
 
@@ -791,79 +786,61 @@ class MainWindow(QMainWindow):
 
     def _page_gaze(self):
         page, lay = self._page('Head movement control',
-                               'Choose options by turning your head. Only your webcam is needed.', icon_name='head')
+                               'Point by turning your head, or with your eyes. Hold still or blink slowly to choose. '
+                               'Only your webcam is needed.', icon_name='head')
         self.gaze_notice = label('', 'warningPill', True)  # why hands-free stopped, if it did
         self.gaze_notice.hide()
         lay.addWidget(self.gaze_notice)
-        start_box, sb = card(margins=24, spacing=10)
-        sb.addWidget(label('Try it now', 'sectionTitle'))
+
+        start_box, sb = card(margins=24, spacing=12)
+        sb.addWidget(label('Point with', 'sectionTitle'))
+        choices = QHBoxLayout()
+        choices.setSpacing(12)
+        self._pointing_cards = {}
+        self._pointing = self._gaze_source()
+        for source, icon_name, title, desc in (
+            ('head', 'head', 'My head', 'Turn your head toward an option. The steadiest choice on most laptop webcams.'),
+            ('eyes', 'eye', 'My eyes', 'Point with eye movement and blink to select. Needs good light on your face.'),
+        ):
+            choice = ChoiceCard(title, desc, (), self._tile(icon_name, 44))
+            choice.clicked.connect(lambda _=False, src=source: self._choose_pointing(src))
+            self._pointing_cards[source] = choice
+            choices.addWidget(choice)
+        sb.addLayout(choices)
         self.gaze_toggle = HeadStartButton('Start head control', 'Stop head control')
-        self.gaze_toggle.clicked.connect(lambda: self._toggle_gaze('head'))
+        self.gaze_toggle.clicked.connect(lambda: self._toggle_gaze(self._pointing))
         sb.addWidget(self.gaze_toggle)
-        sb.addWidget(label('Opens the hands-free appointment booking demo full screen, with large options. '
-                           'Setup takes about 10 seconds.', 'bodyText', True))
+        sb.addWidget(label('Opens the hands-free appointment booking demo full screen. Use Quit hands-free in its top '
+                           'bar to leave at any time, or close your eyes for 5 seconds.', 'bodyText', True))
         lay.addWidget(start_box)
         lay.addWidget(self._steps_card('How it works', (
-            ('1', 'Set up', 'Face the screen, then turn your head when the arrows ask.'),
-            ('2', 'Choose', 'Turn your head toward an option. Hold still, or blink slowly, to choose it.'),
-            ('3', 'Finish', 'After booking, choose Start over or Close. To stop early, close your eyes for 5 seconds.'),
+            ('1', 'Set up', 'With your head: turn when the arrows ask. With your eyes: look at each dot as it appears.'),
+            ('2', 'Choose', 'Point at an option. Hold still until the ring fills, or blink slowly to choose it.'),
+            ('3', 'Finish', 'After booking, choose Start over or Close. Or press Quit hands-free whenever you like.'),
         )))
         speed, sp = card(spacing=10)
-        sp.addWidget(label('Selection speed', 'sectionTitle'))
+        sp.addWidget(label('Selection', 'sectionTitle'))
+        sp.addWidget(self._bind_row('option', 'blink_select', 'Blink to select',
+                                    'A slow, deliberate blink chooses the option you are pointing at.', framed=False))
+        sp.addWidget(label('Selection speed', 'cardTitle'))
         sp.addWidget(label('How long to hold still before an option is chosen.', 'bodyText', True))
         self._dwell_buttons = {}
         sp.addLayout(self._speed_choices(self._dwell_buttons))
         lay.addWidget(speed)
-        eyes, en = card(name='innerCard')
-        en.addWidget(label('Prefer to use your eyes?', 'cardTitle'))
-        en.addWidget(label('Eye movement works too: open Eye and blink control, or switch with the "Pointing with" '
-                           'button in the full-screen view. Head movement is steadier on most laptop webcams.',
-                           'bodyText', True))
-        go_eyes = button('Go to Eye and blink control', 'secondaryButton')
-        go_eyes.clicked.connect(lambda: self._navigate('eyes'))
-        en.addWidget(go_eyes, 0, Qt.AlignmentFlag.AlignLeft)
-        lay.addWidget(eyes)
-        lay.addStretch()
-        return page
-
-    # ------------------------------------------------------------------ Eye and blink
-    def _page_eyes(self):
-        page, lay = self._page('Eye and blink control',
-                               'Point with your eyes and select with a slow blink. Only your webcam is needed.',
-                               icon_name='eye')
-        self.eyes_notice = label('', 'warningPill', True)
-        self.eyes_notice.hide()
-        lay.addWidget(self.eyes_notice)
-        start_box, sb = card(margins=24, spacing=10)
-        sb.addWidget(label('Try it now', 'sectionTitle'))
-        self.eye_toggle = HeadStartButton('Start eye control', 'Stop eye control')
-        self.eye_toggle.clicked.connect(lambda: self._toggle_gaze('eyes'))
-        sb.addWidget(self.eye_toggle)
-        sb.addWidget(label('Opens the hands-free appointment booking demo full screen. You will look at a few dots '
-                           'first so AccessShift can learn where you are looking.', 'bodyText', True))
-        lay.addWidget(start_box)
-        lay.addWidget(self._steps_card('How it works', (
-            ('1', 'Calibrate', 'Keep your head still and look at each dot as it appears.'),
-            ('2', 'Look', 'Look at an option. A ring fills while you hold your gaze on it.'),
-            ('3', 'Blink', 'Blink slowly to choose it straight away. To stop, close your eyes for 5 seconds.'),
-        )))
-        opts, ol = card(spacing=10)
-        ol.addWidget(label('Selection', 'sectionTitle'))
-        ol.addWidget(self._bind_row('option', 'blink_select', 'Blink to select',
-                                    'A slow, deliberate blink chooses the option you are looking at.', framed=False))
-        ol.addWidget(label('Hold time', 'cardTitle'))
-        ol.addWidget(label('How long to look at an option before it is chosen without a blink.', 'bodyText', True))
-        self._eye_dwell_buttons = {}
-        ol.addLayout(self._speed_choices(self._eye_dwell_buttons))
-        lay.addWidget(opts)
         tips, tp = card(name='innerCard')
         tp.addWidget(label('For the best tracking', 'cardTitle'))
-        tp.addWidget(label('Sit about an arm\'s length from the screen, light your face from the front and keep '
-                           'your head fairly still. If your eyes get tired, Head movement is a steadier option.',
+        tp.addWidget(label('Sit about an arm\'s length from the screen and light your face from the front. If eye '
+                           'pointing drifts, use Recalibrate in the full-screen view or switch to your head.',
                            'bodyText', True))
         lay.addWidget(tips)
         lay.addStretch()
         return page
+
+    def _choose_pointing(self, source: str) -> None:
+        if self.prefs.gaze_control and self._gaze_source() != source:
+            self._start_gaze(source)  # running: switch the live session (it recalibrates)
+        self._pointing = source
+        self._refresh()
 
     # ------------------------------------------------------------------ SteadyHand
     def _page_steady(self):
@@ -1203,12 +1180,13 @@ class MainWindow(QMainWindow):
         source = self._gaze_source()
         speed = next((n for _k, n, ms in self.HEAD_SPEEDS if ms == self.prefs.gaze_dwell_ms), 'Custom')
         cards = self.feature_cards
-        head_on = self.prefs.gaze_control and source == 'head'
-        eyes_on = self.prefs.gaze_control and source == 'eyes'
-        cards['gaze'].set_status('Running' if head_on else 'Ready', head_on)
-        cards['gaze'].meta.setText(f'Selection speed: {speed}, {self.prefs.gaze_dwell_ms / 1000:g} s')
-        cards['eyes'].set_status('Running' if eyes_on else 'Ready', eyes_on)
-        cards['eyes'].meta.setText(f'Blink to select is {"on" if self.prefs.blink_select else "off"}')
+        running = bool(self.prefs.gaze_control)
+        if running:
+            self._pointing = source  # the buttons always show what is really running
+        cards['gaze'].set_status('Running' if running else 'Ready', running)
+        cards['gaze'].meta.setText(
+            f'Pointing with your {self._pointing}, speed {speed} ({self.prefs.gaze_dwell_ms / 1000:g} s), '
+            f'blink to select {"on" if self.prefs.blink_select else "off"}')
         cards['steady'].set_status('On' if self.prefs.steady_hand else 'Off', self.prefs.steady_hand)
         cards['steady'].meta.setText(f'Smoothing {self.prefs.tremor_strength}%, click zones {self.prefs.target_size_pct}%')
         cards['interface'].set_status('On' if self.prefs.smart_interface else 'Off', self.prefs.smart_interface)
@@ -1220,11 +1198,13 @@ class MainWindow(QMainWindow):
             btn.setChecked(k == self.prefs.profile)
         for kind, key, row in self._bound_rows:
             row.set_value(self.tint_manager.active if kind == 'tint' else bool(getattr(self.prefs, key, False)))
-        self.gaze_toggle.set_value(head_on)
-        self.eye_toggle.set_value(eyes_on)
-        for store in (self._dwell_buttons, self._eye_dwell_buttons):
-            for key, _name, ms in self.HEAD_SPEEDS:
-                store[key].setChecked(self.prefs.gaze_dwell_ms == ms)
+        noun = 'head' if self._pointing == 'head' else 'eye'
+        self.gaze_toggle.set_texts(f'Start {noun} control', f'Stop {noun} control')
+        self.gaze_toggle.set_value(running)
+        for src, choice in self._pointing_cards.items():
+            choice.setChecked(src == self._pointing)
+        for key, _name, ms in self.HEAD_SPEEDS:
+            self._dwell_buttons[key].setChecked(self.prefs.gaze_dwell_ms == ms)
         for k, (slider, text, suffix) in self._sliders.items():
             value = int(getattr(self.prefs, k))
             slider.blockSignals(True)

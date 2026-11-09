@@ -88,17 +88,23 @@ def test_each_feature_tab_has_its_demo(window):
     assert window._pages["steady"].findChildren(SteadyHandTrialPanel)
     assert any("SmartInterface demo" in t for t in texts(window._pages["interface"]))
     assert window.gaze_toggle.text() == "Start head control"
-    assert window.eye_toggle.text() == "Start eye control"
 
 
-def test_eye_tab_starts_hands_free_with_the_eyes(window):
-    window.eye_toggle.click()
+def test_eye_control_is_merged_into_head_movement(window):
+    assert "eyes" not in window._pages and "eyes" not in window._nav
+    window._pointing_cards["eyes"].click()
+    window.gaze_toggle.click()
     gw = window.gaze_window
     assert gw.gaze.enabled and gw.gaze.controller.source == "eyes"
-    assert window.eye_toggle.text() == "Stop eye control"
-    assert window.gaze_toggle.text() == "Start head control"
-    window.eye_toggle.click()
+    assert window.gaze_toggle.text() == "Stop eye control"
+    window.gaze_toggle.click()
     assert not gw.gaze.enabled
+
+
+def test_hands_free_window_has_a_quit_button(window):
+    window.gaze_toggle.click()
+    window.gaze_window.btn_quit.click()
+    assert not window.prefs.gaze_control and not window.gaze_window.isVisible()
 
 
 # --- SmartInterface settings apply everywhere ---------------------------------------------------
@@ -153,29 +159,56 @@ def test_choosing_a_tint_colour_turns_the_tint_on(window):
 
 # --- Demo Lab ---------------------------------------------------------------------------------
 
-def test_demo_lab_opens_with_all_four_features(window):
+def test_demo_lab_opens_with_every_feature(window):
     window._demo_shortcut.click()
     lab = window.demo_lab
     assert lab.isVisible()
-    assert set(lab._rail_buttons) == {"start", "interface", "steady", "gaze", "eyes"}
-    for key in ("interface", "steady", "gaze", "eyes"):
+    assert set(lab._rail_buttons) == {"start", "interface", "steady", "gaze"}
+    for key in ("interface", "steady", "gaze"):
         lab.show_section(key)
         assert lab.stack.currentWidget() is lab._pages[key]
 
 
-def test_demo_lab_form_follows_the_profile_and_compares_with_original(window):
+def test_demo_form_follows_the_profile(window):
     window._change_module("smart_interface", True)
     window._open_demo_lab("interface")
     form = window.demo_lab.healthcare
-    assert form._accessible  # reflects the profile straight away
-    window.demo_lab.compare_original.click()
-    assert not form._accessible
+    assert form._accessible and form.step_label.text() == "Step 1 of 2"
+    form.view_toggle.click()  # View original form
+    assert not form._accessible and form.primary.text() == "Try simplified"
     window._change_option("font_size_pct", 140)
-    assert not form._accessible  # stays on the original while comparing
-    window.demo_lab.compare_adapted.click()
-    assert form._accessible and form._visual_settings["font_size_pct"] == 140
+    assert not form._accessible  # a text size change never undoes the manual switch
+    form.primary.click()
+    assert form._accessible
     window._change_module("smart_interface", False)
     assert not form._accessible and window.demo_lab.smart_off_notice.isVisibleTo(window.demo_lab)
+
+
+def test_demo_form_steps_finish_and_start_again(qapp):
+    from accessshift.ui.healthcare_demo_window import HealthcareDemoWindow
+
+    form = HealthcareDemoWindow(ROOT, smart_interface_enabled=True)
+    form.show()
+    sent = []
+    form.demo_submitted.connect(sent.append)
+    form.name.setText("Alex Morgan")
+    assert form.primary.text() == "Continue" and not form.back.isVisible()
+    form.primary.click()
+    assert form.step_label.text() == "Step 2 of 2" and form.back.isVisible()
+    assert form.department.isVisible() and not form.name.isVisible()
+    assert form.primary.text() == "Finish demo"
+    form.back.click()
+    assert form.name.isVisible() and form.name.text() == "Alex Morgan"  # nothing typed is lost
+    form.primary.click()
+    form.department.setCurrentIndex(1)
+    form.primary.click()
+    assert form.done_view.isVisible() and form.primary.text() == "Start again"
+    assert sent and sent[0]["full_name"] == "Alex Morgan" and sent[0]["department"] == "Neurology"
+    form.primary.click()
+    assert form.name.text() == "" and form.step_label.text() == "Step 1 of 2"
+    form.view_toggle.click()
+    assert all(field.isVisible() for _l, field in form.fields)  # original: all details at once
+    form.close()
 
 
 def test_demo_lab_starts_head_and_eye_demos(window):
@@ -183,7 +216,7 @@ def test_demo_lab_starts_head_and_eye_demos(window):
     lab = window.demo_lab
     lab.head_button.click()
     assert window.gaze_window.gaze.enabled and window.gaze_window.gaze.controller.source == "head"
-    assert lab.head_button.text().startswith("Stop")
+    assert lab.head_button.text() == "Stop"
     lab.eye_button.click()  # switches the running session to the eyes
     assert window.gaze_window.gaze.controller.source == "eyes"
     lab.eye_button.click()

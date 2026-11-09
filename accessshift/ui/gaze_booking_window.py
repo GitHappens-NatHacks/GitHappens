@@ -2,7 +2,7 @@
 
 Opened by the control center when "Use eye navigation" (or the Hands-free profile)
 is turned on. It holds:
-  - a gaze bar: Recalibrate · Head/Eyes switch · status · Exit gaze control
+  - a gaze bar: Recalibrate · Head/Eyes switch · status · Quit hands-free
   - the 2x2 gaze grid, mirroring the step-by-step booking portal (all buttons, no typing)
 GazeMode (camera, cursor, preview, big high-contrast style) is attached to this window.
 """
@@ -38,11 +38,14 @@ class GazeBookingWindow(QWidget):
         bar.setContentsMargins(0, 0, 0, 0)
         self.btn_recalibrate = QPushButton("Recalibrate")
         self.btn_source = QPushButton()
+        self.btn_quit = QPushButton("Quit hands-free")
+        self.btn_quit.setAccessibleName("Quit hands-free control and go back to AccessShift")
         self.status = QLabel()
         self.status.setWordWrap(True)
         bar.addWidget(self.btn_recalibrate, 1)
         bar.addWidget(self.btn_source, 1)
-        bar.addWidget(self.status, 2)  # to leave: Close on the booked popup, or eyes closed 5 s
+        bar.addWidget(self.status, 2)
+        bar.addWidget(self.btn_quit, 1)  # leave at any time: no booking needed (also: eyes closed 5 s)
 
         self.portal = self._new_portal()
         self.grid = GazeGridPanel(self.portal)
@@ -58,6 +61,7 @@ class GazeBookingWindow(QWidget):
         self.gaze.problem.connect(self.problem)
         self.btn_recalibrate.clicked.connect(self.gaze.request_recalibrate)
         self.btn_source.clicked.connect(self.gaze.toggle_source)
+        self.btn_quit.clicked.connect(self.exit_requested)
         self._show_source(self.gaze.controller.source)
         self.setObjectName("gazeRoot")
         self.apply_theme("standard")
