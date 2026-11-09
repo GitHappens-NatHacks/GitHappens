@@ -7,12 +7,17 @@ from accessshift.modules.steadyhand.controller import SteadyHandController
 class MotorTests(unittest.TestCase):
     def test_frequency_and_export_source(self):
         c = SteadyHandController()
+        c.new_tremor_pattern(seed=42)
+        c.tremor_intensity = 80
         c.simulate_tremor = True
-        for i in range(260):
+        for i in range(320):
             c.stabilize(20, 10, i / 60)
         row = c.telemetry.latest
-        self.assertAlmostEqual(row["dominant_hz"], 5.5, delta=.2)
-        self.assertGreater(row["tremor_index"], 90)
+        # Irregular sim still concentrates energy in the Parkinsonian band.
+        self.assertIsNotNone(row["dominant_hz"])
+        self.assertGreaterEqual(row["dominant_hz"], 4.0)
+        self.assertLessEqual(row["dominant_hz"], 7.0)
+        self.assertGreater(row["tremor_index"], 40)
         self.assertTrue(row["simulated"])
         c.simulate_tremor = False
         self.assertIsNone(c.telemetry.latest)

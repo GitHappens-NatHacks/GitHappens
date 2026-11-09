@@ -349,7 +349,7 @@ class SteadyHandTrialPanel(QFrame):
 
         self.simulation_row = PreferenceRow(
             'Simulate Parkinsonian tremor',
-            'Adds a 5.5 Hz pattern to this canvas so you can demo without a live tremor; turn it off for a real mouse.',
+            'Adds an irregular 4 to 7 Hz pattern to this canvas; set intensity under Assist settings, or turn this off for a real mouse.',
             checked=True,
         )
         self.simulation_row.changed.connect(self.playground.set_simulation)

@@ -35,7 +35,10 @@ class SteadyHandController:
         self.last_raw = (0.0, 0.0)
         self.last_stable = (0.0, 0.0)
 
+        # Pixel-scale displacement for the demo sim; prefs map intensity 0-100 onto this.
         self._tremor_amplitude = 30.0
+        self._tremor_intensity = 55
+        self.tremor_intensity = 55
         self.pattern_seed = secrets.randbits(32)
 
         self.hits = 0
@@ -113,6 +116,18 @@ class SteadyHandController:
 
         self._tremor_amplitude = value
 
+    @property
+    def tremor_intensity(self) -> int:
+        """0 to 100 demo scale: mild through intense simulated tremor."""
+        return self._tremor_intensity
+
+    @tremor_intensity.setter
+    def tremor_intensity(self, value: int | float) -> None:
+        value = int(round(float(value)))
+        self._tremor_intensity = max(0, min(100, value))
+        # Mild stays readable; intense is clearly hard without assist.
+        self._tremor_amplitude = 10.0 + (self._tremor_intensity / 100.0) * 70.0
+
     def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
 
@@ -121,6 +136,9 @@ class SteadyHandController:
 
     def set_simulate_tremor(self, enabled: bool) -> None:
         self.simulate_tremor = enabled
+
+    def set_tremor_intensity(self, intensity: int | float) -> None:
+        self.tremor_intensity = intensity
 
     def reset(self) -> None:
         """Clear smoothing history without clearing metrics."""
@@ -174,9 +192,11 @@ class SteadyHandController:
         self,
         t: float | None = None,
     ) -> tuple[float, float]:
-        """Generate synthetic jitter, not a clinical tremor model.
+        """Generate synthetic jitter for demos, not a clinical tremor model.
 
-        Supply elapsed seconds to replay the same pattern.
+        Keeps most energy near the Parkinsonian 4 to 7 Hz band while the
+        path wanders in frequency, amplitude, and direction so it feels less
+        like a fixed sine wave. Supply elapsed seconds to replay a seeded pattern.
         """
         t = (
             time.perf_counter()
@@ -187,14 +207,46 @@ class SteadyHandController:
         if not math.isfinite(t):
             raise ValueError("Simulation time must be finite.")
 
-        def offset(axis):
+        # Softly reseed every few seconds so long demos do not loop the same motif.
+        chapter = int(t // 6.5)
+        chapter_seed = (self.pattern_seed ^ ((chapter + 1) * 2654435761)) & 0xFFFFFFFF
+        saved_seed = self.pattern_seed
+        self.pattern_seed = chapter_seed
+
+        def band_hz(axis: int) -> float:
+            # Slow wander inside the classic resting/postural band.
+            wander = 0.85 * self._noise_at(t * 0.4, 20 + axis) + 0.35 * self._noise_at(t * 1.15, 22 + axis)
+            return max(4.2, min(6.9, 5.5 + wander))
+
+        def gaussian_noise(axis: int) -> float:
             i = math.floor(t * 60)
             u = max(1e-12, (self._noise_value(i, axis) + 1) / 2)
             phase = math.pi * (1 + self._noise_value(i, axis + 2))
-            noise = math.sqrt(-2 * math.log(u)) * math.cos(phase)
-            return self.tremor_amplitude * (math.sin(2 * math.pi * 5.5 * t + axis) + .08 * noise)
+            return math.sqrt(-2 * math.log(u)) * math.cos(phase)
 
-        return offset(0), offset(1)
+        def offset(axis: int) -> float:
+            hz = band_hz(axis)
+            # Phase drift keeps the ellipse from looking mechanical.
+            phase = axis * 1.25 + 1.7 * self._noise_at(t * 0.28, 24 + axis)
+            carrier = math.sin(2 * math.pi * hz * t + phase)
+            companion = 0.42 * math.sin(
+                2 * math.pi * (hz * (0.88 + 0.08 * self._noise_at(t * 0.5, 26 + axis))) * t
+                + phase + 1.9
+            )
+            # Low-rate envelope so intensity breathes instead of sitting flat.
+            envelope = 0.55 + 0.45 * (0.5 + 0.5 * self._noise_at(t * 0.65, 28 + axis))
+            noise = 0.32 * gaussian_noise(axis)
+            # Rare short spasms on top of the continuous tremor.
+            spasm = 0.0
+            burst = self._noise_value(math.floor(t * 8), axis + 8)
+            if burst > 0.86:
+                spasm = (1.4 + 1.2 * abs(gaussian_noise(axis + 4))) * math.copysign(1.0, burst)
+            return self.tremor_amplitude * envelope * (carrier + companion + noise + spasm)
+
+        try:
+            return offset(0), offset(1)
+        finally:
+            self.pattern_seed = saved_seed
 
     def stabilize(
         self,
