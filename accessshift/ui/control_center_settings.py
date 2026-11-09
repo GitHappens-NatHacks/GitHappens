@@ -20,7 +20,8 @@ class AccessibilitySettings:
     predictive_speech: bool = False
     blink_select: bool = True
     reduce_complexity: bool = True
-    tremor_strength: int = 50
+    tremor_strength: int = 95
+    tremor_intensity: int = 55  # demo sim scale: 0 mild through 100 intense
     gaze_dwell_ms: int = 1100  # Normal speed (Relaxed 1.6 s, Normal 1.1 s, Quick 0.8 s)
     target_size_pct: int = 140
     font_size_pct: int = 110
@@ -73,7 +74,8 @@ def load_settings(store: QSettings | None = None) -> AccessibilitySettings:
         candidate = AccessibilitySettings(**data)
         if candidate.profile not in PROFILES:
             candidate.profile = "custom"
-        candidate.tremor_strength = max(0, min(100, int(candidate.tremor_strength)))
+        candidate.tremor_strength = max(0, min(200, int(candidate.tremor_strength)))
+        candidate.tremor_intensity = max(0, min(100, int(getattr(candidate, "tremor_intensity", 55))))
         candidate.gaze_dwell_ms = max(600, min(2000, int(candidate.gaze_dwell_ms)))
         candidate.target_size_pct = max(100, min(200, int(candidate.target_size_pct)))
         candidate.font_size_pct = max(90, min(160, int(candidate.font_size_pct)))

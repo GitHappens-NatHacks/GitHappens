@@ -39,7 +39,8 @@ SPLASH_MS = 2000  # the Home splash, then the Dashboard
 
 # The three Younify features, in the order they appear everywhere.
 FEATURES = (
-    ('steady', 'steady', 'SteadyHand', 'Smooth shaky pointer movement and reach small targets.'),
+    ('steady', 'steady', 'SteadyHand',
+     'Steady the pointer through Parkinsonian tremor and keep a simple motor session for clinic review.'),
     ('gaze', 'head', 'Head movement', 'Point by turning your head, and blink to select. Only a webcam is needed.'),
     ('interface', 'interface', 'SmartInterface', 'Bigger text, calmer colours and simpler, step-by-step screens.'),
 )
@@ -623,32 +624,67 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ SteadyHand
     def _page_steady(self):
-        page, lay = self._page('SteadyHand',
-                               'Reduce pointer jitter and make small targets easier to select.', icon_name='steady')
-        self.steady_toggle = self._bind_row('module', 'steady_hand', 'Use SteadyHand',
-                                            'Smooth your pointer inside Younify and its demos.')
+        page, lay = self._page(
+            'SteadyHand',
+            'Softens Parkinsonian tremor on the pointer and quietly records a motor session you can share with a clinician.',
+            icon_name='steady',
+        )
+
+        intro, il = card(spacing=10)
+        il.addWidget(label(
+            'Everyday portals ask for precise clicks that a 4 to 7 Hz tremor often cannot deliver, especially when '
+            'medication wears toward OFF. SteadyHand filters that motion, widens click targets, and guards against '
+            'accidental drags, using only the mouse you already have.',
+            'bodyText', True,
+        ))
+        lay.addWidget(intro)
+
+        self.steady_toggle = self._bind_row(
+            'module', 'steady_hand', 'Use SteadyHand',
+            'Applies stabilization across Younify while the session chart below keeps updating.',
+        )
         lay.addWidget(self.steady_toggle)
-        config, cfg = card(spacing=8)
-        cfg.addWidget(label('Stabilization strength', 'cardTitle'))
-        cfg.addWidget(label('Higher values smooth more movement but can feel slower.', 'bodyText', True))
-        self.strength_slider, sr = self._slider(0, 100, 5, 'tremor_strength', '%', ('Light', 'Strong'))
-        cfg.addLayout(sr)
-        cfg.addSpacing(8)
-        cfg.addWidget(label('Click zone size', 'cardTitle'))
-        cfg.addWidget(label('How far around a button a click still counts.', 'bodyText', True))
-        self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%', ('Normal', 'Large'))
-        cfg.addLayout(tr)
-        lay.addWidget(config)
 
         demo, dl = card(spacing=12)
-        dl.addWidget(label('SteadyHand demo', 'sectionTitle'))
-        dl.addWidget(label('Move into the canvas and click the steps in order. Compare Baseline with Smoothing + '
-                           'Target assistance to see how much easier it gets.', 'bodyText', True))
-        self.steady_panel = SteadyHandTrialPanel(self.steady, self.prefs.target_size_pct, self.repo_root,
-                                                 self.prefs.as_dict())
+        dl.addWidget(label('Try it', 'sectionTitle'))
+        dl.addWidget(label(
+            'Work through the booking steps on the canvas, starting with Baseline and then Full assist so you can '
+            'feel the difference in accuracy and effort.',
+            'bodyText', True,
+        ))
+        self.steady_panel = SteadyHandTrialPanel(
+            self.steady, self.prefs.target_size_pct, self.repo_root, self.prefs.as_dict(),
+        )
         self.playground = self.steady_panel.playground
         dl.addWidget(self.steady_panel)
         lay.addWidget(demo)
+
+        config, cfg = card(spacing=8)
+        cfg.addWidget(label('Assist settings', 'sectionTitle'))
+        cfg.addWidget(label('Stabilization strength', 'cardTitle'))
+        cfg.addWidget(label(
+            'How firmly tremor-band motion is filtered. Values above 100% keep leaning harder on the smoother.',
+            'bodyText', True,
+        ))
+        self.strength_slider, sr = self._slider(0, 200, 5, 'tremor_strength', '%', ('Light', 'Maximum'))
+        cfg.addLayout(sr)
+        cfg.addSpacing(8)
+        cfg.addWidget(label('Simulated tremor intensity', 'cardTitle'))
+        cfg.addWidget(label(
+            'How strong the demo tremor feels on the canvas when simulation is on, from mild through intense.',
+            'bodyText', True,
+        ))
+        self.intensity_slider, ir = self._slider(0, 100, 5, 'tremor_intensity', '%', ('Mild', 'Intense'))
+        cfg.addLayout(ir)
+        cfg.addSpacing(8)
+        cfg.addWidget(label('Click zone size', 'cardTitle'))
+        cfg.addWidget(label(
+            'Expands how close the pointer needs to be before a booking step still counts.',
+            'bodyText', True,
+        ))
+        self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%', ('Normal', 'Large'))
+        cfg.addLayout(tr)
+        lay.addWidget(config)
         lay.addStretch()
         return page
 
@@ -894,6 +930,7 @@ class MainWindow(QMainWindow):
         finally:
             self._syncing_engine = previous
         self.steady.strength = self.prefs.tremor_strength / 100.0
+        self.steady.tremor_intensity = self.prefs.tremor_intensity
         self.steady.enabled = self.prefs.steady_hand and self.prefs.assistance_enabled
 
     def _on_external_modules_changed(self, flags):
@@ -919,6 +956,9 @@ class MainWindow(QMainWindow):
         setattr(self.prefs, key, int(value) if isinstance(value, int) and not isinstance(value, bool) else value)
         if key == 'tremor_strength':
             self.steady.strength = self.prefs.tremor_strength / 100.0
+        if key == 'tremor_intensity':
+            self.steady.tremor_intensity = self.prefs.tremor_intensity
+            self.steady.new_tremor_pattern()
         if key == 'target_size_pct' and hasattr(self, 'steady_panel'):
             self.steady_panel.set_target_size(self.prefs.target_size_pct)
         self._save()
@@ -946,7 +986,10 @@ class MainWindow(QMainWindow):
         cards['gaze'].set_status('Running' if running else 'Ready', running)
         cards['gaze'].meta.hide()
         cards['steady'].set_status('On' if self.prefs.steady_hand else 'Off', self.prefs.steady_hand)
-        cards['steady'].meta.setText(f'Smoothing {self.prefs.tremor_strength}%, click zones {self.prefs.target_size_pct}%')
+        cards['steady'].meta.setText(
+            f'Smoothing {self.prefs.tremor_strength}%, tremor intensity {self.prefs.tremor_intensity}, '
+            f'click zones {self.prefs.target_size_pct}%'
+        )
         cards['interface'].set_status('On' if self.prefs.smart_interface else 'Off', self.prefs.smart_interface)
         cards['interface'].meta.setText(
             f'Text {self.prefs.font_size_pct}%, spacing {self.prefs.letter_spacing_px} px, {theme_name} colours')

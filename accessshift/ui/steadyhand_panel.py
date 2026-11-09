@@ -19,6 +19,7 @@ from accessshift.modules.steadyhand.metrics import Trial, save_results
 from accessshift.modules.steadyhand.targets import Target, TargetManager
 from accessshift.ui import theme as theme_mod
 from accessshift.ui.control_center_components import PreferenceRow, button, label
+from accessshift.ui.motor_telemetry import TelemetryPanel
 
 SEQUENCE = ('doctor', 'date', 'time', 'review', 'book') * 2
 LABELS = {
@@ -41,11 +42,17 @@ class TremorPlayground(QWidget):
     trial_completed = Signal(object)
 
     MODES = [
-        'Baseline (Raw input)',
-        'SteadyHand smoothing',
-        'Target assistance',
-        'Smoothing + Target assistance',
+        'Baseline',
+        'Smoothing only',
+        'Larger targets only',
+        'Full assist',
     ]
+    MODE_BLURBS = (
+        'Unassisted path: tremor reaches the buttons exactly as it is, so you can measure a fair starting point.',
+        'Filters the classic 4 to 7 Hz band so the pointer follows intention more closely.',
+        'Keeps the raw path, but makes each booking step easier to catch when aim lands nearby.',
+        'Combines filtering, wider targets, and a drag guard that holds your original click through brief spasms.',
+    )
 
     def __init__(self, controller: SteadyHandController, target_padding: float = 16.0):
         super().__init__()
@@ -65,16 +72,18 @@ class TremorPlayground(QWidget):
         self._mouse = (150.0, 130.0)
         self._raw = self._mouse
         self._stable = self._mouse
+        self._interaction = self._mouse
         self._hits = 0
         self._misses = 0
         self._simulated = True
+        self.controller.simulate_tremor = True
         self._sim_start = time.perf_counter()
 
         self.trial: Trial | None = None
         self.results: list[Trial] = []
 
         self.timer = QTimer(self)
-        self.timer.setInterval(30)
+        self.timer.setInterval(16)
         self.timer.timeout.connect(self._tick)
         self.timer.start()
         self._rebuild_targets()
@@ -111,7 +120,7 @@ class TremorPlayground(QWidget):
     def set_simulation(self, enabled: bool) -> None:
         self._simulated = enabled
         self._sim_start = time.perf_counter()
-        self.controller.simulate_tremor = False
+        self.controller.simulate_tremor = enabled
         self.update()
 
     def reset_scores(self) -> None:
@@ -145,12 +154,23 @@ class TremorPlayground(QWidget):
             return
         x, y = self._mouse
         now = time.perf_counter()
-        if self._simulated:
-            dx, dy = self.controller.tremor_offset(now - self._sim_start)
-            x += dx
-            y += dy
-        self._raw = (x, y)
-        self._stable = self.controller.stabilize(x, y, now) if self.use_filter else (x, y)
+        if not self._inside and not self._simulated and self.controller.hold.anchor is None:
+            self.controller.telemetry.reset_window()
+            return
+        # Tremor sim + spectral sampling live inside stabilize when simulate_tremor is on.
+        self.controller.enabled = self.use_filter
+        stable = self.controller.stabilize(x, y, now)
+        self._raw = self.controller.last_raw
+        latest = self.controller.telemetry.latest
+        if self.assisted and latest and latest["medication_state_estimate"] == "OFF":
+            nearby = self.target_manager.select(*stable, assisted=True)
+            if nearby and not nearby.contains(*stable):
+                stable = (
+                    min(max(stable[0], nearby.x), nearby.x + nearby.width),
+                    min(max(stable[1], nearby.y), nearby.y + nearby.height),
+                )
+        self._interaction = stable
+        self._stable = self.controller.hold.move(stable, self._raw, now)
         self.update()
 
     def mouseMoveEvent(self, event) -> None:
@@ -165,7 +185,26 @@ class TremorPlayground(QWidget):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            sx, sy = self._stable
+            self._inside = True
+            self._mouse = event.position().toTuple()
+            self._tick()
+            self.controller.hold.press(self._stable, self._raw, time.perf_counter())
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        hold = self.controller.hold
+        if event.button() == Qt.MouseButton.LeftButton and hold.anchor is not None:
+            self._mouse = event.position().toTuple()
+            self._tick()
+            select = self.target_manager.select
+            origin = select(*hold.anchor, assisted=self.assisted)
+            slipped = origin is not None and select(*self._raw, assisted=self.assisted) != origin
+            sx, sy = hold.release(self._interaction, slipped)
+            event.accept()
+            if hold.dragging:
+                return
             target = self.target_manager.select(sx, sy, assisted=self.assisted)
             if self.trial and not self.trial.complete:
                 hit = self.trial.record(target.id if target else None, sx, sy)
@@ -184,9 +223,11 @@ class TremorPlayground(QWidget):
                 else:
                     self._misses += 1
                 self.metrics_changed.emit(self._hits, self._misses)
-        super().mousePressEvent(event)
+            return
+        super().mouseReleaseEvent(event)
 
     def hideEvent(self, event) -> None:
+        self.controller.hold.anchor = None
         self.timer.stop()
         super().hideEvent(event)
 
@@ -263,8 +304,7 @@ class TremorPlayground(QWidget):
         font.setPointSize(10)
         p.setFont(font)
         p.setPen(QColor(t.muted))
-        p.drawText(18, self.height() - 14,
-                   'Red ring: your hand with tremor     Filled dot: the steadied pointer     Blue outline: what a click selects')
+        p.drawText(18, self.height() - 14, 'Red ring is tremor · filled dot is the steadied pointer · outline is the click target')
         p.end()
 
 
@@ -284,7 +324,7 @@ class SteadyHandTrialPanel(QFrame):
         controls = QHBoxLayout()
         controls.setSpacing(10)
         self.mode_combo = QComboBox()
-        self.mode_combo.setAccessibleName('SteadyHand test mode')
+        self.mode_combo.setAccessibleName('SteadyHand test scenario')
         for mode in TremorPlayground.MODES:
             self.mode_combo.addItem(mode)
         self.mode_combo.setCurrentIndex(3)
@@ -293,31 +333,36 @@ class SteadyHandTrialPanel(QFrame):
         self.btn_start = button('Start 10-step trial', 'primaryButton')
         self.btn_start.clicked.connect(self.start_trial)
         controls.addWidget(self.btn_start)
-        self.btn_abort = button('Stop trial', 'secondaryButton')
+        self.btn_abort = button('Stop', 'secondaryButton')
         self.btn_abort.setEnabled(False)
         self.btn_abort.clicked.connect(self.abort_trial)
         controls.addWidget(self.btn_abort)
         lay.addLayout(controls)
 
+        self.mode_explain = label(TremorPlayground.MODE_BLURBS[3], 'bodyText', True)
+        lay.addWidget(self.mode_explain)
+
         self.playground = TremorPlayground(controller, target_padding=16.0 * target_size_pct / 100.0)
         lay.addWidget(self.playground)
-        self.score = label('Free practice: move into the canvas and click the steps.', 'cardTitle', True)
+        self.score = label('Move into the canvas and click the booking steps when you are ready.', 'cardTitle', True)
         lay.addWidget(self.score)
 
         self.simulation_row = PreferenceRow(
-            'Simulate shaky movement', 'Adds a realistic tremor to your pointer inside this canvas only.',
-            checked=True)
+            'Simulate Parkinsonian tremor',
+            'Adds an irregular 4 to 7 Hz pattern to this canvas; set intensity under Assist settings, or turn this off for a real mouse.',
+            checked=True,
+        )
         self.simulation_row.changed.connect(self.playground.set_simulation)
         lay.addWidget(self.simulation_row)
+        lay.addWidget(TelemetryPanel(controller))
 
         history = QHBoxLayout()
-        self.history = label('No completed trials yet. Try Baseline first, then Smoothing + Target assistance '
-                             'to see the difference.', 'bodyText', True)
+        self.history = label('Completed trials will appear here for a quick before-and-after comparison.', 'bodyText', True)
         history.addWidget(self.history, 1)
         self.btn_reset = button('Reset scores', 'secondaryButton')
         self.btn_reset.clicked.connect(self.reset_scores)
         history.addWidget(self.btn_reset, 0, Qt.AlignmentFlag.AlignTop)
-        self.btn_export = button('Export results', 'secondaryButton')
+        self.btn_export = button('Export accuracy', 'secondaryButton')
         self.btn_export.clicked.connect(self.export_results)
         history.addWidget(self.btn_export, 0, Qt.AlignmentFlag.AlignTop)
         lay.addLayout(history)
@@ -372,7 +417,8 @@ class SteadyHandTrialPanel(QFrame):
     # --- internal ------------------------------------------------------------------------------
     def _on_mode_changed(self, index: int) -> None:
         self.playground.set_mode(index)
-        self.score.setText(f'{self.playground.MODES[index]}: ready. Practise freely or start a trial.')
+        self.mode_explain.setText(TremorPlayground.MODE_BLURBS[index])
+        self.score.setText(f'{self.playground.MODES[index]} is ready whenever you want to practise or start a trial.')
 
     def _on_trial_progress(self, summary: dict, expected: str | None) -> None:
         if expected is None:

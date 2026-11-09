@@ -11,11 +11,14 @@ import os
 import secrets
 import time
 
-from accessshift.modules.steadyhand.filter import OneEuroFilter
+from accessshift.modules.steadyhand.filter import OneEuroFilter, IntentionalHold
+from accessshift.modules.steadyhand.metrics import MotorTelemetry
 
 
 class SteadyHandController:
     def __init__(self, strength: float | None = None):
+        self.telemetry = MotorTelemetry()
+        self.hold = IntentionalHold(self.telemetry)
         self.fx = OneEuroFilter()
         self.fy = OneEuroFilter()
 
@@ -32,7 +35,10 @@ class SteadyHandController:
         self.last_raw = (0.0, 0.0)
         self.last_stable = (0.0, 0.0)
 
+        # Pixel-scale displacement for the demo sim; prefs map intensity 0-100 onto this.
         self._tremor_amplitude = 30.0
+        self._tremor_intensity = 55
+        self.tremor_intensity = 55
         self.pattern_seed = secrets.randbits(32)
 
         self.hits = 0
@@ -110,6 +116,18 @@ class SteadyHandController:
 
         self._tremor_amplitude = value
 
+    @property
+    def tremor_intensity(self) -> int:
+        """0 to 100 demo scale: mild through intense simulated tremor."""
+        return self._tremor_intensity
+
+    @tremor_intensity.setter
+    def tremor_intensity(self, value: int | float) -> None:
+        value = int(round(float(value)))
+        self._tremor_intensity = max(0, min(100, value))
+        # Mild stays readable; intense is clearly hard without assist.
+        self._tremor_amplitude = 10.0 + (self._tremor_intensity / 100.0) * 70.0
+
     def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
 
@@ -119,8 +137,13 @@ class SteadyHandController:
     def set_simulate_tremor(self, enabled: bool) -> None:
         self.simulate_tremor = enabled
 
+    def set_tremor_intensity(self, intensity: int | float) -> None:
+        self.tremor_intensity = intensity
+
     def reset(self) -> None:
         """Clear smoothing history without clearing metrics."""
+        self.telemetry.reset_window()
+        self.hold.anchor = None
         self.fx.reset()
         self.fy.reset()
         self._last_timestamp = None
@@ -169,9 +192,11 @@ class SteadyHandController:
         self,
         t: float | None = None,
     ) -> tuple[float, float]:
-        """Generate synthetic jitter, not a clinical tremor model.
+        """Generate synthetic jitter for demos, not a clinical tremor model.
 
-        Supply elapsed seconds to replay the same pattern.
+        Keeps most energy near the Parkinsonian 4 to 7 Hz band while the
+        path wanders in frequency, amplitude, and direction so it feels less
+        like a fixed sine wave. Supply elapsed seconds to replay a seeded pattern.
         """
         t = (
             time.perf_counter()
@@ -182,50 +207,46 @@ class SteadyHandController:
         if not math.isfinite(t):
             raise ValueError("Simulation time must be finite.")
 
-        block = math.floor(t / 0.45)
-        local = t / 0.45 - block
+        # Softly reseed every few seconds so long demos do not loop the same motif.
+        chapter = int(t // 6.5)
+        chapter_seed = (self.pattern_seed ^ ((chapter + 1) * 2654435761)) & 0xFFFFFFFF
+        saved_seed = self.pattern_seed
+        self.pattern_seed = chapter_seed
 
-        center = 0.25 + 0.5 * (
-            self._noise_value(block, 7) + 1.0
-        ) / 2.0
+        def band_hz(axis: int) -> float:
+            # Slow wander inside the classic resting/postural band.
+            wander = 0.85 * self._noise_at(t * 0.4, 20 + axis) + 0.35 * self._noise_at(t * 1.15, 22 + axis)
+            return max(4.2, min(6.9, 5.5 + wander))
 
-        width = 0.035 + 0.10 * (
-            self._noise_value(block, 8) + 1.0
-        ) / 2.0
-
-        burst = 0.0
-
-        if self._noise_value(block, 9) > 0.05:
-            burst = math.exp(
-                -((local - center) / width) ** 2
-            )
-
-        envelope = 0.15 + 1.3 * (
-            (self._noise_at(t * 3.0, 2) + 1.0) / 2.0
-        ) ** 2
+        def gaussian_noise(axis: int) -> float:
+            i = math.floor(t * 60)
+            u = max(1e-12, (self._noise_value(i, axis) + 1) / 2)
+            phase = math.pi * (1 + self._noise_value(i, axis + 2))
+            return math.sqrt(-2 * math.log(u)) * math.cos(phase)
 
         def offset(axis: int) -> float:
-            fast_jitter = (
-                0.85 * self._noise_at(t * 27.0, axis)
-                + 0.4 * self._noise_at(t * 61.0, axis + 3)
+            hz = band_hz(axis)
+            # Phase drift keeps the ellipse from looking mechanical.
+            phase = axis * 1.25 + 1.7 * self._noise_at(t * 0.28, 24 + axis)
+            carrier = math.sin(2 * math.pi * hz * t + phase)
+            companion = 0.42 * math.sin(
+                2 * math.pi * (hz * (0.88 + 0.08 * self._noise_at(t * 0.5, 26 + axis))) * t
+                + phase + 1.9
             )
+            # Low-rate envelope so intensity breathes instead of sitting flat.
+            envelope = 0.55 + 0.45 * (0.5 + 0.5 * self._noise_at(t * 0.65, 28 + axis))
+            noise = 0.32 * gaussian_noise(axis)
+            # Rare short spasms on top of the continuous tremor.
+            spasm = 0.0
+            burst = self._noise_value(math.floor(t * 8), axis + 8)
+            if burst > 0.86:
+                spasm = (1.4 + 1.2 * abs(gaussian_noise(axis + 4))) * math.copysign(1.0, burst)
+            return self.tremor_amplitude * envelope * (carrier + companion + noise + spasm)
 
-            slower_motion = (
-                0.25 * self._noise_at(t * 5.0, axis + 12)
-            )
-
-            sudden_motion = (
-                1.6 * burst
-                * self._noise_value(block, axis + 20)
-            )
-
-            return self.tremor_amplitude * (
-                envelope * fast_jitter
-                + slower_motion
-                + sudden_motion
-            )
-
-        return offset(0), offset(1)
+        try:
+            return offset(0), offset(1)
+        finally:
+            self.pattern_seed = saved_seed
 
     def stabilize(
         self,
@@ -254,7 +275,9 @@ class SteadyHandController:
                 return self.last_stable
 
             if dt > self.reset_after_seconds:
-                self.reset()
+                self.fx.reset()
+                self.fy.reset()
+                self.telemetry.reset_window()
 
         self.last_input = (x, y)
 
@@ -271,7 +294,12 @@ class SteadyHandController:
 
         self.last_raw = (x, y)
 
+        self.telemetry.sample(x, y, now, self.simulate_tremor)
+        high = self.telemetry.latest and self.telemetry.latest["medication_state_estimate"] == "OFF"
         if self.enabled:
+            extra = max(1.0 if high else 0.0, self.strength - 1)
+            for axis in (self.fx, self.fy):
+                axis.configure(.65 * (.15 / .65) ** extra, .004 * .25 ** extra)
             filtered_x = self.fx.filter(x, now)
             filtered_y = self.fy.filter(y, now)
 
