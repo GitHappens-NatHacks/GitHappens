@@ -18,7 +18,6 @@ Younify is a PySide6 (Qt) app with a Control Center, a Demo Lab, and three main 
 
 Profiles (Steadier pointing, Hands-free control, Clearer interfaces, Custom mix) turn combinations of those modules on. Preferences save on the device.
 
-Speech (offline TTS) and short word suggestions appear inside the hands-free keyboard path. They are not a separate Control Center tab.
 
 ---
 
@@ -32,7 +31,6 @@ Speech (offline TTS) and short word suggestions appear inside the hands-free key
 | Optional EyeTrax | Richer eye tracking when `GAZE_BACKEND=auto` / `eyetrax` / `hybrid` |
 | pynput | Optional system pointer hooks for SteadyHand |
 | pyttsx3 | Offline TTS in hands-free flows |
-| onnxruntime | Optional local text prediction when enabled |
 
 ---
 
@@ -127,14 +125,13 @@ Build on the OS you ship (Mac binary on Mac, Windows binary on Windows).
 | Pragati Puri | Adaptive Engine & Dashboard |
 | Yee | SteadyHand filters |
 | Dipta | SteadyHand targets & metrics |
-| Elizabeth | Healthcare form / SmartInterface |
-| Avneet Kaur | Speech & predictive text |
+| Avneet and Elizabeth | UI / SmartInterface |
 
 ## Credits
 
 - MediaPipe Face Mesh (Google)
 - 1-Euro filter (Casiez et al.)
-- Qt / PySide6, OpenCV, pyttsx3, pynput, ONNX Runtime
+- Qt / PySide6, OpenCV, pyttsx3, pynput
 
 ## Known limitations
 
