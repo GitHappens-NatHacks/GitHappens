@@ -13,7 +13,7 @@ Younify is a PySide6 (Qt) app with a Control Center, a Demo Lab, and three main 
 | Feature | What you get |
 | :--- | :--- |
 | **SteadyHand** | Tremor filtering on a practice canvas, strength up to 200%, simulated tremor intensity, wider click zones, drag guard, session tremor chart, and trial export |
-| **Head movement** | Webcam head pointing, dwell or blink to select, calibration, full-screen hands-free booking demo |
+| **Head movement** | Webcam head pointing with a guided 5-step calibration, select by holding still (Relaxed, Normal or Quick) or by blinking, a full-screen hands-free booking demo with large photo targets, live camera preview, and on-screen alerts. Leave by closing your eyes for 5 seconds or with Quit hands-free |
 | **SmartInterface** | Larger text, letter spacing, colour themes, screen tint, and a sample healthcare form that switches to a step-by-step layout |
 
 Profiles (Steadier pointing, Hands-free control, Clearer interfaces, Custom mix) turn combinations of those modules on. Preferences save on the device.
@@ -48,6 +48,8 @@ GitHappens/
 │   │   ├── smartinterface/   # Themes, tint, form modes
 │   │   └── speech/           # TTS + optional prediction
 │   └── ui/                   # Control Center, Demo Lab, gaze booking, SteadyHand panel
+├── AccessShift_Extension/    # Standalone Chromium extension (reading, steady pointer); see its README
+├── steadyhand_demo/          # SteadyHand practice targets and metrics
 ├── assets/
 │   ├── brand/                # Logo and mark
 │   ├── ui/                   # Photo headers
@@ -63,9 +65,9 @@ GitHappens/
 
 ## Demo flow
 
-1. **SteadyHand** — Turn on simulated tremor, try Baseline vs Full assist, watch the session chart, export if needed.
-2. **Head movement** — Start head control, calibrate, complete the booking demo with dwell or blink.
-3. **SmartInterface** — Open the Demo Lab healthcare form; toggle SmartInterface and reading settings and watch the form update.
+1. **SteadyHand:** Turn on simulated tremor, try Baseline vs Full assist, watch the session chart, export if needed.
+2. **Head movement:** Start head control, follow the calibration arrows, then book an appointment by holding your head still on an option or blinking. Close your eyes for 5 seconds to leave.
+3. **SmartInterface:** Open the Demo Lab healthcare form; toggle SmartInterface and reading settings and watch the form update.
 
 ---
 
@@ -121,8 +123,8 @@ Build on the OS you ship (Mac binary on Mac, Windows binary on Windows).
 
 | Member | Focus |
 | :--- | :--- |
-| Adnan | Architecture & GazeControl |
-| Pragati Puri | Adaptive Engine & Dashboard |
+| Adnan | Architecture, integration and UI |
+| Pragati Puri | Head movement (head pointing, calibration, hands-free booking) |
 | Yee | SteadyHand filters |
 | Dipta | SteadyHand targets & metrics |
 | Avneet and Elizabeth | UI / SmartInterface |
