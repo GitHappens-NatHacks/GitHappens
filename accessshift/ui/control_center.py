@@ -38,7 +38,8 @@ MODULE_KEYS = ('gaze_control', 'steady_hand', 'smart_interface', 'predictive_spe
 # The four AccessShift features, in the order they appear everywhere.
 FEATURES = (
     ('gaze', 'head', 'Head movement', 'Point with your head or your eyes, and blink to select. Only a webcam is needed.'),
-    ('steady', 'steady', 'SteadyHand', 'Smooth shaky pointer movement and reach small targets.'),
+    ('steady', 'steady', 'SteadyHand',
+     'Steady the pointer through Parkinsonian tremor and keep a simple motor session for clinic review.'),
     ('interface', 'interface', 'SmartInterface', 'Bigger text, calmer colours and simpler, step-by-step screens.'),
 )
 
@@ -66,8 +67,8 @@ INTRO_SLIDES = (
      ('Large options in a calm, full-screen view', 'Head or eyes: pick whichever feels easier',
       'Quit at any time with the Quit hands-free button')),
     ('steady', 'SteadyHand',
-     'Smooths out tremor so the pointer goes where you mean it to, and makes small buttons easier to hit.',
-     ('Adjustable smoothing strength', 'Bigger click zones around buttons', 'Measure your accuracy with a 10-step trial')),
+     'SteadyHand softens tremor on the pointer, widens hard-to-hit targets, and keeps a motor session you can export.',
+     ('Quieter aiming with tremor', 'Clearer booking-step trials', 'A session chart clinicians can review')),
     ('interface', 'SmartInterface',
      'Reshapes busy screens: larger text, extra letter spacing, calmer colours and one step at a time.',
      ('Text size and spacing across the whole app', 'Word highlighting to help you keep your place',
@@ -844,32 +845,59 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ SteadyHand
     def _page_steady(self):
-        page, lay = self._page('SteadyHand',
-                               'Reduce pointer jitter and make small targets easier to select.', icon_name='steady')
-        self.steady_toggle = self._bind_row('module', 'steady_hand', 'Use SteadyHand',
-                                            'Smooth your pointer inside AccessShift and its demos.')
+        page, lay = self._page(
+            'SteadyHand',
+            'Softens Parkinsonian tremor on the pointer and quietly records a motor session you can share with a clinician.',
+            icon_name='steady',
+        )
+
+        intro, il = card(spacing=10)
+        il.addWidget(label(
+            'Everyday portals ask for precise clicks that a 4 to 7 Hz tremor often cannot deliver, especially when '
+            'medication wears toward OFF. SteadyHand filters that motion, widens click targets, and guards against '
+            'accidental drags, using only the mouse you already have.',
+            'bodyText', True,
+        ))
+        lay.addWidget(intro)
+
+        self.steady_toggle = self._bind_row(
+            'module', 'steady_hand', 'Use SteadyHand',
+            'Applies stabilization across AccessShift while the session chart below keeps updating.',
+        )
         lay.addWidget(self.steady_toggle)
+
+        demo, dl = card(spacing=12)
+        dl.addWidget(label('Try it', 'sectionTitle'))
+        dl.addWidget(label(
+            'Work through the booking steps on the canvas, starting with Baseline and then Full assist so you can '
+            'feel the difference in accuracy and effort.',
+            'bodyText', True,
+        ))
+        self.steady_panel = SteadyHandTrialPanel(
+            self.steady, self.prefs.target_size_pct, self.repo_root, self.prefs.as_dict(),
+        )
+        self.playground = self.steady_panel.playground
+        dl.addWidget(self.steady_panel)
+        lay.addWidget(demo)
+
         config, cfg = card(spacing=8)
+        cfg.addWidget(label('Assist settings', 'sectionTitle'))
         cfg.addWidget(label('Stabilization strength', 'cardTitle'))
-        cfg.addWidget(label('Higher values smooth more movement but can feel slower.', 'bodyText', True))
+        cfg.addWidget(label(
+            'Raises how firmly tremor-band motion is filtered when you need a calmer pointer.',
+            'bodyText', True,
+        ))
         self.strength_slider, sr = self._slider(0, 100, 5, 'tremor_strength', '%', ('Light', 'Strong'))
         cfg.addLayout(sr)
         cfg.addSpacing(8)
         cfg.addWidget(label('Click zone size', 'cardTitle'))
-        cfg.addWidget(label('How far around a button a click still counts.', 'bodyText', True))
+        cfg.addWidget(label(
+            'Expands how close the pointer needs to be before a booking step still counts.',
+            'bodyText', True,
+        ))
         self.target_slider, tr = self._slider(100, 200, 10, 'target_size_pct', '%', ('Normal', 'Large'))
         cfg.addLayout(tr)
         lay.addWidget(config)
-
-        demo, dl = card(spacing=12)
-        dl.addWidget(label('SteadyHand demo', 'sectionTitle'))
-        dl.addWidget(label('Move into the canvas and click the steps in order. Compare Baseline with Smoothing + '
-                           'Target assistance to see how much easier it gets.', 'bodyText', True))
-        self.steady_panel = SteadyHandTrialPanel(self.steady, self.prefs.target_size_pct, self.repo_root,
-                                                 self.prefs.as_dict())
-        self.playground = self.steady_panel.playground
-        dl.addWidget(self.steady_panel)
-        lay.addWidget(demo)
         lay.addStretch()
         return page
 

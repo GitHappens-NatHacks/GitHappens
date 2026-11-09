@@ -42,11 +42,17 @@ class TremorPlayground(QWidget):
     trial_completed = Signal(object)
 
     MODES = [
-        'Baseline (Raw input)',
-        'SteadyHand smoothing',
-        'Target assistance',
-        'Smoothing + Target assistance',
+        'Baseline',
+        'Smoothing only',
+        'Larger targets only',
+        'Full assist',
     ]
+    MODE_BLURBS = (
+        'Unassisted path: tremor reaches the buttons exactly as it is, so you can measure a fair starting point.',
+        'Filters the classic 4 to 7 Hz band so the pointer follows intention more closely.',
+        'Keeps the raw path, but makes each booking step easier to catch when aim lands nearby.',
+        'Combines filtering, wider targets, and a drag guard that holds your original click through brief spasms.',
+    )
 
     def __init__(self, controller: SteadyHandController, target_padding: float = 16.0):
         super().__init__()
@@ -298,8 +304,7 @@ class TremorPlayground(QWidget):
         font.setPointSize(10)
         p.setFont(font)
         p.setPen(QColor(t.muted))
-        p.drawText(18, self.height() - 14,
-                   'Red ring: your hand with tremor     Filled dot: the steadied pointer     Blue outline: what a click selects')
+        p.drawText(18, self.height() - 14, 'Red ring is tremor · filled dot is the steadied pointer · outline is the click target')
         p.end()
 
 
@@ -319,7 +324,7 @@ class SteadyHandTrialPanel(QFrame):
         controls = QHBoxLayout()
         controls.setSpacing(10)
         self.mode_combo = QComboBox()
-        self.mode_combo.setAccessibleName('SteadyHand test mode')
+        self.mode_combo.setAccessibleName('SteadyHand test scenario')
         for mode in TremorPlayground.MODES:
             self.mode_combo.addItem(mode)
         self.mode_combo.setCurrentIndex(3)
@@ -328,33 +333,36 @@ class SteadyHandTrialPanel(QFrame):
         self.btn_start = button('Start 10-step trial', 'primaryButton')
         self.btn_start.clicked.connect(self.start_trial)
         controls.addWidget(self.btn_start)
-        self.btn_abort = button('Stop trial', 'secondaryButton')
+        self.btn_abort = button('Stop', 'secondaryButton')
         self.btn_abort.setEnabled(False)
         self.btn_abort.clicked.connect(self.abort_trial)
         controls.addWidget(self.btn_abort)
         lay.addLayout(controls)
 
+        self.mode_explain = label(TremorPlayground.MODE_BLURBS[3], 'bodyText', True)
+        lay.addWidget(self.mode_explain)
+
         self.playground = TremorPlayground(controller, target_padding=16.0 * target_size_pct / 100.0)
         lay.addWidget(self.playground)
-        self.score = label('Free practice: move into the canvas and click the steps.', 'cardTitle', True)
+        self.score = label('Move into the canvas and click the booking steps when you are ready.', 'cardTitle', True)
         lay.addWidget(self.score)
 
         self.simulation_row = PreferenceRow(
-            'Simulate 5.5 Hz Parkinsonian tremor',
-            'Adds a sinusoid and noise to the raw practice cursor inside this canvas only.',
-            checked=True)
+            'Simulate Parkinsonian tremor',
+            'Adds a 5.5 Hz pattern to this canvas so you can demo without a live tremor; turn it off for a real mouse.',
+            checked=True,
+        )
         self.simulation_row.changed.connect(self.playground.set_simulation)
         lay.addWidget(self.simulation_row)
         lay.addWidget(TelemetryPanel(controller))
 
         history = QHBoxLayout()
-        self.history = label('No completed trials yet. Try Baseline first, then Smoothing + Target assistance '
-                             'to see the difference.', 'bodyText', True)
+        self.history = label('Completed trials will appear here for a quick before-and-after comparison.', 'bodyText', True)
         history.addWidget(self.history, 1)
         self.btn_reset = button('Reset scores', 'secondaryButton')
         self.btn_reset.clicked.connect(self.reset_scores)
         history.addWidget(self.btn_reset, 0, Qt.AlignmentFlag.AlignTop)
-        self.btn_export = button('Export results', 'secondaryButton')
+        self.btn_export = button('Export accuracy', 'secondaryButton')
         self.btn_export.clicked.connect(self.export_results)
         history.addWidget(self.btn_export, 0, Qt.AlignmentFlag.AlignTop)
         lay.addLayout(history)
@@ -409,7 +417,8 @@ class SteadyHandTrialPanel(QFrame):
     # --- internal ------------------------------------------------------------------------------
     def _on_mode_changed(self, index: int) -> None:
         self.playground.set_mode(index)
-        self.score.setText(f'{self.playground.MODES[index]}: ready. Practise freely or start a trial.')
+        self.mode_explain.setText(TremorPlayground.MODE_BLURBS[index])
+        self.score.setText(f'{self.playground.MODES[index]} is ready whenever you want to practise or start a trial.')
 
     def _on_trial_progress(self, summary: dict, expected: str | None) -> None:
         if expected is None:
