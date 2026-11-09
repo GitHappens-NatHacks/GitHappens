@@ -238,3 +238,14 @@ def test_demo_lab_starts_the_head_movement_demo(window):
     assert lab.head_button.text() == "Stop the demo"
     lab.head_button.click()
     assert not window.gaze_window.gaze.enabled
+
+
+def test_turning_steadyhand_off_sets_strength_to_zero(window):
+    window._change_module("steady_hand", True)
+    window._change_option("tremor_strength", 120)
+    window.steady_toggle.switch.click()  # Use SteadyHand: off
+    assert not window.prefs.steady_hand and window.prefs.tremor_strength == 0
+    assert window.strength_slider.value() == 0 and window.steady.strength == 0
+    window.steady_toggle.switch.click()  # back on: the previous strength returns
+    assert window.prefs.steady_hand and window.prefs.tremor_strength == 120
+    assert window.strength_slider.value() == 120
