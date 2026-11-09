@@ -1,4 +1,4 @@
-"""Line icons for AccessShift, drawn with QPainter in one consistent stroke.
+"""Line icons for Younify, drawn with QPainter in one consistent stroke.
 
 Every icon is authored on a 24 x 24 grid with a 1.8 px round stroke, so icons look
 like one family at any size and take their colour from the active theme.

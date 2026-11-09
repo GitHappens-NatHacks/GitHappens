@@ -1,4 +1,4 @@
-"""Small reusable PySide6 controls for AccessShift's cross-platform UI."""
+"""Small reusable PySide6 controls for Younify's cross-platform UI."""
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal

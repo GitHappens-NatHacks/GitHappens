@@ -1,8 +1,8 @@
 """Full-screen hands-free booking window for GazeControl.
 
-Opened by the control center when "Use eye navigation" (or the Hands-free profile)
+Opened by the control center when head movement control (or the Hands-free profile)
 is turned on. It holds:
-  - a gaze bar: Recalibrate · Head/Eyes switch · status · Quit hands-free
+  - a gaze bar: Recalibrate · status · Quit hands-free (Younify points with the head only)
   - the 2x2 gaze grid, mirroring the step-by-step booking portal (all buttons, no typing)
 GazeMode (camera, cursor, preview, big high-contrast style) is attached to this window.
 """
@@ -28,7 +28,7 @@ class GazeBookingWindow(QWidget):
 
     def __init__(self, repo_root: Path, parent: QWidget | None = None):
         super().__init__(parent, Qt.Window)
-        self.setWindowTitle("AccessShift AI  ·  Hands-free booking")
+        self.setWindowTitle("Younify  ·  Hands-free booking")
         self.resize(1100, 760)
         self._repo_root = Path(repo_root)
         self._stopping = False
@@ -39,7 +39,7 @@ class GazeBookingWindow(QWidget):
         self.btn_recalibrate = QPushButton("Recalibrate")
         self.btn_source = QPushButton()
         self.btn_quit = QPushButton("Quit hands-free")
-        self.btn_quit.setAccessibleName("Quit hands-free control and go back to AccessShift")
+        self.btn_quit.setAccessibleName("Quit hands-free control and go back to Younify")
         self.status = QLabel()
         self.status.setWordWrap(True)
         bar.addWidget(self.btn_recalibrate, 1)
@@ -62,6 +62,10 @@ class GazeBookingWindow(QWidget):
         self.btn_recalibrate.clicked.connect(self.gaze.request_recalibrate)
         self.btn_source.clicked.connect(self.gaze.toggle_source)
         self.btn_quit.clicked.connect(self.exit_requested)
+        # Younify points with the head only: no eyes option in the bar or before calibrating.
+        self.gaze.allow_eyes = False
+        self.gaze.controller.set_source("head")
+        self.btn_source.hide()
         self._show_source(self.gaze.controller.source)
         self.setObjectName("gazeRoot")
         self.apply_theme("standard")

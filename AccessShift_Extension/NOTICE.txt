@@ -1,0 +1,13 @@
+AccessShift extension prototype
+
+Signal processing: One Euro filter design described by Casiez, Roussel and Vogel,
+"1 € Filter: A Simple Speed-based Low-pass Filter for Noisy Input in Interactive Systems" (CHI 2012).
+The JavaScript implementation in this package is newly written prototype code.
+
+Color simulation coefficients: Machado, Oliveira and Fernandes (2009),
+"A Physiologically-based Model for Simulation of Color Vision Deficiency".
+The experimental assistance transform additionally uses a separate RGB error
+redistribution heuristic; it is not a validated correction from that paper.
+
+No external JavaScript, font, image, model, or analytics asset is loaded by the extension.
+Optional tests use jsdom, supplied separately through npm; it is not part of the runtime.

@@ -86,7 +86,7 @@ class HealthcareDemoWindow(QDialog):
         self._mode_inputs: tuple | None = None
         self._targets: dict[str, QPushButton] = {}
         self.setObjectName('healthDemo')
-        self.setWindowTitle('AccessShift · Healthcare demo')
+        self.setWindowTitle('Younify · Healthcare demo')
         self._build()
         if self._embedded:
             self.setWindowFlags(Qt.WindowType.Widget)

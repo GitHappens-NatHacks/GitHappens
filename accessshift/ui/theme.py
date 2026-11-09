@@ -1,8 +1,8 @@
-"""AccessShift visual system: brand palette, colour themes and app-wide reading settings.
+"""Younify visual system: brand palette, colour themes and app-wide reading settings.
 
 Everything here is presentation only. The four colour themes a person can pick
 (Standard, High contrast, Warm reading, Cool blue) are expressed as one token set,
-so every AccessShift window (control center, Demo Lab, hands-free view) looks the
+so every Younify window (control center, Demo Lab, hands-free view) looks the
 same and follows the same text size and letter spacing.
 """
 from __future__ import annotations
@@ -17,15 +17,17 @@ from PySide6.QtWidgets import QApplication
 
 from accessshift.modules.smartinterface.visual_controller import Palette
 
-# Brand palette (the agreed AccessShift colours).
-DEEP_TEAL = '#176F6C'        # primary buttons, branding
-SOFT_MINT = '#E5F2EF'        # cards, highlights
-WARM_CREAM = '#FAF2DE'       # background sections
-FOREST_GREEN = '#1C302C'     # sidebar, headings
-ACCESSIBLE_BLUE = '#3478D4'  # links, active controls
+# Brand palette, tuned to the Younify logo (green #014A35, navy #01305A) with the cream theme.
+LOGO_GREEN = '#014A35'
+LOGO_NAVY = '#01305A'
+DEEP_TEAL = '#0B6B4F'        # primary buttons (the logo green, one step lighter)
+SOFT_MINT = '#E4F0EA'        # cards, highlights
+WARM_CREAM = '#FAF3E1'       # background sections
+FOREST_GREEN = LOGO_GREEN    # headings, branding
+ACCESSIBLE_BLUE = '#1F5FA8'  # links, active controls (the logo navy, brightened for contrast)
 PURE_WHITE = '#FFFFFF'       # main background
-CHARCOAL = '#252B29'         # main text
-MUTED_GREY_GREEN = '#65716D'  # secondary text
+CHARCOAL = '#22302B'         # main text
+MUTED_GREY_GREEN = '#5D6B66'  # secondary text
 
 
 @dataclass(frozen=True)
@@ -52,10 +54,10 @@ class Theme:
 THEMES: dict[str, Theme] = {
     'standard': Theme(
         bg=PURE_WHITE, section=WARM_CREAM, card=PURE_WHITE, mint=SOFT_MINT,
-        sidebar=FOREST_GREEN, sidebar_text='#E1EEEA', sidebar_muted='#97B5AC', sidebar_active='#2A4A43',
+        sidebar=LOGO_GREEN, sidebar_text='#E8F2EE', sidebar_muted='#9FC2B4', sidebar_active='#0D5C45',
         heading=FOREST_GREEN, text=CHARCOAL, muted=MUTED_GREY_GREEN,
-        primary=DEEP_TEAL, primary_hover='#115654', on_primary=PURE_WHITE,
-        active=ACCESSIBLE_BLUE, border='#D5E2DE', highlight='#FFE07A',
+        primary=DEEP_TEAL, primary_hover=LOGO_GREEN, on_primary=PURE_WHITE,
+        active=ACCESSIBLE_BLUE, border='#D3E1DA', highlight='#FFE07A',
     ),
     'high_contrast': Theme(
         bg='#0B0F0E', section='#121A18', card='#121A18', mint='#1E2B28',
@@ -68,14 +70,14 @@ THEMES: dict[str, Theme] = {
         bg='#FFFBF2', section=WARM_CREAM, card=PURE_WHITE, mint='#F3E8CF',
         sidebar='#2B2418', sidebar_text='#F5EBD8', sidebar_muted='#C9B48F', sidebar_active='#3E3423',
         heading='#2B2418', text='#332718', muted='#6B563B',
-        primary=DEEP_TEAL, primary_hover='#115654', on_primary=PURE_WHITE,
+        primary=DEEP_TEAL, primary_hover=LOGO_GREEN, on_primary=PURE_WHITE,
         active='#2F6DC0', border='#E5D5B4', highlight='#FFD978',
     ),
     'cool': Theme(
         bg='#F4F8FD', section='#E6F0FA', card=PURE_WHITE, mint='#DCEAF8',
-        sidebar='#132C44', sidebar_text='#DCEBFA', sidebar_muted='#8FAFCC', sidebar_active='#1F3F5E',
-        heading='#132C44', text='#152C45', muted='#486784',
-        primary='#255FD3', primary_hover='#1C4CAD', on_primary=PURE_WHITE,
+        sidebar=LOGO_NAVY, sidebar_text='#DCEBFA', sidebar_muted='#8FAFCC', sidebar_active='#1F3F5E',
+        heading=LOGO_NAVY, text='#152C45', muted='#486784',
+        primary='#1F5FA8', primary_hover=LOGO_NAVY, on_primary=PURE_WHITE,
         active='#255FD3', border='#C5DAEE', highlight='#FFE58A',
     ),
 }
@@ -102,8 +104,8 @@ def gaze_palette(profile: str) -> Palette:
 
 
 # Labels whose size must stay fixed so navigation never overflows at large text sizes.
-FIXED_SIZE_SELECTORS = ('#navButton', '#sideSection', '#brandName', '#brandSub', '#sidebarFoot',
-                        '#topBarTitle', '#footerText', '#railButton', '#railTitle')
+FIXED_SIZE_SELECTORS = ('#navTab', '#navBrand', '#profileButton', '#navAction', '#footerText',
+                        '#railButton', '#railTitle')
 
 _QSS_TEMPLATE = Template(Path(__file__).with_name('control_center_styles.qss').read_text(encoding='utf-8'))
 
@@ -123,13 +125,13 @@ def scale_font_sizes(qss: str, font_size_pct: int, fixed: tuple[str, ...] = FIXE
 
 
 def stylesheet(font_size_pct: int = 100, color_profile: str = 'standard') -> str:
-    """The complete AccessShift stylesheet for a text size and colour theme."""
+    """The complete Younify stylesheet for a text size and colour theme."""
     tokens = {k: v for k, v in theme(color_profile).__dict__.items()}
     return scale_font_sizes(_QSS_TEMPLATE.substitute(tokens), font_size_pct)
 
 
 def apply_letter_spacing(px: int) -> None:
-    """Letter spacing for every AccessShift window, not only one page.
+    """Letter spacing for every Younify window, not only one page.
 
     The application font carries the spacing; re-applying each window's stylesheet
     makes Qt re-resolve fonts that a stylesheet sized, so the spacing reaches them too.
@@ -145,3 +147,27 @@ def apply_letter_spacing(px: int) -> None:
     app.setFont(font)
     for window in app.topLevelWidgets():
         window.setStyleSheet(window.styleSheet())
+
+
+# ---------------------------------------------------------------- brand and photography
+_PIXMAPS: dict[str, object] = {}
+
+
+def asset(*parts: str) -> Path:
+    return Path(__file__).resolve().parents[2].joinpath('assets', *parts)
+
+
+def pixmap(*parts: str):
+    """Cached QPixmap for a file under assets/ (an empty pixmap if it is missing)."""
+    from PySide6.QtGui import QPixmap
+
+    key = '/'.join(parts)
+    if key not in _PIXMAPS:
+        _PIXMAPS[key] = QPixmap(str(asset(*parts)))
+    return _PIXMAPS[key]
+
+
+def logo_icon():
+    from PySide6.QtGui import QIcon
+
+    return QIcon(pixmap('brand', 'younify-mark.png'))
