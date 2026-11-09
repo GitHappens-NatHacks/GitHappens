@@ -1,0 +1,99 @@
+--- a/accessshift/ui/steadyhand_panel.py
++++ b/accessshift/ui/steadyhand_panel.py
+@@ -8,8 +8,8 @@
+ import time
+ from pathlib import Path
+ 
+-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, QUrl, Signal
+-from PySide6.QtGui import QColor, QDesktopServices, QPainter, QPen
++from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
++from PySide6.QtGui import QColor, QPainter, QPen
+ from PySide6.QtWidgets import (
+     QComboBox, QFileDialog, QFrame, QHBoxLayout, QMessageBox, QVBoxLayout, QWidget,
+ )
+@@ -367,18 +367,9 @@
+         self.btn_export.clicked.connect(self.export_results)
+         history.addWidget(self.btn_export, 0, Qt.AlignmentFlag.AlignTop)
+         lay.addLayout(history)
+-        mouse_tests = button('Open mouse tests', 'secondaryButton')
+-        mouse_tests.clicked.connect(self.open_mouse_tests)
+-        lay.addWidget(mouse_tests)
+-
+         self.playground.metrics_changed.connect(self._update_score)
+         self.playground.trial_progress.connect(self._on_trial_progress)
+         self.playground.trial_completed.connect(self._on_trial_completed)
+-
+-    def open_mouse_tests(self) -> None:
+-        page = Path(__file__).with_name('mouse_tests.html')
+-        if not page.is_file() or not QDesktopServices.openUrl(QUrl.fromLocalFile(str(page.resolve()))):
+-            QMessageBox.warning(self, 'Mouse tests', 'Could not open the mouse tests in your browser.')
+ 
+     # --- public -------------------------------------------------------------------------------
+     def set_theme(self, t: theme_mod.Theme) -> None:
+--- a/accessshift/ui/motor_telemetry.py
++++ b/accessshift/ui/motor_telemetry.py
+@@ -171,6 +171,14 @@
+         self.chart = TremorTrendChart(self.metrics)
+         layout.addWidget(self.chart)
+ 
++        self.test_toggle = QPushButton("Movement tests")
++        self.test_toggle.setCheckable(True)
++        self.test_toggle.setMinimumHeight(42)
++        self.test_toggle.setObjectName("secondaryButton")
++        layout.addWidget(self.test_toggle)
++        self.test_view = None
++        self.test_toggle.toggled.connect(self.show_movement_tests)
++
+         self.summary = QLabel()
+         self.summary.setObjectName("bodyText")
+         self.summary.setWordWrap(True)
+@@ -200,6 +208,39 @@
+         self.timer.timeout.connect(self.refresh)
+         self.timer.start(150)
+         self.refresh()
++
++    def show_movement_tests(self, visible):
++        if visible and self.test_view is None:
++            from pathlib import Path
++            from PySide6.QtCore import QUrl
++            from PySide6.QtWebEngineWidgets import QWebEngineView
++
++            view = QWebEngineView(self)
++            view.setAccessibleName("Movement tests")
++            view.setMinimumHeight(660)
++            view.page().profile().downloadRequested.connect(self.save_test_download)
++            page = Path(__file__).with_name("mouse_tests.html")
++            view.load(QUrl.fromLocalFile(str(page.resolve())))
++            self.layout().insertWidget(self.layout().indexOf(self.test_toggle) + 1, view)
++            self.test_view = view
++        if self.test_view is not None:
++            self.test_view.setVisible(visible)
++
++    def save_test_download(self, request):
++        from pathlib import Path
++        from PySide6.QtWidgets import QFileDialog
++
++        if self.test_view is None or request.page() != self.test_view.page():
++            return
++        filename, _ = QFileDialog.getSaveFileName(self, "Save movement test data",
++                                                   request.downloadFileName())
++        if filename:
++            path = Path(filename)
++            request.setDownloadDirectory(str(path.parent))
++            request.setDownloadFileName(path.name)
++            request.accept()
++        else:
++            request.cancel()
+ 
+     def set_theme(self, t: theme_mod.Theme) -> None:
+         self.chart.set_theme(t)
+--- a/scripts/build_accessshift.py
++++ b/scripts/build_accessshift.py
+@@ -21,6 +21,7 @@
+         sys.executable, '-m', 'PyInstaller', '--noconfirm', '--windowed',
+         '--name', 'AccessShiftAI', '--paths', str(ROOT),
+         '--add-data', f'{ROOT / "accessshift/ui/control_center_styles.qss"}{sep}accessshift/ui',
++        '--add-data', f'{ROOT / "accessshift/ui/mouse_tests.html"}{sep}accessshift/ui',
+         '--add-data', f'{ROOT / "assets"}{sep}assets',
+         str(ROOT / 'accessshift/__main__.py'),
+     ]

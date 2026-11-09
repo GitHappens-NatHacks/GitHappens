@@ -1,0 +1,168 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AccessShift Â· Mouse tests</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f3ec;color:#203a35;font:17px/1.45 "Segoe UI",sans-serif}header,main{max-width:1120px;margin:auto;padding:22px 5%}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bdc8bd}header b{font-size:23px}header small{color:#52665e}h1,h2{font-family:Georgia,serif;font-weight:400;letter-spacing:-.04em}h1{font-size:clamp(44px,7vw,80px);margin:36px 0 0}h2{font-size:34px;margin:0}.intro{margin:4px 0 28px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}button,select{font:inherit;color:inherit;padding:11px 16px;border:1px solid #9baea0;border-radius:9px;background:#fff;cursor:pointer}button:disabled{opacity:.5;cursor:default}button:focus-visible,select:focus-visible{outline:3px solid #da8629}.card{text-align:left;background:#e6ebe1;font-weight:600;padding:15px}.card[aria-pressed=true]{background:#224a41;color:white}.card svg{display:block;width:100%;height:56px;margin-bottom:8px}section{background:#fffef9;border:1px solid #cbd3c6;border-radius:16px;padding:clamp(16px,3vw,34px);margin:18px 0}.controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.primary{background:#244c41;color:white}#board{width:100%;height:clamp(250px,35vw,380px);display:block;background-color:#f5f7ef;background-image:radial-gradient(#bbc8b8 1px,transparent 1px);background-size:16px 16px;border:1px solid #cad3c4;border-radius:10px;cursor:crosshair}#status{font-weight:600;min-height:25px}footer{color:#55685c;margin:22px 0}.row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 0;border-top:1px solid #d6ddd3}.row button{margin-left:auto}@media(max-width:680px){.cards{grid-template-columns:repeat(2,1fr)}header small{font-size:12px}}
+</style><header><b>âˆ¿ &nbsp; Motion Study</b><small>Mouse movement lab</small></header><main><h1>Movement tests</h1><p class="intro">Compare cursor movement across four tasks using a standard mouse.</p><div class="cards" id="cards"></div><section><h2 id="title"></h2><p id="hint"></p><div class="controls"><label>Test hand &nbsp;<select id="hand"><option>Right</option><option>Left</option></select></label><label><input id="demo" type="checkbox"> Demo · synthetic 5.5 Hz</label><button class="primary" id="start">Start trial</button><button hidden id="stop">Cancel trial</button></div><p id="status" role="status"></p><canvas id="board" aria-label="Mouse test area with a marked starting point"></canvas></section><section><h2>Movement telemetry</h2><p id="reading" aria-live="off">Start a trial to view its signal.</p><svg id="trend" viewBox="0 0 600 104" role="img" aria-label="Band power over this trial, from zero to one hundred percent" style="width:100%;height:110px;background:#eef2e8"></svg><small>Share of cursor movement power in the 4–7 Hz band, relative to 0.5–12 Hz. A four-second window needs enough movement samples. This experimental measure does not estimate medication state or clinical severity.</small></section><section><h2>Session records</h2><p id="empty">Completed trials will appear here.</p><div id="rows"></div><button disabled id="download">Download raw trace (.json)</button> <button disabled id="csv">Export motor CSV</button> <button disabled id="stats">Export test statistics CSV</button> <button disabled id="json">Export motor JSON</button><p>Motor exports include only usable four-second windows, evaluated every half second. Test statistics CSV also includes trial labels, sample coverage, and 4–7 Hz movement amplitude. Frequency and power are filled when enough movement is recorded. Medication state stays empty. Raw JSON retains the task, hand, and trial boundaries.</p></section><footer>Research prototype for mouse movement. Clinical interpretation requires validation. Records stay in this tab until you download them or close it.</footer></main>
+<script>
+const $=id=>document.getElementById(id), canvas=$('board'),ctx=canvas.getContext('2d');
+const names=['Steady hold','Straight line','Wave trace','Spiral trace'];
+const hints=['Rest your forearm comfortably. Hold the cursor at the green dot for 30 seconds.','Trace from the green dot to the orange ring without clicking.','Follow the wave from the green dot to the orange ring without clicking.','Follow the spiral outward from the green dot to the orange ring without clicking.'];
+let warmupTimer,demoTimer;let task=0,path=[],trial=null,records=[],timer,replay=0,lastPoint=null;
+function shape(k,t,w,h){let a=t*Math.PI*4.5,r=t*Math.min(w,h)*.39;return k===0?[w/2,h/2]:k===3?[w/2+r*Math.cos(a),h/2+r*Math.sin(a)]:[w*(.09+.82*t),h*(.5+(k===2?.25*Math.sin(t*Math.PI*4):0))]}
+function line(p,color,width){if(!p.length)return;ctx.beginPath();p.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.stroke()}
+function dot(p,r,color){ctx.beginPath();ctx.arc(...p,r,0,2*Math.PI);ctx.fillStyle=color;ctx.fill()}
+function draw(points=[]){ctx.clearRect(0,0,canvas.width,canvas.height);line(path,'#d4dfc9',15);line(path,'#93a78b',1);if(task){dot(path.at(-1),10,'#bb7445');dot(path.at(-1),6,'#fffef9')}dot(path[0],task?7:20,'#4d8266');line(points,'#183f65',2)}
+function layout(){canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;path=Array.from({length:401},(_,i)=>shape(task,i/400,canvas.width,canvas.height));draw()}
+function select(k){cancelAnimationFrame(replay);task=k;$('title').textContent=names[k];$('hint').textContent=hints[k];$('status').textContent='Ready Â· Use a physical mouse.';[...$('cards').children].forEach((b,i)=>b.setAttribute('aria-pressed',i===k));layout()}
+names.forEach((name,k)=>{let b=document.createElement('button');b.className='card';let pts=Array.from({length:100},(_,i)=>shape(k,i/99,160,55).join(',')).join(' ');b.innerHTML='<svg viewBox="0 0 160 55" aria-hidden="true">'+(k?'<polyline points="'+pts+'" fill="none" stroke="currentColor" stroke-width="2"/>':'<circle cx="80" cy="27" r="17" fill="none" stroke="currentColor"/><circle cx="80" cy="27" r="4" fill="currentColor"/>')+'</svg>'+name;b.onclick=()=>select(k);$('cards').append(b)});
+function lock(on){for(let b of [...$('cards').children,$('hand'),$('start'),$('demo'),...$('rows').querySelectorAll('button')])b.disabled=on;$('stop').hidden=!on}
+$('start').onclick=()=>{cancelAnimationFrame(replay);draw();lock(true);trial={task:names[task],hand:$('hand').value,width:canvas.width,height:canvas.height,target:path,simulated:$('demo').checked,telemetry:[],samples:[],interruptions:[]};lastPoint=null;showTelemetry([]);$('status').textContent='Move the mouse onto the green dot to begin.';trial.readyAt=performance.now()+4000;
+  const countdown=()=>{
+    const seconds=Math.ceil((trial.readyAt-performance.now())/1000);
+    if(seconds>0){$('status').textContent='Warmup · '+seconds+' seconds. Place your mouse on the green dot.';return}
+    clearInterval(warmupTimer);
+    $('status').textContent='Ready · Move from the green dot to begin.';
+    if(trial.simulated)startDemo();
+  };
+  warmupTimer=setInterval(countdown,100);countdown()};
+function endpointHit(previous,current){
+  if(!task)return null;
+  const [cx,cy]=path.at(-1),[x,y]=previous??current;
+  const dx=current[0]-x,dy=current[1]-y;
+  const a=dx*dx+dy*dy,b=(x-cx)*dx+(y-cy)*dy,c=(x-cx)**2+(y-cy)**2-100;
+  if(c<=0)return {point:[x,y],fraction:0};
+  if(!a||b*b<a*c)return null;
+  const fraction=(-b-Math.sqrt(b*b-a*c))/a;
+  return fraction>=0&&fraction<=1?{point:[x+fraction*dx,y+fraction*dy],fraction}:null;
+}
+function point(e){let rect=canvas.getBoundingClientRect();return [e.clientX-rect.left-canvas.clientLeft,e.clientY-rect.top-canvas.clientTop]}
+canvas.onpointermove=e=>{if(!trial||trial.simulated||e.pointerType!=='mouse')return;let events=e.getCoalescedEvents?.()||[];for(let s of events.length?events:[e]){if(s.timeStamp<trial.readyAt)continue;let p=point(s);if(trial.origin===undefined){if(Math.hypot(p[0]-path[0][0],p[1]-path[0][1])>18)continue;trial.origin=s.timeStamp;trial.start_ms=s.timeStamp;trial.started=new Date(performance.timeOrigin+s.timeStamp).toISOString();timer=setInterval(()=>{updateTelemetry(trial,performance.now()-trial.origin);let left=30-(performance.now()-trial.origin)/1000;if(!task&&left<=0)return end(true);$('status').textContent=task?'Recording Â· Trace to the orange ring.':'Recording Â· '+Math.ceil(left)+' seconds left';},150)}
+let t=s.timeStamp-trial.origin;if(!task&&t>30000){end(true);break}const hit=endpointHit(lastPoint,p);
+if(hit){p=hit.point;const prev=trial.samples.at(-1)?.[0]??t;t=prev+(t-prev)*hit.fraction}
+trial.samples.push([t,...p,s.buttons]);if(lastPoint)line([lastPoint,p],'#183f65',2);lastPoint=p;if(hit){end(true,t);break}}}
+canvas.onpointerleave=()=>{if(trial?.started){trial.interruptions.push({type:'pointer left area',ms:performance.now()-trial.origin});lastPoint=null}};
+function end(save,finishedAt){if(!trial)return;clearInterval(warmupTimer);clearInterval(timer);clearInterval(demoTimer);let r=trial;trial=null;lock(false);$('status').textContent=save?'Trial saved.':'Trial cancelled.';if(!save)return;r.duration_ms=finishedAt??(task&&!r.simulated?performance.now()-r.origin:30000);updateTelemetry(r,r.duration_ms);delete r.origin;records.push(r);$('empty').hidden=true;$('download').disabled=false;
+const usable=records.some(rec=>rec.telemetry.some(p=>p.index!=null));
+for(const id of ['csv','stats','json'])$(id).disabled=!usable;
+if(!r.telemetry.some(p=>p.index!=null))$('status').textContent='Trial saved · No usable tremor windows to export.';
+let row=document.createElement('div');row.className='row';row.textContent=r.task+' Â· '+r.hand+' Â· '+r.samples.length+' samples';let b=document.createElement('button');b.textContent='Replay';b.onclick=()=>{select(names.indexOf(r.task));showTelemetry(r.telemetry);let begin=performance.now(),i=0;function frame(){let t=performance.now()-begin;while(i<r.samples.length&&r.samples[i][0]<=t)i++;draw(r.samples.slice(0,i).map(s=>[s[1]*canvas.width/r.width,s[2]*canvas.height/r.height]));if(i<r.samples.length)replay=requestAnimationFrame(frame)}frame()};row.append(b);$('rows').prepend(row)}
+$('stop').onclick=()=>end(false);
+$('download').onclick=()=>{let url=URL.createObjectURL(new Blob([JSON.stringify({version:1,coordinates:'CSS pixels relative to canvas',sample_columns:['elapsed_ms','x','y','buttons'],trials:records})],{type:'application/json'}));let a=document.createElement('a');a.href=url;a.download='motion-study-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+const motorFields=['timestamp','sample_time','tremor_index','dominant_hz','medication_state_estimate','simulated'];
+function estimate(samples,end,interruptions=[]){
+  const start=end-4000;
+  if(start<0||interruptions.some(e=>e.ms>=start&&e.ms<=end))return null;
+  const window=samples.filter(s=>s[0]>=start-100&&s[0]<=end);
+  if(window.length<96||window[0][0]>start+40||window.at(-1)[0]<end-60)return null;
+  if(window.some((s,i)=>i&&s[0]-window[i-1][0]>100))return null;
+  const axes=[[],[]];let j=0;
+  for(let n=0;n<240;n++){
+    const time=start+n*1000/60;
+    while(j+1<window.length-1&&window[j+1][0]<time)j++;
+    const a=window[j],b=window[j+1],f=Math.max(0,Math.min(1,(time-a[0])/(b[0]-a[0]||1)));
+    axes.forEach((axis,k)=>axis.push(a[k+1]+f*(b[k+1]-a[k+1])));
+  }
+  const power=Array(49).fill(0);
+  for(const axis of axes){
+    const mean=axis.reduce((a,b)=>a+b)/240;
+    const slope=axis.reduce((sum,v,n)=>sum+(n-119.5)*(v-mean),0)/1151980;
+    const signal=axis.map((v,n)=>(v-mean-slope*(n-119.5))*(.5-.5*Math.cos(2*Math.PI*n/239)));
+    for(let k=2;k<=48;k++){
+      let re=0,im=0;
+      for(let n=0;n<240;n++){const phase=2*Math.PI*k*n/240;re+=signal[n]*Math.cos(phase);im+=signal[n]*Math.sin(phase)}
+      power[k]+=re*re+im*im;
+    }
+  }
+  const total=power.reduce((a,b)=>a+b),band=power.slice(16,29),peak=Math.max(...band);
+  if(total<1)return null;
+  const bandPower=band.reduce((a,b)=>a+b);
+  return {amplitude:+Math.sqrt(2*bandPower/(240*239*3/8)).toFixed(3),index:+(100*bandPower/total).toFixed(2),hz:peak>=.1*total?(16+band.indexOf(peak))/4:null};
+}
+function showTelemetry(log){
+  const last=log.at(-1);
+  $('reading').textContent=last?.index!=null?'Band power '+last.index+'% · '+(last.hz==null?'No prominent band peak':last.hz+' Hz peak'):'Waiting for four seconds of sufficiently sampled movement';
+  const scale=Math.max(30,log.length-1);
+  $('trend').innerHTML=log.map((p,i)=>p.index==null?'':'<circle cx="'+(3+594*i/scale)+'" cy="'+(102-p.index)+'" r="2.8" fill="#28654d"/>').join('');
+}
+function updateTelemetry(r,end){
+  let added=false;
+  for(let ms=r.telemetry.length*500;ms<=end;ms+=500){
+    const value=estimate(r.samples,ms,r.interruptions);
+    r.telemetry.push({ms,amplitude:value?.amplitude??null,index:value?.index??null,hz:value?.hz??null});added=true;
+  }
+  if(added)showTelemetry(r.telemetry);
+}
+function startDemo(){
+  const r=trial;r.origin=performance.now();r.start_ms=r.origin;r.started=new Date(performance.timeOrigin+r.origin).toISOString();
+  let frame=0;
+  demoTimer=setInterval(()=>{
+    const elapsed=Math.min(30000,performance.now()-r.origin);
+    while(frame*1000/60<=elapsed){
+      const t=frame++*1000/60,base=shape(task,t/30000,r.width,r.height);
+      const point=[base[0]+6*Math.sin(2*Math.PI*5.5*t/1000),base[1]];
+      const hit=endpointHit(lastPoint,point),next=hit?.point??point;
+      const prev=r.samples.at(-1)?.[0]??t,at=hit?prev+(t-prev)*hit.fraction:t;
+      r.samples.push([at,...next,0]);if(lastPoint)line([lastPoint,next],'#183f65',2);lastPoint=next;
+      if(hit){end(true,at);return}
+    }
+    updateTelemetry(r,elapsed);$('status').textContent='Synthetic demo · '+Math.ceil((30000-elapsed)/1000)+' seconds left';
+    if(elapsed>=30000)end(true);
+  },40);
+}
+function summary(r){
+  const values=r.telemetry.filter(p=>p.index!=null);
+  if(!values.length)return 'Insufficient signal';
+  const peaks=values.map(p=>p.hz).filter(h=>h!=null).sort((a,b)=>a-b);
+  const mean=values.reduce((s,p)=>s+p.index,0)/values.length;
+  return mean.toFixed(1)+'% mean band power · '+(peaks.length?peaks[Math.floor(peaks.length/2)]+' Hz median peak':'No prominent peak');
+}
+function motorRows(){
+  return records.flatMap(trial=>trial.telemetry.filter(p=>p.index!=null).map(p=>{
+    const time=(trial.start_ms+p.ms)/1000;
+    return {timestamp:performance.timeOrigin/1000+time,sample_time:time,tremor_index:p.index,dominant_hz:p.hz,medication_state_estimate:null,simulated:trial.simulated};
+  }));
+}
+function testStatistics(){
+  const rows=[];
+  for(const [trialIndex,r] of records.entries()){
+    let begin=0,finish=0;
+    for(const point of r.telemetry){
+      if(point.index==null)continue;
+      const start=Math.max(0,point.ms-4000);
+      while(begin<r.samples.length&&r.samples[begin][0]<start)begin++;
+      while(finish<r.samples.length&&r.samples[finish][0]<=point.ms)finish++;
+      let maxGap=0,previous=start;
+      for(let i=begin;i<finish;i++){maxGap=Math.max(maxGap,r.samples[i][0]-previous);previous=r.samples[i][0]}
+      maxGap=Math.max(maxGap,point.ms-previous);
+      const count=finish-begin,span=point.ms-start;
+      const quality=point.ms<4000?'warming_up':r.interruptions.some(e=>e.ms>=start&&e.ms<=point.ms)?'interrupted':point.index==null?'insufficient_signal':'usable';
+      const time=(r.start_ms+point.ms)/1000;
+      rows.push({timestamp:performance.timeOrigin/1000+time,sample_time:time,tremor_index:point.index,dominant_hz:point.hz,medication_state_estimate:null,simulated:r.simulated?'True':'False',trial_id:trialIndex+1,test:r.task,hand:r.hand,trial_elapsed_s:point.ms/1000,window_s:span/1000,samples_in_window:count,events_per_s:span?+(count*1000/span).toFixed(1):null,max_event_gap_ms:+maxGap.toFixed(1),band_rms_px:point.amplitude,signal_quality:quality});
+    }
+  }
+  return rows;
+}
+$('stats').onclick=()=>{
+  const rows=testStatistics();
+  if(!rows.length)return;
+  const columns=Object.keys(rows[0]);
+  const csv=[columns.join(','),...rows.map(row=>columns.map(k=>row[k]??'').join(','))].join('\r\n')+'\r\n';
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const link=document.createElement('a');
+  link.href=url;link.download='motor-test-statistics.csv';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+function exportMotor(format){
+  const rows=motorRows();
+  const csv=[motorFields.join(','),...rows.map(row=>motorFields.map(key=>key==='simulated'?(row[key]?'True':'False'):row[key]??'').join(','))].join('\r\n')+'\r\n';
+  const content=format==='csv'?csv:JSON.stringify(rows,null,2);
+  const link=document.createElement('a');
+  const url=URL.createObjectURL(new Blob([content],{type:format==='csv'?'text/csv;charset=utf-8':'application/json'}));
+  link.href=url;
+  link.download='motor-session.'+format;
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('csv').onclick=()=>exportMotor('csv');
+$('json').onclick=()=>exportMotor('json');
+window.onresize=()=>{if(trial)end(false);layout()};document.onvisibilitychange=()=>{if(document.hidden&&trial)end(false)};select(0)
+</script></html>
