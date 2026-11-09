@@ -70,7 +70,7 @@ def test_top_navigation_lists_features_in_order(window):
     layout = window.top_bar_layout
     tabs = [layout.itemAt(i).widget().text() for i in range(layout.count())
             if layout.itemAt(i).widget() is not None and layout.itemAt(i).widget().objectName() == "navTab"]
-    assert tabs == ["Home", "Dashboard", "SteadyHand", "Head movement", "SmartInterface"]
+    assert tabs == ["Dashboard", "SteadyHand", "Head movement", "SmartInterface"]
     assert [key for key, *_ in control_center.FEATURES] == ["steady", "gaze", "interface"]
     assert list(window.feature_cards) == ["steady", "gaze", "interface"]
     window._open_demo_lab("start")

@@ -289,7 +289,7 @@ class MainWindow(QMainWindow):
         self.brand_button = brand
         nl.addWidget(brand)
         nl.addSpacing(12)
-        tabs = [('home', 'home', 'Home'), ('overview', 'dashboard', 'Dashboard')]
+        tabs = [('overview', 'dashboard', 'Dashboard')]  # the Home splash shows only at launch
         tabs += [(key, icon_name, title) for key, icon_name, title, _ in FEATURES]
         for key, icon_name, text in tabs:
             tab = button(text, 'navTab')
