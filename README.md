@@ -1,49 +1,38 @@
-# AccessShift AI (GitHappens)
+# Younify
 
-> Adaptive digital accessibility for healthcare workflows: webcam gaze/blink navigation, AI interface simplification, and tremor-stabilized mouse control in one cross-platform desktop app.
+Desktop accessibility tools for everyday healthcare workflows: pointer stabilization for tremor, head-and-blink hands-free control, and a calmer appointment form. Built for natHacks 2026 (Healthcare & Accessibility).
 
-**Event:** natHacks 2026 · **Division:** Standard · **Theme:** Healthcare & Accessibility  
-**Demo:** _link_ · **Slides:** _link_ · **Video:** _link_ · **Devpost:** _link_
+**Repo:** [GitHappens-NatHacks/GitHappens](https://github.com/GitHappens-NatHacks/GitHappens) · **App name in the UI:** Younify
 
 ---
 
-## The Problem
+## What it does
 
-Essential healthcare tasks (booking appointments, managing prescriptions, accessing records) often use dense forms, visual clutter, and tiny targets. People with motor disabilities, neurological conditions, or cognitive impairments hit hard barriers. Traditional tools need expensive hardware or one-off apps that do not cover overlapping needs.
+Younify is a PySide6 (Qt) app with a Control Center, a Demo Lab, and three main features:
 
-## Our Solution
-
-**AccessShift AI** is a Python desktop application that adapts interaction and interface to each user through an **Adaptive Interaction Engine**:
-
-| Profile | Active modules |
+| Feature | What you get |
 | :--- | :--- |
-| ALS / severe motor impairment | GazeControl + blink select + predictive speech + SmartInterface |
-| Parkinson's / essential tremor | SteadyHand + target enlargement + click assistance |
-| Cognitive accessibility | SmartInterface + step-by-step guidance + reduced complexity |
-| Combined needs | Profile-selected mix of the above |
+| **SteadyHand** | Tremor filtering on a practice canvas, strength up to 200%, simulated tremor intensity, wider click zones, drag guard, session tremor chart, and trial export |
+| **Head movement** | Webcam head pointing, dwell or blink to select, calibration, full-screen hands-free booking demo |
+| **SmartInterface** | Larger text, letter spacing, colour themes, screen tint, and a sample healthcare form that switches to a step-by-step layout |
 
-### Modules
+Profiles (Steadier pointing, Hands-free control, Clearer interfaces, Custom mix) turn combinations of those modules on. Preferences save on the device.
 
-1. **GazeControl** — Webcam eye/blink navigation (OpenCV + MediaPipe Face Mesh)
-2. **SmartInterface** — Complicated healthcare booking UI ↔ simplified task layout
-3. **SteadyHand** — 1-Euro / adaptive smoothing via `pynput` (in-app first, OS pointer next)
-4. **Speech & prediction** — Offline TTS (`pyttsx3`) + optional local/ONNX text prediction
+Speech (offline TTS) and short word suggestions appear inside the hands-free keyboard path. They are not a separate Control Center tab.
 
 ---
 
 ## Tech stack
 
-| Component | Technology | Purpose |
-| :--- | :--- | :--- |
-| Programming language | Python 3.11+ | Main application logic and algorithms |
-| Desktop framework | PySide6 (Qt) | Cross-platform graphical interface (macOS + Windows) |
-| Computer vision | OpenCV + MediaPipe | Webcam tracking, gaze estimation, blink detection |
-| AI | ONNX Runtime or local models | Text prediction and adaptive algorithms |
-| Text-to-speech | pyttsx3 | Offline speech output |
-| Mouse control | pynput + OS-specific APIs | Tremor filtering and mouse interactions |
-| Packaging | PyInstaller | Distribute Windows and macOS applications |
-
-**Why this stack:** one language for vision, DSP, UI, and speech; system-level pointer control that a browser extension cannot match; the same codebase on Mac and Windows; offline-friendly demos when the network is unreliable.
+| Piece | Used for |
+| :--- | :--- |
+| Python 3.10–3.12 | App runtime (MediaPipe Face Mesh needs ≤3.12) |
+| PySide6 | Control Center, Demo Lab, hands-free window |
+| OpenCV + MediaPipe | Head pose, face landmarks, blink |
+| Optional EyeTrax | Richer eye tracking when `GAZE_BACKEND=auto` / `eyetrax` / `hybrid` |
+| pynput | Optional system pointer hooks for SteadyHand |
+| pyttsx3 | Offline TTS in hands-free flows |
+| onnxruntime | Optional local text prediction when enabled |
 
 ---
 
@@ -51,70 +40,67 @@ Essential healthcare tasks (booking appointments, managing prescriptions, access
 
 ```
 GitHappens/
-├── accessshift/                 # PySide6 application package
-│   ├── __main__.py              # python -m accessshift
-│   ├── app.py                   # QApplication bootstrap
-│   ├── ui/                      # Main window, dashboard, portal views
-│   ├── engine/                  # Profiles + Adaptive Interaction Engine
-│   └── modules/
-│       ├── gaze/                # MediaPipe gaze + blink
-│       ├── steadyhand/          # 1-Euro filter + pynput controller
-│       ├── speech/              # pyttsx3 + text prediction hooks
-│       └── smartinterface/      # Complex ↔ accessible portal modes
-├── assets/portal/               # Local healthcare booking demo pages
-├── docs/                        # Architecture, milestones, demo script
-├── scripts/                     # Setup + PyInstaller helpers
+├── accessshift/              # Younify package
+│   ├── __main__.py           # python -m accessshift
+│   ├── app.py
+│   ├── engine/               # Profiles + AdaptiveEngine
+│   ├── modules/
+│   │   ├── gaze/             # Tracking, blink, dwell, calibration
+│   │   ├── steadyhand/       # Filter, hold, telemetry, targets
+│   │   ├── smartinterface/   # Themes, tint, form modes
+│   │   └── speech/           # TTS + optional prediction
+│   └── ui/                   # Control Center, Demo Lab, gaze booking, SteadyHand panel
+├── assets/
+│   ├── brand/                # Logo and mark
+│   ├── ui/                   # Photo headers
+│   └── portal/               # Design references (live form is Qt)
+├── docs/
+├── scripts/                  # setup.sh, packaging helpers
+├── tests/
 ├── requirements.txt
 └── .env.example
 ```
 
-| Area | Owner (team plan) |
-| :--- | :--- |
-| Architecture, GazeControl, packaging | Adnan |
-| Adaptive Engine + dashboard UI | Pragati |
-| SteadyHand filters | Yee |
-| SteadyHand targets / metrics | Dipta |
-| Healthcare portal / SmartInterface UI | Elizabeth |
-| Speech, prediction, ONNX/LLM assist | Avneet |
-
 ---
 
-## Demo scenarios (judging)
+## Demo flow
 
-Built around an intentionally cluttered healthcare appointment-booking flow inside the desktop app:
-
-1. **Gaze & blink:** Complete booking hands-free with webcam gaze + blink confirm.
-2. **SmartInterface:** Toggle complex layout → simplified step-by-step flow.
-3. **SteadyHand:** Before/after click accuracy with simulated tremor, then live smoothing.
-
-**Metrics:** click accuracy, accidental clicks, task time, interaction count, gaze selection accuracy.
+1. **SteadyHand** — Turn on simulated tremor, try Baseline vs Full assist, watch the session chart, export if needed.
+2. **Head movement** — Start head control, calibrate, complete the booking demo with dwell or blink.
+3. **SmartInterface** — Open the Demo Lab healthcare form; toggle SmartInterface and reading settings and watch the form update.
 
 ---
 
 ## Prerequisites
 
-- Python 3.11+
-- Built-in or USB webcam
-- macOS: grant **Camera** and **Accessibility** permissions when prompted (SteadyHand / gaze)
-- Windows: run once so OS permission prompts can appear
+- Python **3.10, 3.11, or 3.12** (3.13+ is not supported with the pinned MediaPipe build)
+- Webcam for Head movement
+- macOS: Camera permission for gaze; Accessibility if you use system-wide pointer control
+- Windows: allow permission prompts on first run
 
-### Optional
-- ONNX model files under `assets/models/` when text prediction is enabled
-- PyInstaller (for packaging builds)
+---
 
 ## Setup
 
 ```bash
 git clone https://github.com/GitHappens-NatHacks/GitHappens.git
 cd GitHappens
-cp .env.example .env
 
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python3.12 -m venv .venv          # or python3.11 / python3.10
+source .venv/bin/activate         # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env              # optional camera / gaze backend tweaks
 ```
 
-Or run `bash scripts/setup.sh`.
+Or:
+
+```bash
+bash scripts/setup.sh
+```
+
+`setup.sh` picks a 3.10–3.12 interpreter, creates `.venv`, and copies `.env.example` when `.env` is missing.
+
+---
 
 ## Run
 
@@ -123,48 +109,26 @@ source .venv/bin/activate
 python -m accessshift
 ```
 
-### Package (later)
+### Package (optional)
 
 ```bash
 bash scripts/build_app.sh
 ```
 
-Builds a platform binary with PyInstaller (run on each OS you ship).
-
----
-
-## Priority for the weekend
-
-1. PySide6 shell + profile dashboard  
-2. Healthcare portal (complex + accessible) inside the app  
-3. SteadyHand smoothing + click metrics  
-4. GazeControl dwell / blink select  
-5. pyttsx3 + predictive text if time remains  
-6. PyInstaller pass for the demo machine  
-
-Three working demos beat six half-finished features.
-
----
-
-## Submission notes (natHacks)
-
-- Code developed during the Nov 6–9, 2026 window  
-- Submit by **Nov 9, 11:00 AM MDT**  
-- README must explain how to run the demo  
-- 5-minute pitch + demo, then 5-minute Q&A  
+Build on the OS you ship (Mac binary on Mac, Windows binary on Windows).
 
 ---
 
 ## Team
 
-| Member | Role |
+| Member | Focus |
 | :--- | :--- |
 | Adnan | Architecture & GazeControl |
 | Pragati Puri | Adaptive Engine & Dashboard |
-| Yee | SteadyHand core filters |
+| Yee | SteadyHand filters |
 | Dipta | SteadyHand targets & metrics |
-| Elizabeth | Healthcare portal / SmartInterface UI |
-| Avneet Kaur | Speech, predictive text, ONNX assist |
+| Elizabeth | Healthcare form / SmartInterface |
+| Avneet Kaur | Speech & predictive text |
 
 ## Credits
 
@@ -174,8 +138,9 @@ Three working demos beat six half-finished features.
 
 ## Known limitations
 
-- Gaze accuracy depends on lighting, camera angle, and calibration.
-- macOS Accessibility permission is required for system-wide pointer control; in-app smoothing works without it.
-- SmartInterface targets the bundled healthcare demo first; arbitrary third-party sites are out of scope for the weekend.
-- ONNX text prediction is optional; core demos run offline with rule-based suggestions + pyttsx3.
-- PyInstaller builds must be produced on the target OS (Mac build on Mac, Windows build on Windows).
+- Head tracking depends on lighting, camera angle, and calibration quality.
+- Shipping pointing mode is **head**; eye pointing is experimental via env (`GAZE_BACKEND`, `GAZE_INPUT`).
+- SteadyHand’s primary demo is the in-app canvas; system-wide pointer control needs OS Accessibility permission and is secondary.
+- SmartInterface reshapes the bundled healthcare form. It does not restyle arbitrary third-party websites.
+- ONNX text prediction is optional and off by default (`PREDICTION_ENABLED=0`).
+- PyInstaller output must be built on the target OS.
