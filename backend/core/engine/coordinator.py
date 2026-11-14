@@ -129,6 +129,9 @@ class EngineCoordinator:
                 anti_drag=validated.anti_drag,
                 anti_drag_threshold_px=validated.anti_drag_threshold_px,
                 anti_drag_hold_ms=validated.anti_drag_hold_ms,
+                click_freeze_ms=validated.click_freeze_ms,
+                gravity_wells=validated.gravity_wells,
+                gravity_strength=validated.gravity_strength,
             )
             self.steady_worker.set_system_mouse(
                 enabled=validated.system_mouse and effective_steady,
@@ -316,6 +319,11 @@ class EngineCoordinator:
                     "tremor_intensity": steady["tremor_intensity"],
                     "spastic_drags_prevented": steady["spastic_drags_prevented"],
                     "slip_clicks_rescued": steady["slip_clicks_rescued"],
+                    "click_freeze_active": steady["click_freeze_active"],
+                    "gravity_well_active": steady["gravity_well_active"],
+                    "gravity_target_role": steady["gravity_target_role"],
+                    "os_tap_mode": steady["os_tap_mode"],
+                    "os_tap_error": steady["os_tap_error"],
                     "system_mouse_enabled": steady["system_mouse_enabled"],
                 },
                 "active_modes": {

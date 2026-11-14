@@ -24,6 +24,10 @@ class SettingsPayload(BaseModel):
     anti_drag: bool
     anti_drag_threshold_px: float
     anti_drag_hold_ms: int
+    click_freeze_ms: int
+    gravity_wells: bool
+    gravity_strength: int
+    global_shortcut: str
     system_mouse: bool
     gaze_source: str
     gaze_dwell_ms: int
@@ -55,6 +59,10 @@ class SettingsUpdateRequest(BaseModel):
     anti_drag: bool | None = None
     anti_drag_threshold_px: float | None = Field(default=None, ge=2.0, le=40.0)
     anti_drag_hold_ms: int | None = Field(default=None, ge=100, le=1500)
+    click_freeze_ms: int | None = Field(default=None, ge=0, le=500)
+    gravity_wells: bool | None = None
+    gravity_strength: int | None = Field(default=None, ge=0, le=80)
+    global_shortcut: str | None = Field(default=None, max_length=64)
     system_mouse: bool | None = None
     gaze_source: Literal["head", "eyes"] | None = None
     gaze_dwell_ms: int | None = Field(default=None, ge=600, le=2000)

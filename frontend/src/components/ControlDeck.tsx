@@ -4,14 +4,22 @@ import {
   CheckCircle2,
   Eye,
   Hand,
+  Magnet,
   MousePointerClick,
   ShieldCheck,
   Waves,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { pushSteadyHandSample } from "../api/client";
 import type { ConnectionState, TelemetryPoint } from "../hooks/useTelemetry";
-import type { EngineToggleRequest, SettingsPayload, TelemetryFrame } from "../types/telemetry";
+import { CLINICAL_PRESETS, type ClinicalPreset } from "../presets";
+import type {
+  EngineToggleRequest,
+  SettingsPayload,
+  SettingsUpdate,
+  TelemetryFrame,
+} from "../types/telemetry";
 
 interface ControlDeckProps {
   settings: SettingsPayload;
@@ -22,6 +30,7 @@ interface ControlDeckProps {
   connectionState: ConnectionState;
   toggling: boolean;
   onToggle: (payload: EngineToggleRequest) => Promise<void>;
+  onApplyPreset: (updates: SettingsUpdate) => Promise<void>;
   onStartCalibration: () => void;
 }
 
@@ -34,12 +43,14 @@ export function ControlDeck({
   connectionState,
   toggling,
   onToggle,
+  onApplyPreset,
   onStartCalibration,
 }: ControlDeckProps) {
   const [padCursor, setPadCursor] = useState<{ x: number; y: number } | null>(null);
   const lastSentAtRef = useRef<number>(0);
 
-  const steadyActive = frame?.stabilization_active ?? (settings.assistance_enabled && settings.steady_hand);
+  const steadyActive =
+    frame?.stabilization_active ?? (settings.assistance_enabled && settings.steady_hand);
   const gazeActive = frame?.active_modes.gaze_control ?? settings.gaze_control;
   const simActive = frame?.active_modes.simulate_tremor ?? settings.simulate_tremor;
   const cameraRunning = frame?.gaze.running ?? false;
@@ -47,8 +58,13 @@ export function ControlDeck({
 
   const tremorHz = frame?.tremor_hz ?? null;
   const inParkinsonBand = tremorHz !== null && tremorHz >= 4 && tremorHz <= 7;
-  const dampeningPct = Math.round((frame?.steadyhand.strength ?? settings.tremor_strength / 100) * 100);
+  const dampeningPct = Math.round(
+    (frame?.steadyhand.strength ?? settings.tremor_strength / 100) * 100
+  );
   const dragsPrevented = frame?.steadyhand.spastic_drags_prevented ?? 0;
+  const gravityActive = frame?.steadyhand.gravity_well_active ?? false;
+  const tapMode = frame?.steadyhand.os_tap_mode ?? "idle";
+  const tapError = frame?.steadyhand.os_tap_error ?? null;
 
   const handlePadPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -59,35 +75,36 @@ export function ControlDeck({
     const now = performance.now();
     if (now - lastSentAtRef.current >= 32) {
       lastSentAtRef.current = now;
-      void pushSteadyHandSample(x, y).catch(() => {
-        // Ignore transient network errors during high-rate practice pointer streaming.
-      });
+      void pushSteadyHandSample(x, y).catch(() => undefined);
     }
   };
 
-  // Build SVG polyline for rolling stability score (0-100)
-  const chartW = 560;
-  const chartH = 128;
-  const points = history.length > 1
-    ? history
-        .map((pt, idx) => {
-          const px = (idx / (history.length - 1)) * chartW;
-          const py = chartH - (Math.max(0, Math.min(100, pt.stabilityScore)) / 100) * (chartH - 16) - 8;
-          return `${px.toFixed(1)},${py.toFixed(1)}`;
-        })
-        .join(" ")
-    : `0,${(chartH / 2).toFixed(1)} ${chartW},${(chartH / 2).toFixed(1)}`;
+  const handleSelectPreset = async (preset: ClinicalPreset) => {
+    await onApplyPreset(preset.updates);
+    if (preset.id === "hands_free") {
+      await onToggle({ gaze_control: true, camera: true, steady_hand: false, assistance_enabled: true });
+    } else {
+      await onToggle({ steady_hand: true, gaze_control: false, camera: false, assistance_enabled: true });
+    }
+  };
+
+  const chartData =
+    history.length > 0
+      ? history.map((pt, idx) => ({ idx, score: pt.stabilityScore }))
+      : [{ idx: 0, score: 100 }];
 
   return (
     <div className="space-y-8">
-      <section aria-labelledby="primary-modes-heading">
+      {/* Medication State Quick-Switch Presets */}
+      <section aria-labelledby="medication-presets-heading">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 id="primary-modes-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
-              Assistance Modes
+            <h2 id="medication-presets-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
+              Comfort &amp; Medication State Presets
             </h2>
             <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
-              Large toggle controls for motor stabilization and hands-free gaze pointing.
+              Choose how much stabilization you want right now with one large tap. Shortcut:{" "}
+              <span className="font-bold text-[var(--tc-ink)]">{settings.global_shortcut}</span>
             </p>
           </div>
           <button
@@ -102,13 +119,57 @@ export function ControlDeck({
           </button>
         </div>
 
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {CLINICAL_PRESETS.map((preset) => {
+            const selected = settings.profile === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                disabled={toggling}
+                aria-pressed={selected}
+                onClick={() => void handleSelectPreset(preset)}
+                className={`flex min-h-[116px] flex-col justify-between rounded-2xl border-2 p-5 text-left transition-colors ${
+                  selected
+                    ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+                    : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
+                }`}
+              >
+                <div>
+                  <span className="block text-lg font-bold">{preset.label}</span>
+                  <span className="mt-1.5 block text-sm text-[var(--tc-ink-muted)]">
+                    {preset.tagline}
+                  </span>
+                </div>
+                <span
+                  className={`mt-3 inline-block self-start rounded-lg px-3 py-1 text-xs font-bold uppercase ${
+                    selected
+                      ? "bg-[var(--tc-primary)] text-white"
+                      : "bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
+                  }`}
+                >
+                  {selected ? "Active Preset" : "Select"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Primary Assistance Toggles */}
+      <section aria-labelledby="primary-modes-heading">
+        <h2 id="primary-modes-heading" className="mb-4 text-2xl font-bold text-[var(--tc-ink)]">
+          Active System Assistance
+        </h2>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* SteadyHand Toggle Card */}
           <button
             type="button"
             disabled={toggling}
             aria-pressed={steadyActive}
-            onClick={() => void onToggle({ steady_hand: !steadyActive, assistance_enabled: true })}
+            onClick={() =>
+              void onToggle({ steady_hand: !steadyActive, assistance_enabled: true })
+            }
             className={`flex min-h-[112px] w-full items-center justify-between gap-6 rounded-2xl border-2 p-6 text-left transition-colors ${
               steadyActive
                 ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
@@ -128,7 +189,7 @@ export function ControlDeck({
               <div>
                 <span className="block text-xl font-bold">SteadyHand Stabilization</span>
                 <span className="mt-1 block text-base text-[var(--tc-ink-muted)]">
-                  One Euro smoothing and anti-drag protection for hand tremors.
+                  Adaptive smoothing, 180ms click-freeze, and button magnetism.
                 </span>
               </div>
             </div>
@@ -143,7 +204,6 @@ export function ControlDeck({
             </span>
           </button>
 
-          {/* GazeControl Toggle Card */}
           <button
             type="button"
             disabled={toggling}
@@ -174,7 +234,7 @@ export function ControlDeck({
               <div>
                 <span className="block text-xl font-bold">GazeControl Tracking</span>
                 <span className="mt-1 block text-base text-[var(--tc-ink-muted)]">
-                  Webcam MediaPipe head and iris pointing with dwell or blink click.
+                  Webcam head and iris pointing with dwell or blink click.
                 </span>
               </div>
             </div>
@@ -190,14 +250,31 @@ export function ControlDeck({
           </button>
         </div>
 
-        {/* Secondary Lab / OS Pointer Toggles */}
+        {/* OS Tap + Secondary Toggles */}
         <div className="mt-4 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            disabled={toggling}
+            aria-pressed={sysMouseActive}
+            onClick={() => void onToggle({ system_mouse: !sysMouseActive })}
+            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-bold ${
+              sysMouseActive
+                ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-primary)]"
+                : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
+            }`}
+          >
+            <MousePointerClick className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span>
+              System-Wide Cursor Intercept: {sysMouseActive ? "ON" : "OFF"}
+            </span>
+          </button>
+
           <button
             type="button"
             disabled={toggling}
             aria-pressed={simActive}
             onClick={() => void onToggle({ simulate_tremor: !simActive })}
-            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-semibold ${
+            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-bold ${
               simActive
                 ? "border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] text-[var(--tc-alert)]"
                 : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -207,31 +284,37 @@ export function ControlDeck({
             <span>4-7 Hz Tremor Simulation: {simActive ? "ON" : "OFF"}</span>
           </button>
 
-          <button
-            type="button"
-            disabled={toggling}
-            aria-pressed={sysMouseActive}
-            onClick={() => void onToggle({ system_mouse: !sysMouseActive })}
-            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-semibold ${
-              sysMouseActive
-                ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-primary)]"
-                : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
-            }`}
-          >
-            <MousePointerClick className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span>OS Pointer Control: {sysMouseActive ? "ON" : "OFF"}</span>
-          </button>
+          <div className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] px-4 text-sm font-semibold text-[var(--tc-ink)]">
+            <Magnet className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
+            <span>
+              Gravity Wells:{" "}
+              {settings.gravity_wells
+                ? gravityActive
+                  ? `Locked (${(frame?.steadyhand.gravity_target_role ?? "Control").replace(/^AX/, "")})`
+                  : "Armed"
+                : "Off"}
+            </span>
+          </div>
         </div>
+
+        {tapError && sysMouseActive && (
+          <div
+            role="status"
+            className="mt-4 rounded-xl border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-4 text-sm font-semibold text-[var(--tc-alert)]"
+          >
+            OS Interception ({tapMode}): {tapError}
+          </div>
+        )}
       </section>
 
       {/* Live Telemetry & Stability Monitor */}
       <section aria-labelledby="telemetry-heading">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <h2 id="telemetry-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
-            Live Telemetry &amp; Stability Monitor
+            Live Stability Monitor
           </h2>
           <span className="text-sm font-semibold text-[var(--tc-ink-muted)]">
-            Stream: {connectionState === "connected" ? "25 Hz live" : connectionState}
+            Stream: {connectionState === "connected" ? "25 Hz live" : connectionState} | OS Hook: {tapMode}
           </span>
         </div>
 
@@ -246,7 +329,7 @@ export function ControlDeck({
               <span className="ml-1 text-lg font-semibold text-[var(--tc-ink-muted)]">/ 100</span>
             </p>
             <p className="mt-2 text-sm text-[var(--tc-ink-muted)]">
-              {steadyActive ? "One Euro filter active" : "Raw unfiltered cursor"}
+              {steadyActive ? "Smoothing active" : "Raw unfiltered cursor"}
             </p>
           </div>
 
@@ -276,14 +359,14 @@ export function ControlDeck({
               }`}
             >
               {inParkinsonBand
-                ? `4-7 Hz band power: ${smoothedTremorIndex.toFixed(1)}%`
-                : "No sustained 4-7 Hz oscillation"}
+                ? `4-7 Hz Welch power: ${smoothedTremorIndex.toFixed(1)}%`
+                : "No sustained 4-7 Hz tremor"}
             </p>
           </div>
 
           <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div className="flex items-center justify-between text-sm font-semibold text-[var(--tc-ink-muted)]">
-              <span>Dampening Intensity</span>
+              <span>Dampening &amp; Click-Freeze</span>
               <CheckCircle2 className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
             </div>
             <p className="mt-3 text-4xl font-bold text-[var(--tc-ink)] tabular-nums">
@@ -291,7 +374,8 @@ export function ControlDeck({
               <span className="ml-1 text-lg font-semibold text-[var(--tc-ink-muted)]">%</span>
             </p>
             <p className="mt-2 text-sm text-[var(--tc-ink-muted)]">
-              Anti-drag rescues: <span className="font-bold tabular-nums">{dragsPrevented}</span>
+              Drags prevented: <span className="font-bold tabular-nums">{dragsPrevented}</span>
+              {frame?.steadyhand.click_freeze_active ? " | Click-Freeze locked" : ""}
             </p>
           </div>
 
@@ -313,7 +397,7 @@ export function ControlDeck({
           </div>
         </div>
 
-        {/* Rolling Stability Trace + Practice Surface */}
+        {/* Real-Time Recharts Trace + Practice Strip */}
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div className="mb-3 flex items-center justify-between">
@@ -321,27 +405,33 @@ export function ControlDeck({
                 Real-Time Stability Score Trace
               </h3>
               <span className="text-sm font-semibold text-[var(--tc-ink-muted)] tabular-nums">
-                Band: {frame?.medication_state_estimate ?? "N/A"}
+                Est. Med State: {frame?.medication_state_estimate ?? "N/A"}
               </span>
             </div>
-            <svg
-              viewBox={`0 0 ${chartW} ${chartH}`}
-              role="img"
-              aria-label="Live stability score waveform from 0 to 100"
-              className="h-36 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-bg)]"
-            >
-              <line x1="0" y1={chartH * 0.25} x2={chartW} y2={chartH * 0.25} stroke="#D5DED8" strokeDasharray="4 4" />
-              <line x1="0" y1={chartH * 0.5} x2={chartW} y2={chartH * 0.5} stroke="#D5DED8" strokeDasharray="4 4" />
-              <line x1="0" y1={chartH * 0.75} x2={chartW} y2={chartH * 0.75} stroke="#D5DED8" strokeDasharray="4 4" />
-              <polyline
-                fill="none"
-                stroke="#014A35"
-                strokeWidth="3"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                points={points}
-              />
-            </svg>
+            <div className="h-40 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-bg)] p-2">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <AreaChart data={chartData}>
+                  <YAxis domain={[0, 100]} width={32} stroke="#3D4C46" fontSize={12} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#FFFFFF",
+                      border: "2px solid #014A35",
+                      borderRadius: "12px",
+                      color: "#16201C",
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="score"
+                    stroke="#014A35"
+                    strokeWidth={3}
+                    fill="#E3EFE9"
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
@@ -355,10 +445,10 @@ export function ControlDeck({
             </div>
             <div
               onPointerMove={handlePadPointerMove}
-              className="relative flex h-36 w-full items-center justify-center rounded-xl border-2 border-dashed border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-4 text-center"
+              className="relative flex h-40 w-full items-center justify-center rounded-xl border-2 border-dashed border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-4 text-center"
             >
               <p className="pointer-events-none text-base font-medium text-[var(--tc-ink-muted)]">
-                Move your cursor across this area to feed live coordinates into the FFT tremor detector.
+                Move your cursor across this area to sample live 4-7 Hz Welch tremor power and One Euro smoothing.
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-"""Thread-safe SteadyHand background worker for mouse capture, One-Euro filtering, and FFT telemetry."""
+"""Thread-safe SteadyHand background worker for OS tap interception, One Euro filtering, gravity wells, and FFT telemetry."""
 
 from __future__ import annotations
 
@@ -7,18 +7,21 @@ import threading
 import time
 
 from backend.core.steadyhand.controller import SteadyHandController
+from backend.core.steadyhand.gravity_wells import AccessibilityGravityWells
+from backend.core.steadyhand.os_tap import SystemCursorInterceptor
 
 
 class SteadyHandWorker:
-    """Runs SteadyHand filtering, 4-7 Hz FFT tremor estimation, and optional OS mouse capture."""
+    """Runs SteadyHand filtering, 4-7 Hz Welch PSD tremor estimation, gravity wells, and OS interception."""
 
     def __init__(self, controller: SteadyHandController | None = None, tick_hz: float = 60.0):
         self._lock = threading.RLock()
         self.controller = controller or SteadyHandController()
+        self.gravity = AccessibilityGravityWells()
+        self._interceptor = SystemCursorInterceptor(self._on_tap_event)
         self._tick_interval = 1.0 / max(1.0, float(tick_hz))
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._mouse_listener = None
         self._os_listener_enabled = False
         self._system_mouse_enabled = False
         self._last_injected_pos: tuple[int, int] | None = None
@@ -54,6 +57,9 @@ class SteadyHandWorker:
         anti_drag: bool | None = None,
         anti_drag_threshold_px: float | None = None,
         anti_drag_hold_ms: int | None = None,
+        click_freeze_ms: int | None = None,
+        gravity_wells: bool | None = None,
+        gravity_strength: int | None = None,
     ) -> None:
         with self._lock:
             if enabled is not None:
@@ -68,19 +74,30 @@ class SteadyHandWorker:
                 self.controller.tremor_intensity = int(tremor_intensity)
             if anti_drag is not None:
                 self.controller.hold.enabled = bool(anti_drag)
-            if anti_drag_threshold_px is not None or anti_drag_hold_ms is not None:
+            if (
+                anti_drag_threshold_px is not None
+                or anti_drag_hold_ms is not None
+                or click_freeze_ms is not None
+            ):
                 self.controller.hold.configure(
                     drag_threshold_px=anti_drag_threshold_px,
                     hold_seconds=(anti_drag_hold_ms / 1000.0) if anti_drag_hold_ms is not None else None,
+                    click_freeze_ms=click_freeze_ms,
+                )
+            if gravity_wells is not None or gravity_strength is not None:
+                self.gravity.configure(
+                    enabled=gravity_wells,
+                    strength_pct=gravity_strength,
                 )
 
     def set_system_mouse(self, enabled: bool, listen_os_mouse: bool = False) -> tuple[bool, str | None]:
-        """Enable/disable OS pointer positioning and optional global mouse listener."""
+        """Enable/disable OS pointer positioning and optional OS event tap."""
         with self._lock:
             if not enabled:
                 self.controller.disable_system_mouse()
                 self._system_mouse_enabled = False
-                self._stop_mouse_listener()
+                self._interceptor.stop()
+                self._os_listener_enabled = False
                 return False, None
 
             ok = self.controller.try_enable_system_mouse()
@@ -89,43 +106,14 @@ class SteadyHandWorker:
                 return False, self.controller.last_system_error
 
             if listen_os_mouse:
-                self._start_mouse_listener()
+                started, err = self._interceptor.start()
+                self._os_listener_enabled = started
+                if err and not self.controller.last_system_error:
+                    self.controller.last_system_error = err
             else:
-                self._stop_mouse_listener()
-            return True, None
-
-    def _start_mouse_listener(self) -> None:
-        if self._mouse_listener is not None:
-            return
-        try:
-            from pynput import mouse
-
-            def on_move(x: float, y: float) -> None:
-                self._on_os_move(x, y)
-
-            def on_click(x: float, y: float, button, pressed: bool) -> None:
-                if getattr(button, "name", "") == "left":
-                    self._on_os_click(x, y, pressed)
-
-            listener = mouse.Listener(on_move=on_move, on_click=on_click)
-            listener.daemon = True
-            listener.start()
-            self._mouse_listener = listener
-            self._os_listener_enabled = True
-        except Exception as exc:
-            self.controller.last_system_error = str(exc)
-            self._mouse_listener = None
-            self._os_listener_enabled = False
-
-    def _stop_mouse_listener(self) -> None:
-        listener = self._mouse_listener
-        self._mouse_listener = None
-        self._os_listener_enabled = False
-        if listener is not None:
-            try:
-                listener.stop()
-            except Exception:
-                pass
+                self._interceptor.stop()
+                self._os_listener_enabled = False
+            return True, self.controller.last_system_error
 
     def _is_echo_move(self, x: float, y: float, now: float) -> bool:
         if self._last_injected_pos is None:
@@ -135,25 +123,44 @@ class SteadyHandWorker:
         ix, iy = self._last_injected_pos
         return abs(round(x) - ix) <= 1 and abs(round(y) - iy) <= 1
 
-    def _on_os_move(self, x: float, y: float) -> None:
-        now = time.perf_counter()
+    def _on_tap_event(
+        self,
+        kind: str,
+        x: float,
+        y: float,
+        now: float,
+    ) -> tuple[float, float] | None:
+        in_place_tap = self._interceptor.mode == "quartz_cgeventtap"
         with self._lock:
-            if self._is_echo_move(x, y, now):
-                return
-            self._sim_cursor = (float(x), float(y))
-            self._process_locked(x, y, now, move_os=self._system_mouse_enabled)
+            if not in_place_tap and kind == "move" and self._is_echo_move(x, y, now):
+                return None
 
-    def _on_os_click(self, x: float, y: float, pressed: bool) -> None:
-        now = time.perf_counter()
-        with self._lock:
             self._sim_cursor = (float(x), float(y))
-            stable = self._process_locked(x, y, now, move_os=False)
-            if pressed:
+            if kind == "move":
+                # Only use Quartz in-place rewrite or fallback pointer warp; never both.
+                stable = self._process_locked(
+                    x,
+                    y,
+                    now,
+                    move_os=(self._system_mouse_enabled and not in_place_tap),
+                    query_ax=self._system_mouse_enabled,
+                )
+                return stable if in_place_tap else None
+
+            if kind == "down":
+                stable = self._process_locked(x, y, now, move_os=False, query_ax=self._system_mouse_enabled)
                 self._last_button_pressed = True
                 self.controller.hold.press(stable, self.controller.last_raw, now)
-            elif self._last_button_pressed:
-                self._last_button_pressed = False
-                self.controller.hold.release(stable, slipped=False)
+                return stable if in_place_tap else None
+
+            if kind == "up":
+                stable = self._process_locked(x, y, now, move_os=False, query_ax=self._system_mouse_enabled)
+                if self._last_button_pressed:
+                    self._last_button_pressed = False
+                    stable = self.controller.hold.release(stable, slipped=False)
+                return stable if in_place_tap else None
+
+            return None
 
     def process_sample(
         self,
@@ -166,7 +173,13 @@ class SteadyHandWorker:
         now = time.perf_counter() if timestamp is None else float(timestamp)
         with self._lock:
             self._sim_cursor = (float(x), float(y))
-            stable = self._process_locked(x, y, now, move_os=self._system_mouse_enabled)
+            stable = self._process_locked(
+                x,
+                y,
+                now,
+                move_os=self._system_mouse_enabled,
+                query_ax=False,
+            )
             if pressed is True and not self._last_button_pressed:
                 self._last_button_pressed = True
                 self.controller.hold.press(stable, self.controller.last_raw, now)
@@ -175,10 +188,22 @@ class SteadyHandWorker:
                 stable = self.controller.hold.release(stable, slipped=False)
             return self.snapshot()
 
-    def _process_locked(self, x: float, y: float, now: float, move_os: bool) -> tuple[float, float]:
+    def _process_locked(
+        self,
+        x: float,
+        y: float,
+        now: float,
+        *,
+        move_os: bool,
+        query_ax: bool,
+    ) -> tuple[float, float]:
         stable = self.controller.stabilize(x, y, now)
         if self.controller.hold.anchor is not None:
             stable = self.controller.hold.move(stable, self.controller.last_raw, now)
+        elif query_ax and self.controller.enabled:
+            stable = self.gravity.apply_pull(stable[0], stable[1], now)
+            self.controller.last_stable = stable
+
         if move_os and self._system_mouse_enabled:
             rx, ry = round(stable[0]), round(stable[1])
             self._last_injected_pos = (rx, ry)
@@ -202,7 +227,8 @@ class SteadyHandWorker:
     def stop(self, timeout: float = 2.0) -> None:
         self._stop_event.set()
         with self._lock:
-            self._stop_mouse_listener()
+            self._interceptor.stop()
+            self._os_listener_enabled = False
             thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=timeout)
@@ -216,7 +242,13 @@ class SteadyHandWorker:
             with self._lock:
                 if self.controller.simulate_tremor:
                     cx, cy = self._sim_cursor
-                    self._process_locked(cx, cy, start, move_os=self._system_mouse_enabled)
+                    self._process_locked(
+                        cx,
+                        cy,
+                        start,
+                        move_os=self._system_mouse_enabled,
+                        query_ax=False,
+                    )
             elapsed = time.perf_counter() - start
             sleep_s = max(0.001, self._tick_interval - elapsed)
             self._stop_event.wait(sleep_s)
@@ -255,6 +287,7 @@ class SteadyHandWorker:
     def snapshot(self) -> dict:
         with self._lock:
             latest = self.controller.telemetry.latest
+            grav = self.gravity.snapshot()
             return {
                 "running": self.running,
                 "stabilization_active": self.controller.enabled,
@@ -271,7 +304,12 @@ class SteadyHandWorker:
                 "stable_pos": list(self.controller.last_stable),
                 "spastic_drags_prevented": self.controller.telemetry.spastic_drags_prevented,
                 "slip_clicks_rescued": self.controller.telemetry.slip_clicks_rescued,
+                "click_freeze_active": self.controller.hold.click_freeze_active,
+                "gravity_well_active": grav["gravity_well_active"],
+                "gravity_target_role": grav["gravity_target_role"],
                 "system_mouse_enabled": self._system_mouse_enabled,
                 "os_listener_enabled": self._os_listener_enabled,
+                "os_tap_mode": self._interceptor.mode,
+                "os_tap_error": self._interceptor.last_error or self.controller.last_system_error,
                 "last_system_error": self.controller.last_system_error,
             }

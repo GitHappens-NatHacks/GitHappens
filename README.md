@@ -7,12 +7,13 @@ Desktop assistive motor stabilization and hands-free gaze control application fo
 ```mermaid
 flowchart LR
   UI["React 19 + TypeScript + Tailwind UI<br/>(frontend/)"]
-  Shell["Tauri v2 Native Desktop Shell<br/>(src-tauri/src/lib.rs)"]
+  Shell["Tauri v2 Shell, Tray &amp; Hotkeys<br/>(src-tauri/src/lib.rs)"]
   API["FastAPI + WebSocket Server<br/>(backend/api/ &amp; backend/sidecar_main.py)"]
-  Core["Decoupled Python Core Engine<br/>(One Euro + 4-7 Hz FFT + MediaPipe)"]
+  Core["Motor &amp; OS Assist Engine<br/>(OneEuroFilter + CGEventTap + AX Gravity Wells + Welch FFT)"]
   DB["Local SQLite Database<br/>(settings, calibration, sessions)"]
 
   Shell -->|"Spawns &amp; monitors sidecar"| API
+  Shell -->|"Global Hotkey CommandOrControl+Shift+S"| API
   Shell -->|"IPC get_backend_port"| UI
   UI -->|"REST /api/* &amp; WS /ws/telemetry (25 Hz)"| API
   API --> Core
@@ -21,11 +22,14 @@ flowchart LR
 
 ## Features
 
-- **Control Deck:** Oversized `56px+` toggle cards for SteadyHand stabilization, GazeControl webcam tracking, 4-7 Hz simulated tremor injection, and live stability telemetry (`ws://127.0.0.1:<port>/ws/telemetry`).
-- **10-Step Appointment Playground:** Interactive comparison canvas (`1. Doctor` -> `2. Date` -> `3. Time` -> `4. Review` -> `5. Book` repeated twice) showing inner vs. dashed extended click boundaries (`TargetManager`) alongside real-time shaky raw cursor (`raw_pos`) and One Euro stabilized cursor (`stable_pos`).
-- **Sensitivity & Filter Tuning:** Stepped `-` / `+` controls alongside wide-track sliders for One Euro cutoff (`min_cutoff`), speed coefficient (`beta`), Anti-Drag thresholds, and gaze dwell latency, persisted to SQLite (`POST /api/settings`).
-- **Guided Gaze Calibration:** Distraction-free 5-point or 9-point full-screen calibration modal saving affine profiles via `POST /api/calibrate`.
-- **Session History:** SQLite-backed daily average stability trend chart and saved calibration profile table (`GET /api/sessions`).
+- **Patient-First Home Overview:** Plain-language guide explaining who TrueCursor supports, daily tremor challenges, real-time solutions, and 3-step onboarding with warm high-contrast visuals.
+- **One-Tap Medication State Presets:** Switch seamlessly between *Mild Tremor (Responsive)*, *Moderate Tremor (Balanced)*, *High Tremor (Maximum Stabilization)*, and *Hands-Free (Gaze Mode)*, while fine-grained One Euro (`min_cutoff`, `beta`), Click-Freeze, and Gravity Well controls live inside an expandable **Advanced Tuning** drawer.
+- **True System-Wide Cursor Interception & 180ms Click-Freeze:** Uses `CGEventTapCreate` (`kCGHIDEventTap` on macOS via `pyobjc-framework-Quartz`) with cross-platform `pynput` fallback to apply `OneEuroFilter` coordinate smoothing in-place before OS rendering, locking coordinates for 180ms on `MouseDown` (releasing early only on drags over 25px).
+- **Accessibility Gravity Wells:** Queries the OS Accessibility tree (`AXUIElementCopyElementAtPosition` on macOS, `uiautomation` on Windows) at up to 45 Hz to gently magnetize slow-moving pointers onto small buttons, close boxes, menu items, and links (`2.5x` to `3x` virtual hitboxes).
+- **Menu Bar / System Tray HUD & Global Hotkey:** Native Tauri tray controls show live state and toggle stabilization anywhere via `CommandOrControl+Shift+S`.
+- **Dual-Trace Sandbox Lab & 10-Step Appointment Trial:** Compare dashed red raw tremor trajectories against solid green stabilized trails in real time alongside target buttons, checkboxes, and note inputs.
+- **Clinician Motor Report (PDF & CSV):** Longitudinal Recharts stability and 4-7 Hz `scipy.signal.welch` tremor power trends stored in SQLite, exportable via `jspdf` + `jspdf-autotable` with descriptive clinical interpretations and a built-in *How to Read This Clinical Motor Report* guide.
+- **Guided Gaze Calibration:** Distraction-free 5-point or 9-point full-screen calibration wizard saving affine profiles via `POST /api/calibrate`.
 
 ## Repository Layout
 

@@ -1,13 +1,14 @@
 """Task metrics, trial logging, and evaluation export for SteadyHand."""
 from __future__ import annotations
 
-import numpy as np
-
 import json
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
+
+import numpy as np
+from scipy import signal as scipy_signal
 
 
 @dataclass(frozen=True)
@@ -126,19 +127,34 @@ class MotorTelemetry:
         if self.latest and now - self.latest["sample_time"] < 0.5:
             return
         times, xs, ys = np.asarray(self.samples).T
-        grid = np.arange(times[0], times[-1], 1 / 60)
-        # Separate signed axes preserve the fundamental of a back-and-forth motion.
-        taper = np.hanning(len(grid))
-        power = np.zeros(len(grid) // 2 + 1)
+        fs = 60.0
+        grid = np.arange(times[0], times[-1], 1.0 / fs)
+        if len(grid) < 32:
+            return
+        # Welch PSD with Hann tapering reduces spectral leakage in the 4-7 Hz motor band.
+        nperseg = min(len(grid), 240)
+        hz = None
+        power = None
         for axis in (xs, ys):
             values = np.interp(grid, times, axis)
             values -= np.linspace(values[0], values[-1], len(grid))
-            power += abs(np.fft.rfft((values - values.mean()) * taper)) ** 2
-        hz = np.fft.rfftfreq(len(grid), 1 / 60)
-        band = (hz >= 4) & (hz <= 7)
-        total = power[(hz >= .5) & (hz <= 12)].sum()
-        index = float(100 * power[band].sum() / total) if total > 1e-6 else 0.
-        dominant = float(hz[band][power[band].argmax()]) if index >= 10 else None
+            values -= values.mean()
+            freqs, psd = scipy_signal.welch(
+                values,
+                fs=fs,
+                window="hann",
+                nperseg=nperseg,
+                noverlap=nperseg // 2,
+                detrend=False,
+            )
+            hz = freqs
+            power = psd if power is None else (power + psd)
+
+        assert hz is not None and power is not None
+        band = (hz >= 4.0) & (hz <= 7.0)
+        total = power[(hz >= 0.5) & (hz <= 12.0)].sum()
+        index = float(100.0 * power[band].sum() / total) if total > 1e-6 else 0.0
+        dominant = float(hz[band][power[band].argmax()]) if index >= 10.0 and np.any(band) else None
         self.latest = dict(timestamp=time.time(), sample_time=now, tremor_index=round(index, 2),
                            dominant_hz=dominant, medication_state_estimate="OFF" if index >= 50 else "ON",
                            simulated=simulated)

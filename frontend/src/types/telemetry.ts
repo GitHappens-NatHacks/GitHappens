@@ -17,6 +17,10 @@ export interface SettingsPayload {
   anti_drag: boolean;
   anti_drag_threshold_px: number;
   anti_drag_hold_ms: number;
+  click_freeze_ms: number;
+  gravity_wells: boolean;
+  gravity_strength: number;
+  global_shortcut: string;
   system_mouse: boolean;
   gaze_source: GazeSource;
   gaze_dwell_ms: number;
@@ -56,6 +60,11 @@ export interface SteadyHandTelemetry {
   tremor_intensity: number;
   spastic_drags_prevented: number;
   slip_clicks_rescued: number;
+  click_freeze_active: boolean;
+  gravity_well_active: boolean;
+  gravity_target_role: string | null;
+  os_tap_mode: string;
+  os_tap_error: string | null;
   system_mouse_enabled: boolean;
 }
 

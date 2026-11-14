@@ -1,7 +1,17 @@
-import { Activity, Crosshair, History, SlidersHorizontal, Target, Wifi, WifiOff } from "lucide-react";
+import {
+  Activity,
+  Crosshair,
+  History,
+  Home,
+  SlidersHorizontal,
+  Target,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import type { ConnectionState } from "../hooks/useTelemetry";
+import { BrandLogo } from "./BrandLogo";
 
-export type AppView = "deck" | "playground" | "sensitivity" | "history";
+export type AppView = "home" | "deck" | "playground" | "sensitivity" | "history";
 
 interface TopBarProps {
   activeView: AppView;
@@ -12,10 +22,11 @@ interface TopBarProps {
 }
 
 const NAV_ITEMS: { id: AppView; label: string; icon: typeof Activity }[] = [
+  { id: "home", label: "Home", icon: Home },
   { id: "deck", label: "Control Deck", icon: Activity },
-  { id: "playground", label: "Appointment Lab", icon: Target },
-  { id: "sensitivity", label: "Sensitivity & Filter", icon: SlidersHorizontal },
-  { id: "history", label: "Session History", icon: History },
+  { id: "playground", label: "Sandbox Lab", icon: Target },
+  { id: "sensitivity", label: "Tuning", icon: SlidersHorizontal },
+  { id: "history", label: "Clinician Report", icon: History },
 ];
 
 export function TopBar({
@@ -39,15 +50,13 @@ export function TopBar({
     <header className="border-b-2 border-[var(--tc-border)] bg-[var(--tc-primary)] text-[var(--tc-on-primary)]">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--tc-surface)] text-[var(--tc-primary)]">
-            <Crosshair className="h-7 w-7" aria-hidden="true" />
-          </div>
+          <BrandLogo className="h-12 w-12 shrink-0 rounded-xl border-2 border-white" />
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white">
               TrueCursor
             </h1>
             <p className="text-sm text-[#DCEAE4]">
-              Motor Stabilization &amp; Gaze Control
+              Steady Pointer &amp; Hands-Free Gaze
             </p>
           </div>
         </div>
@@ -62,10 +71,10 @@ export function TopBar({
                 type="button"
                 onClick={() => onNavigate(item.id)}
                 aria-current={selected ? "page" : undefined}
-                className={`inline-flex min-h-14 items-center gap-3 rounded-xl px-5 text-base font-semibold transition-colors ${
+                className={`inline-flex min-h-14 items-center gap-3 rounded-xl px-4 text-base font-semibold transition-colors ${
                   selected
                     ? "bg-[var(--tc-surface)] text-[var(--tc-primary)]"
-                    : "border-2 border-[#4E8572] bg-transparent text-white hover:bg-[#0D5C45]"
+                    : "border-2 border-[#8FBAA9] bg-transparent text-white hover:bg-[#013828]"
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />

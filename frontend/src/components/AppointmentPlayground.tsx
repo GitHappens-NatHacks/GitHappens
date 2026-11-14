@@ -1,4 +1,4 @@
-import { Play, RotateCcw, Waves } from "lucide-react";
+import { CheckSquare, Play, RotateCcw, Square, Waves } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pushSteadyHandSample } from "../api/client";
 import type { EngineToggleRequest, SettingsPayload } from "../types/telemetry";
@@ -49,7 +49,7 @@ const MODES: ModeMeta[] = [
   {
     id: "full",
     title: "Full Assist",
-    subtitle: "One Euro filter, anti-drag, and extended zones.",
+    subtitle: "One Euro filter, 180ms click-freeze, and extended zones.",
     useSmoothing: true,
     useExtendedTargets: true,
   },
@@ -78,6 +78,7 @@ const STEP_LABELS: Record<StepId, string> = {
 
 const CANVAS_W = 880;
 const CANVAS_H = 340;
+const MAX_TRAIL_POINTS = 64;
 
 function buildAppointmentTargets(): TargetBox[] {
   const keys: StepId[] = ["doctor", "date", "time", "review", "book"];
@@ -133,6 +134,18 @@ function selectTarget(
   );
 }
 
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
 interface AppointmentPlaygroundProps {
   settings: SettingsPayload;
   toggling: boolean;
@@ -152,15 +165,22 @@ export function AppointmentPlayground({
   const [hits, setHits] = useState<number>(0);
   const [misses, setMisses] = useState<number>(0);
   const [inside, setInside] = useState<boolean>(false);
-  const [rawPos, setRawPos] = useState<[number, number]>([440, 170]);
-  const [stablePos, setStablePos] = useState<[number, number]>([440, 170]);
   const [liveHz, setLiveHz] = useState<number | null>(null);
   const [lastFeedback, setLastFeedback] = useState<string>(
-    "Click target 1 of 10: 1. Doctor"
+    "Move across the dual-trace canvas and click target 1 of 10: 1. Doctor"
   );
 
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  // Interactive sandbox controls for testing everyday clicks & forms
+  const [sandboxChecks, setSandboxChecks] = useState<boolean[]>([true, false, false]);
+  const [sandboxNote, setSandboxNote] = useState<string>("");
+  const [sandboxClickCount, setSandboxClickCount] = useState<number>(0);
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const anchorPosRef = useRef<[number, number]>([440, 170]);
+  const rawPosRef = useRef<[number, number]>([440, 170]);
+  const stablePosRef = useRef<[number, number]>([440, 170]);
+  const rawTrailRef = useRef<[number, number][]>([]);
+  const stableTrailRef = useRef<[number, number][]>([]);
   const inFlightRef = useRef<boolean>(false);
 
   const activeMode = useMemo(
@@ -169,38 +189,176 @@ export function AppointmentPlayground({
   );
 
   const expectedId = trialStep < SEQUENCE.length ? SEQUENCE[trialStep] : null;
-  const activeCursor = activeMode.useSmoothing ? stablePos : rawPos;
-  const candidate = inside
-    ? selectTarget(
-        targets,
-        activeCursor[0],
-        activeCursor[1],
-        activeMode.useExtendedTargets,
-        paddingPx
-      )
-    : null;
 
-  const sampleBackend = useCallback(async (x: number, y: number, pressed?: boolean) => {
-    if (inFlightRef.current && pressed === undefined) {
+  const paintCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
       return;
     }
-    inFlightRef.current = true;
-    try {
-      const snap = await pushSteadyHandSample(x, y, pressed);
-      setRawPos(snap.raw_pos);
-      setStablePos(snap.stable_pos);
-      setLiveHz(snap.tremor_hz);
-    } catch {
-      // Fall back gracefully if backend is temporarily unreachable.
-      setRawPos([x, y]);
-      setStablePos([x, y]);
-    } finally {
-      inFlightRef.current = false;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const backingW = Math.round(CANVAS_W * dpr);
+    const backingH = Math.round(CANVAS_H * dpr);
+    if (canvas.width !== backingW || canvas.height !== backingH) {
+      canvas.width = backingW;
+      canvas.height = backingH;
     }
-  }, []);
 
-  // Poll at ~20 Hz while pointer is inside canvas or simulation is active so real-time
-  // tremor oscillation and One Euro filtering stay visible even when mouse holds steady.
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = "#FAF7F0";
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Subtle calibration dot matrix background
+    ctx.fillStyle = "rgba(92, 110, 102, 0.3)";
+    for (let gx = 20; gx < CANVAS_W; gx += 30) {
+      for (let gy = 20; gy < CANVAS_H; gy += 30) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const activeCursor = activeMode.useSmoothing ? stablePosRef.current : rawPosRef.current;
+    const candidate = inside
+      ? selectTarget(
+          targets,
+          activeCursor[0],
+          activeCursor[1],
+          activeMode.useExtendedTargets,
+          paddingPx
+        )
+      : null;
+
+    // Render targets and extended hitbox halos
+    for (const target of targets) {
+      const isExpected = target.id === expectedId;
+      const isCandidate = candidate?.id === target.id;
+      if (activeMode.useExtendedTargets && paddingPx > 0) {
+        ctx.save();
+        drawRoundedRect(
+          ctx,
+          target.x - paddingPx,
+          target.y - paddingPx,
+          target.width + paddingPx * 2,
+          target.height + paddingPx * 2,
+          14
+        );
+        ctx.fillStyle = isCandidate ? "#CFE5DA" : "#E3EFE9";
+        ctx.fill();
+        ctx.setLineDash([7, 5]);
+        ctx.strokeStyle = isExpected ? "#014A35" : "#3D4C46";
+        ctx.lineWidth = isCandidate ? 2.5 : 1.75;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      drawRoundedRect(ctx, target.x, target.y, target.width, target.height, 10);
+      ctx.fillStyle = isExpected ? "#014A35" : "#FFFFFF";
+      ctx.fill();
+      ctx.strokeStyle = isCandidate ? "#01305A" : isExpected ? "#013828" : "#5C6E66";
+      ctx.lineWidth = isCandidate ? 3.5 : 2;
+      ctx.stroke();
+
+      ctx.fillStyle = isExpected ? "#FFFFFF" : "#16201C";
+      ctx.font = "bold 16px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(target.label, target.x + target.width / 2, target.y + target.height / 2);
+    }
+
+    // Draw dual-trace history ribbons (Raw shaky trail in crimson vs Smoothed trail in forest green)
+    const drawTrail = (pts: [number, number][], color: string, width: number, dashed: boolean) => {
+      if (pts.length < 2) {
+        return;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i += 1) {
+        ctx.lineTo(pts[i][0], pts[i][1]);
+      }
+      if (dashed) {
+        ctx.setLineDash([4, 3]);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    drawTrail(rawTrailRef.current, "rgba(140, 33, 19, 0.55)", 2, true);
+    drawTrail(stableTrailRef.current, "rgba(1, 74, 53, 0.9)", 3.5, false);
+
+    // Draw live raw tremor ring and stabilized pointer dot
+    if (inside || settings.simulate_tremor) {
+      const [rx, ry] = rawPosRef.current;
+      const [sx, sy] = stablePosRef.current;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([3, 3]);
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(sx, sy);
+      ctx.strokeStyle = "rgba(140, 33, 19, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(rx, ry, 10, 0, Math.PI * 2);
+      ctx.strokeStyle = "#8C2113";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+      ctx.fillStyle = "#014A35";
+      ctx.fill();
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+  }, [activeMode, expectedId, inside, paddingPx, settings.simulate_tremor, targets]);
+
+  useEffect(() => {
+    paintCanvas();
+  }, [paintCanvas]);
+
+  const recordTrail = (raw: [number, number], stable: [number, number]) => {
+    rawPosRef.current = raw;
+    stablePosRef.current = stable;
+    rawTrailRef.current = [...rawTrailRef.current, raw].slice(-MAX_TRAIL_POINTS);
+    stableTrailRef.current = [...stableTrailRef.current, stable].slice(-MAX_TRAIL_POINTS);
+    paintCanvas();
+  };
+
+  const sampleBackend = useCallback(
+    async (x: number, y: number, pressed?: boolean) => {
+      if (inFlightRef.current && pressed === undefined) {
+        return;
+      }
+      inFlightRef.current = true;
+      try {
+        const snap = await pushSteadyHandSample(x, y, pressed);
+        recordTrail(snap.raw_pos, snap.stable_pos);
+        setLiveHz(snap.tremor_hz);
+      } catch {
+        recordTrail([x, y], [x, y]);
+      } finally {
+        inFlightRef.current = false;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paintCanvas]
+  );
+
   useEffect(() => {
     if (!inside && !settings.simulate_tremor) {
       return;
@@ -208,12 +366,12 @@ export function AppointmentPlayground({
     const id = window.setInterval(() => {
       const [ax, ay] = anchorPosRef.current;
       void sampleBackend(ax, ay);
-    }, 45);
+    }, 35);
     return () => window.clearInterval(id);
   }, [inside, sampleBackend, settings.simulate_tremor]);
 
   const toStageCoords = (clientX: number, clientY: number): [number, number] => {
-    const el = stageRef.current;
+    const el = canvasRef.current;
     if (!el) {
       return [440, 170];
     }
@@ -239,24 +397,26 @@ export function AppointmentPlayground({
     setTrialActive(true);
     setHits(0);
     setMisses(0);
+    rawTrailRef.current = [];
+    stableTrailRef.current = [];
+    paintCanvas();
     setLastFeedback("Trial started: click target 1 of 10 (1. Doctor).");
   };
 
-  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const [x, y] = toStageCoords(e.clientX, e.clientY);
     anchorPosRef.current = [x, y];
     setInside(true);
     void sampleBackend(x, y);
   };
 
-  const handleCanvasPointerDown = async (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleCanvasPointerDown = async (e: React.PointerEvent<HTMLCanvasElement>) => {
     const [x, y] = toStageCoords(e.clientX, e.clientY);
     anchorPosRef.current = [x, y];
     setInside(true);
     try {
       const snap = await pushSteadyHandSample(x, y, true);
-      setRawPos(snap.raw_pos);
-      setStablePos(snap.stable_pos);
+      recordTrail(snap.raw_pos, snap.stable_pos);
       const clickPos = activeMode.useSmoothing ? snap.stable_pos : snap.raw_pos;
       const hitTarget = selectTarget(
         targets,
@@ -288,12 +448,11 @@ export function AppointmentPlayground({
         setMisses((m) => m + 1);
         setLastFeedback(
           hitTarget
-            ? `Clicked ${hitTarget.label}, but expected ${STEP_LABELS[expectedId]}.`
+            ? `Clicked ${hitTarget.label}, expected ${STEP_LABELS[expectedId]}.`
             : `Missed target boundary. Aim for ${STEP_LABELS[expectedId]}.`
         );
       }
     } catch {
-      // Fall back locally when backend API is offline.
       const hitTarget = selectTarget(
         targets,
         x,
@@ -322,10 +481,10 @@ export function AppointmentPlayground({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-[var(--tc-ink)]">
-            10-Step Appointment Tremor Playground
+            Sandbox Test Playground &amp; 10-Step Appointment Trial
           </h2>
           <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
-            Compare raw shaky input against One Euro smoothing and dashed extended button boundaries across 10 simulated clinic booking steps.
+            Watch the dashed red shaky input path compared against the solid green One Euro stabilized path across target buttons, extended hitboxes, and practice controls.
           </p>
         </div>
 
@@ -392,7 +551,7 @@ export function AppointmentPlayground({
         })}
       </div>
 
-      {/* Interactive Appointment Trial Canvas */}
+      {/* Dual-Trace Real-Time HTML5 Canvas */}
       <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div role="status" aria-live="polite" className="text-lg font-bold text-[var(--tc-ink)] tabular-nums">
@@ -411,123 +570,21 @@ export function AppointmentPlayground({
           </div>
         </div>
 
-        <div
-          ref={stageRef}
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_W}
+          height={CANVAS_H}
+          style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}
           onPointerMove={handleCanvasPointerMove}
           onPointerDown={(e) => void handleCanvasPointerDown(e)}
           onPointerLeave={() => setInside(false)}
-          className="relative w-full cursor-crosshair select-none overflow-hidden rounded-2xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)]"
-          style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}
-        >
-          <svg
-            viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-            role="img"
-            aria-label="10-step appointment simulator showing button edges, extended dashed click boundaries, raw tremor ring, and smoothed pointer dot"
-            className="h-full w-full"
-          >
-            {/* Subtle calibration dot matrix background */}
-            <defs>
-              <pattern
-                id="tc-dot-grid"
-                width="30"
-                height="30"
-                patternUnits="userSpaceOnUse"
-              >
-                <circle cx="15" cy="15" r="1.4" fill="#9EB0A6" opacity="0.45" />
-              </pattern>
-            </defs>
-            <rect width={CANVAS_W} height={CANVAS_H} fill="url(#tc-dot-grid)" />
-
-            {targets.map((target) => {
-              const isExpected = target.id === expectedId;
-              const isCandidate = candidate?.id === target.id;
-              const showExtended = activeMode.useExtendedTargets && paddingPx > 0;
-              return (
-                <g key={target.id}>
-                  {/* Extended Hitbox Boundary */}
-                  {showExtended && (
-                    <rect
-                      x={target.x - paddingPx}
-                      y={target.y - paddingPx}
-                      width={target.width + paddingPx * 2}
-                      height={target.height + paddingPx * 2}
-                      rx={14}
-                      fill={isCandidate ? "#CFE5DA" : "#E3EFE9"}
-                      stroke={isExpected ? "#014A35" : "#3D4C46"}
-                      strokeWidth={isCandidate ? 2.5 : 1.75}
-                      strokeDasharray="7 5"
-                    />
-                  )}
-
-                  {/* Standard Button Inner Boundary */}
-                  <rect
-                    x={target.x}
-                    y={target.y}
-                    width={target.width}
-                    height={target.height}
-                    rx={10}
-                    fill={isExpected ? "#014A35" : "#FFFFFF"}
-                    stroke={
-                      isCandidate
-                        ? "#01305A"
-                        : isExpected
-                        ? "#013828"
-                        : "#5C6E66"
-                    }
-                    strokeWidth={isCandidate ? 3.5 : 2}
-                  />
-
-                  <text
-                    x={target.x + target.width / 2}
-                    y={target.y + target.height / 2 + 6}
-                    textAnchor="middle"
-                    fontSize="16"
-                    fontWeight="700"
-                    fill={isExpected ? "#FFFFFF" : "#16201C"}
-                  >
-                    {target.label}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Real-Time Cursors: Raw Tremor Ring vs One Euro Stabilized Dot */}
-            {(inside || settings.simulate_tremor) && (
-              <g>
-                <line
-                  x1={rawPos[0]}
-                  y1={rawPos[1]}
-                  x2={stablePos[0]}
-                  y2={stablePos[1]}
-                  stroke="#8C2113"
-                  strokeWidth="1.5"
-                  strokeDasharray="3 3"
-                  opacity="0.7"
-                />
-                <circle
-                  cx={rawPos[0]}
-                  cy={rawPos[1]}
-                  r="11"
-                  fill="none"
-                  stroke="#8C2113"
-                  strokeWidth="3"
-                />
-                <circle
-                  cx={stablePos[0]}
-                  cy={stablePos[1]}
-                  r="7"
-                  fill="#014A35"
-                  stroke="#FFFFFF"
-                  strokeWidth="2.5"
-                />
-              </g>
-            )}
-          </svg>
-        </div>
+          aria-label="Dual-trace HTML5 canvas showing raw tremor trail, stabilized pointer trail, and 5 appointment targets with extended boundaries"
+          className="w-full cursor-crosshair select-none rounded-2xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)]"
+        />
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm font-semibold text-[var(--tc-ink-muted)]">
           <span>
-            Red ring: raw / 4-7 Hz shaky input | Solid green dot: One Euro smoothed pointer | Dashed box: extended boundary
+            Dashed red ring &amp; trail: raw shaky input | Solid green dot &amp; trail: One Euro stabilized path | Dashed green box: extended boundary
           </span>
           <span className="text-[var(--tc-ink)]">{lastFeedback}</span>
         </div>
@@ -536,7 +593,7 @@ export function AppointmentPlayground({
       <SteppedControl
         id="extended-boundary-padding"
         label="Extended Click Boundary Padding"
-        description="Expands forgiving target hitboxes around each appointment button for Larger Targets and Full Assist modes."
+        description="Expands forgiving hitboxes around the 5 clinic booking targets for Larger Targets and Full Assist modes."
         value={paddingPx}
         min={0}
         max={36}
@@ -544,6 +601,92 @@ export function AppointmentPlayground({
         unit="px"
         onChange={setPaddingPx}
       />
+
+      {/* Everyday UI Target Sandbox */}
+      <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6">
+        <h3 className="text-xl font-bold text-[var(--tc-ink)]">
+          Everyday Control Practice Area
+        </h3>
+        <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
+          Try clicking checkboxes, confirmation buttons, and typing notes while OS pointer interception or tremor simulation is active.
+        </p>
+
+        <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-4">
+            {[
+              "Confirm morning appointment",
+              "Bring medication schedule list",
+              "Send copy to caregiver",
+            ].map((labelText, idx) => (
+              <button
+                key={labelText}
+                type="button"
+                role="checkbox"
+                aria-checked={sandboxChecks[idx]}
+                onClick={() =>
+                  setSandboxChecks((prev) =>
+                    prev.map((v, i) => (i === idx ? !v : v))
+                  )
+                }
+                className={`flex min-h-14 w-full items-center gap-3 rounded-xl border-2 px-4 text-left text-base font-semibold ${
+                  sandboxChecks[idx]
+                    ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+                    : "border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
+                }`}
+              >
+                {sandboxChecks[idx] ? (
+                  <CheckSquare className="h-6 w-6 shrink-0 text-[var(--tc-primary)]" aria-hidden="true" />
+                ) : (
+                  <Square className="h-6 w-6 shrink-0 text-[var(--tc-ink-muted)]" aria-hidden="true" />
+                )}
+                <span>{labelText}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-4">
+            <label
+              htmlFor="sandbox-note-input"
+              className="block text-base font-bold text-[var(--tc-ink)]"
+            >
+              Visit Note Practice Input
+            </label>
+            <input
+              id="sandbox-note-input"
+              type="text"
+              value={sandboxNote}
+              onChange={(e) => setSandboxNote(e.target.value)}
+              placeholder="Click inside and type a short test note..."
+              className="min-h-14 w-full rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-4 text-base text-[var(--tc-ink)]"
+            />
+            <button
+              type="button"
+              onClick={() => setSandboxNote("")}
+              className="inline-flex min-h-14 items-center rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+            >
+              Clear Note
+            </button>
+          </div>
+
+          <div className="flex flex-col justify-between rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-bg)] p-5">
+            <div>
+              <p className="text-base font-bold text-[var(--tc-ink)]">
+                Quick Target Tap Counter
+              </p>
+              <p className="mt-1 text-3xl font-bold text-[var(--tc-primary)] tabular-nums">
+                {sandboxClickCount} clicks
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSandboxClickCount((c) => c + 1)}
+              className="mt-4 min-h-14 w-full rounded-xl bg-[var(--tc-primary)] px-5 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+            >
+              Tap Cleanly to Test Click-Freeze
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

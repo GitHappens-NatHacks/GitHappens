@@ -24,6 +24,10 @@ class AccessibilitySettings:
     anti_drag: bool = True
     anti_drag_threshold_px: float = 8.0
     anti_drag_hold_ms: int = 300
+    click_freeze_ms: int = 180
+    gravity_wells: bool = True
+    gravity_strength: int = 35
+    global_shortcut: str = "CommandOrControl+Shift+S"
     system_mouse: bool = False
     gaze_source: str = "head"
     gaze_dwell_ms: int = 1100
@@ -49,7 +53,16 @@ class AccessibilitySettings:
         return cls(**filtered).validated()
 
     def validated(self) -> AccessibilitySettings:
-        if self.profile not in ("als", "parkinsons", "cognitive", "custom"):
+        if self.profile not in (
+            "als",
+            "parkinsons",
+            "cognitive",
+            "custom",
+            "mild",
+            "moderate",
+            "high",
+            "hands_free",
+        ):
             self.profile = "custom"
         if self.gaze_source not in ("head", "eyes"):
             self.gaze_source = "head"
@@ -63,6 +76,10 @@ class AccessibilitySettings:
         self.one_euro_beta = round(max(0.0, min(0.2, float(self.one_euro_beta))), 5)
         self.anti_drag_threshold_px = round(max(2.0, min(40.0, float(self.anti_drag_threshold_px))), 1)
         self.anti_drag_hold_ms = max(100, min(1500, int(self.anti_drag_hold_ms)))
+        self.click_freeze_ms = max(0, min(500, int(self.click_freeze_ms)))
+        self.gravity_strength = max(0, min(80, int(self.gravity_strength)))
+        shortcut = str(self.global_shortcut or "").strip()
+        self.global_shortcut = shortcut[:64] if shortcut else "CommandOrControl+Shift+S"
         self.gaze_dwell_ms = max(600, min(2000, int(self.gaze_dwell_ms)))
         self.target_size_pct = max(100, min(200, int(self.target_size_pct)))
         self.font_size_pct = max(90, min(160, int(self.font_size_pct)))
