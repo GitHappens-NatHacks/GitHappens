@@ -177,7 +177,7 @@ export function App() {
         {(apiError || errorMessage) && (
           <div
             role="alert"
-            className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-5 text-[var(--tc-alert)]"
+            className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-5 text-[var(--tc-alert)]"
           >
             <p className="text-base font-bold">
               {apiError ?? errorMessage}
@@ -189,7 +189,7 @@ export function App() {
                 reconnect();
                 void loadInitialSettings();
               }}
-              className="min-h-14 rounded-xl bg-[var(--tc-alert)] px-5 text-base font-bold text-white"
+              className="min-h-14 rounded-lg bg-[var(--tc-alert)] px-5 text-base font-bold text-white"
             >
               Retry Connection
             </button>
@@ -197,7 +197,7 @@ export function App() {
         )}
 
         {loadingSettings ? (
-          <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-8 text-lg font-semibold text-[var(--tc-ink-muted)]">
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-8 text-lg font-semibold text-[var(--tc-ink-muted)]">
             Connecting to TrueCursor backend...
           </div>
         ) : activeView === "home" ? (

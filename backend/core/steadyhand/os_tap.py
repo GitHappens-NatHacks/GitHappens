@@ -20,6 +20,7 @@ class SystemCursorInterceptor:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._run_loop = None
+        self._tap_port = None
         self._pynput_listener = None
         self._mode: str = "idle"
         self._last_error: str | None = None
@@ -54,6 +55,15 @@ class SystemCursorInterceptor:
     def stop(self) -> None:
         with self._lock:
             self._stop_event.set()
+            if self._tap_port is not None:
+                try:
+                    import Quartz  # type: ignore[import-not-found]
+
+                    Quartz.CGEventTapEnable(self._tap_port, False)
+                    Quartz.CFMachPortInvalidate(self._tap_port)
+                except Exception:
+                    pass
+                self._tap_port = None
             if self._run_loop is not None:
                 try:
                     import Quartz  # type: ignore[import-not-found]
@@ -96,6 +106,7 @@ class SystemCursorInterceptor:
 
         ready = threading.Event()
         started_ok = {"ok": False}
+        tap_box: dict[str, object] = {"tap": None, "loop": None}
 
         def _tap_thread() -> None:
             mask = (
@@ -104,7 +115,6 @@ class SystemCursorInterceptor:
                 | (1 << Quartz.kCGEventLeftMouseDown)
                 | (1 << Quartz.kCGEventLeftMouseUp)
             )
-            tap_box: dict[str, object] = {"tap": None}
 
             def _callback(_proxy, event_type, event, _refcon):
                 if event_type in (
@@ -124,11 +134,14 @@ class SystemCursorInterceptor:
                 else:
                     return event
 
-                pt = Quartz.CGEventGetLocation(event)
-                transformed = self._on_event(kind, float(pt.x), float(pt.y), time.perf_counter())
-                if transformed is not None:
-                    new_pt = Quartz.CGPoint(float(transformed[0]), float(transformed[1]))
-                    Quartz.CGEventSetLocation(event, new_pt)
+                try:
+                    pt = Quartz.CGEventGetLocation(event)
+                    transformed = self._on_event(kind, float(pt.x), float(pt.y), time.perf_counter())
+                    if transformed is not None:
+                        new_pt = Quartz.CGPoint(float(transformed[0]), float(transformed[1]))
+                        Quartz.CGEventSetLocation(event, new_pt)
+                except Exception:
+                    return event
                 return event
 
             tap = Quartz.CGEventTapCreate(
@@ -143,11 +156,10 @@ class SystemCursorInterceptor:
                 ready.set()
                 return
 
-            tap_box["tap"] = tap
             source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
             loop = Quartz.CFRunLoopGetCurrent()
-            with self._lock:
-                self._run_loop = loop
+            tap_box["tap"] = tap
+            tap_box["loop"] = loop
             Quartz.CFRunLoopAddSource(loop, source, Quartz.kCFRunLoopCommonModes)
             Quartz.CGEventTapEnable(tap, True)
             started_ok["ok"] = True
@@ -163,6 +175,8 @@ class SystemCursorInterceptor:
             )
             return False
 
+        self._tap_port = tap_box["tap"]
+        self._run_loop = tap_box["loop"]
         self._thread = thread
         self._mode = "quartz_cgeventtap"
         return True

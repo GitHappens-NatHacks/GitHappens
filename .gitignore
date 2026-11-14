@@ -14,6 +14,8 @@ ENV/
 .ipynb_checkpoints/
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
 
 # Secrets
 .env

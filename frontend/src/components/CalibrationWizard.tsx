@@ -104,12 +104,12 @@ export function CalibrationWizard({
       Math.round(dot.ny * screenHeight),
     ];
 
-    const nextFeatures = [...capturedFeatures, feat];
-    const nextTargets = [...capturedTargets, targetPx];
+    const nextFeatures = [...capturedFeatures.slice(0, stepIndex), feat];
+    const nextTargets = [...capturedTargets.slice(0, stepIndex), targetPx];
     const nextEars =
       frame?.gaze.ear !== null && frame?.gaze.ear !== undefined
-        ? [...capturedEars, frame.gaze.ear]
-        : capturedEars;
+        ? [...capturedEars.slice(0, stepIndex), frame.gaze.ear]
+        : capturedEars.slice(0, stepIndex);
 
     setCapturedFeatures(nextFeatures);
     setCapturedTargets(nextTargets);
@@ -176,7 +176,7 @@ export function CalibrationWizard({
               aria-pressed={pointCount === 5}
               onClick={() => resetWizard(5, source)}
               disabled={submitting}
-              className={`min-h-14 rounded-xl border-2 px-5 text-base font-bold ${
+              className={`min-h-14 rounded-lg border-2 px-5 text-base font-bold ${
                 pointCount === 5
                   ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-primary)]"
                   : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
@@ -189,7 +189,7 @@ export function CalibrationWizard({
               aria-pressed={pointCount === 9}
               onClick={() => resetWizard(9, source)}
               disabled={submitting}
-              className={`min-h-14 rounded-xl border-2 px-5 text-base font-bold ${
+              className={`min-h-14 rounded-lg border-2 px-5 text-base font-bold ${
                 pointCount === 9
                   ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-primary)]"
                   : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
@@ -201,14 +201,14 @@ export function CalibrationWizard({
               type="button"
               onClick={() => resetWizard(pointCount, source === "head" ? "eyes" : "head")}
               disabled={submitting}
-              className="min-h-14 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
+              className="min-h-14 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
             >
               Source: {source === "head" ? "Head" : "Eyes"}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-alert-bg)]"
+              className="inline-flex min-h-14 items-center gap-2 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-alert-bg)]"
             >
               <X className="h-5 w-5" aria-hidden="true" />
               <span>Exit Calibration</span>
@@ -221,13 +221,13 @@ export function CalibrationWizard({
         {error && (
           <div
             role="alert"
-            className="mx-auto mt-6 max-w-xl rounded-2xl border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-5 text-center"
+            className="mx-auto mt-6 max-w-xl rounded-lg border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-5 text-center"
           >
             <p className="text-lg font-bold text-[var(--tc-alert)]">{error}</p>
             <button
               type="button"
               onClick={() => resetWizard()}
-              className="mt-4 inline-flex min-h-14 items-center gap-2 rounded-xl bg-[var(--tc-primary)] px-6 text-base font-bold text-white"
+              className="mt-4 inline-flex min-h-14 items-center gap-2 rounded-lg bg-[var(--tc-primary)] px-6 text-base font-bold text-white"
             >
               <RotateCcw className="h-5 w-5" aria-hidden="true" />
               <span>Restart Grid</span>
@@ -237,8 +237,8 @@ export function CalibrationWizard({
 
         {result ? (
           <div className="flex h-full items-center justify-center p-6">
-            <div className="w-full max-w-lg rounded-2xl border-2 border-[var(--tc-primary)] bg-[var(--tc-surface)] p-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--tc-mint)] text-[var(--tc-primary)]">
+            <div className="w-full max-w-lg rounded-lg border-2 border-[var(--tc-primary)] bg-[var(--tc-surface)] p-8 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-[var(--tc-mint)] text-[var(--tc-primary)]">
                 <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
               </div>
               <h3 className="mt-4 text-2xl font-bold text-[var(--tc-ink)]">
@@ -251,7 +251,7 @@ export function CalibrationWizard({
                 <button
                   type="button"
                   onClick={() => resetWizard()}
-                  className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-6 text-base font-bold text-[var(--tc-ink)]"
+                  className="inline-flex min-h-14 items-center gap-2 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-6 text-base font-bold text-[var(--tc-ink)]"
                 >
                   <RotateCcw className="h-5 w-5" aria-hidden="true" />
                   <span>Calibrate Again</span>
@@ -259,7 +259,7 @@ export function CalibrationWizard({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="min-h-14 rounded-xl bg-[var(--tc-primary)] px-8 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+                  className="min-h-14 rounded-lg bg-[var(--tc-primary)] px-8 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
                 >
                   Return to Control Deck
                 </button>

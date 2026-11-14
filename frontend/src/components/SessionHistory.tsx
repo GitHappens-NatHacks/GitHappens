@@ -290,7 +290,11 @@ export function SessionHistory() {
       ]),
     ];
 
-    const csvEscape = (cell: string) => `"${String(cell).replace(/"/g, '""')}"`;
+    const csvEscape = (cell: string) => {
+      const str = String(cell);
+      const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
     const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -317,7 +321,7 @@ export function SessionHistory() {
           <button
             type="button"
             onClick={exportClinicianPdf}
-            className="inline-flex min-h-14 items-center gap-3 rounded-xl bg-[var(--tc-primary)] px-6 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+            className="inline-flex min-h-14 items-center gap-3 rounded-lg bg-[var(--tc-primary)] px-6 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
           >
             <FileDown className="h-5 w-5" aria-hidden="true" />
             <span>Export Clinician Report (PDF)</span>
@@ -326,7 +330,7 @@ export function SessionHistory() {
           <button
             type="button"
             onClick={exportClinicianCsv}
-            className="inline-flex min-h-14 items-center gap-3 rounded-xl border-2 border-[var(--tc-primary)] bg-[var(--tc-mint)] px-5 text-base font-bold text-[var(--tc-primary)] hover:bg-[var(--tc-surface-alt)]"
+            className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-[var(--tc-primary)] bg-[var(--tc-mint)] px-5 text-base font-bold text-[var(--tc-primary)] hover:bg-[var(--tc-surface-alt)]"
           >
             <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
             <span>Export CSV Data</span>
@@ -336,7 +340,7 @@ export function SessionHistory() {
             type="button"
             disabled={loading}
             onClick={() => void load()}
-            className="inline-flex min-h-14 items-center gap-3 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)] disabled:opacity-50"
+            className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)] disabled:opacity-50"
           >
             <RefreshCw className="h-5 w-5" aria-hidden="true" />
             <span>{loading ? "Refreshing..." : "Refresh"}</span>
@@ -347,16 +351,16 @@ export function SessionHistory() {
       {error && (
         <div
           role="alert"
-          className="rounded-2xl border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-5 text-base font-semibold text-[var(--tc-alert)]"
+          className="rounded-lg border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-5 text-base font-semibold text-[var(--tc-alert)]"
         >
           {error}
         </div>
       )}
 
-      {/* How to Read the Clinical Data */}
+      {/* How to Read the Clinical Data (Flattened editorial glossary, zero nested cards) */}
       <section
         aria-labelledby="how-to-read-heading"
-        className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6"
+        className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6"
       >
         <div className="flex items-center gap-3">
           <Info className="h-6 w-6 shrink-0 text-[var(--tc-primary)]" aria-hidden="true" />
@@ -364,50 +368,50 @@ export function SessionHistory() {
             How to Read This Clinical Motor Data
           </h3>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 text-base text-[var(--tc-ink)] md:grid-cols-2">
-          <div className="rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
-            <p className="font-bold text-[var(--tc-primary)]">Cursor Stability Score (0 to 100)</p>
-            <p className="mt-1 text-sm text-[var(--tc-ink-muted)]">
+        <dl className="mt-4 grid grid-cols-1 gap-6 text-base text-[var(--tc-ink)] md:grid-cols-2">
+          <div className="border-t-2 border-[var(--tc-primary)] pt-3">
+            <dt className="font-bold text-[var(--tc-primary)]">Cursor Stability Score (0 to 100)</dt>
+            <dd className="mt-1 text-sm text-[var(--tc-ink)]">
               Measures overall steadiness. <strong>85-100</strong> means smooth control, <strong>65-84</strong> shows mild/moderate shaking being dampened, and <strong>below 65</strong> flags heavy tremor activity.
-            </p>
+            </dd>
           </div>
-          <div className="rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
-            <p className="font-bold text-[var(--tc-primary)]">4-7 Hz Tremor Band Power (%) &amp; Frequency (Hz)</p>
-            <p className="mt-1 text-sm text-[var(--tc-ink-muted)]">
+          <div className="border-t-2 border-[var(--tc-primary)] pt-3">
+            <dt className="font-bold text-[var(--tc-primary)]">4-7 Hz Tremor Band Power (%) &amp; Frequency (Hz)</dt>
+            <dd className="mt-1 text-sm text-[var(--tc-ink)]">
               Percentage of Welch movement energy concentrated in the <strong>4-7 Hz Parkinsonian tremor band</strong>. Readings <strong>50% or higher</strong> indicate a likely OFF-medication or high-tremor interval.
-            </p>
+            </dd>
           </div>
-          <div className="rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
-            <p className="font-bold text-[var(--tc-primary)]">Assistance Mode (Stabilized vs. Baseline)</p>
-            <p className="mt-1 text-sm text-[var(--tc-ink-muted)]">
+          <div className="border-t-2 border-[var(--tc-primary)] pt-3">
+            <dt className="font-bold text-[var(--tc-primary)]">Assistance Mode (Stabilized vs. Baseline)</dt>
+            <dd className="mt-1 text-sm text-[var(--tc-ink)]">
               Shows whether One Euro smoothing and 180ms click-freeze were turned ON (<strong>Stabilized</strong>) or OFF (<strong>Unassisted Baseline</strong>) during that session window.
-            </p>
+            </dd>
           </div>
-          <div className="rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
-            <p className="font-bold text-[var(--tc-primary)]">Gaze Calibration Mean Error (px)</p>
-            <p className="mt-1 text-sm text-[var(--tc-ink-muted)]">
+          <div className="border-t-2 border-[var(--tc-primary)] pt-3">
+            <dt className="font-bold text-[var(--tc-primary)]">Gaze Calibration Mean Error (px)</dt>
+            <dd className="mt-1 text-sm text-[var(--tc-ink)]">
               Average pixel offset from the 5- or 9-point gaze wizard. Values <strong>under 65 px</strong> provide comfortable hands-free button selection.
-            </p>
+            </dd>
           </div>
-        </div>
+        </dl>
       </section>
 
       {/* Recharts Daily Stability & Tremor Charts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section
           aria-labelledby="daily-trend-heading"
-          className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6"
+          className="space-y-4 border-t-2 border-[var(--tc-border)] pt-5"
         >
           <h3 id="daily-trend-heading" className="text-xl font-bold text-[var(--tc-ink)]">
             Daily Average Stability Score (0-100)
           </h3>
 
           {trends.length === 0 ? (
-            <p className="mt-6 rounded-xl bg-[var(--tc-surface-alt)] p-6 text-base text-[var(--tc-ink-muted)]">
+            <p className="rounded-md bg-[var(--tc-surface-alt)] p-5 text-base text-[var(--tc-ink-muted)]">
               No daily stability trends recorded yet. Use the Sandbox Lab or move the pointer with 4-7 Hz simulation enabled for at least 4 seconds to store a window.
             </p>
           ) : (
-            <div className="mt-4 h-64 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-bg)] p-3">
+            <div className="h-64 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart data={trends}>
                   <CartesianGrid stroke="#CBD5CF" strokeDasharray="4 4" />
@@ -417,7 +421,7 @@ export function SessionHistory() {
                     contentStyle={{
                       backgroundColor: "#FFFFFF",
                       border: "2px solid #014A35",
-                      borderRadius: "12px",
+                      borderRadius: "6px",
                       color: "#16201C",
                       fontWeight: 600,
                     }}
@@ -438,18 +442,18 @@ export function SessionHistory() {
 
         <section
           aria-labelledby="tremor-trend-heading"
-          className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6"
+          className="space-y-4 border-t-2 border-[var(--tc-border)] pt-5"
         >
           <h3 id="tremor-trend-heading" className="text-xl font-bold text-[var(--tc-ink)]">
             Daily 4-7 Hz Tremor Power (%) Trend
           </h3>
 
           {trends.length === 0 ? (
-            <p className="mt-6 rounded-xl bg-[var(--tc-surface-alt)] p-6 text-base text-[var(--tc-ink-muted)]">
+            <p className="rounded-md bg-[var(--tc-surface-alt)] p-5 text-base text-[var(--tc-ink-muted)]">
               Once sessions are recorded, this chart tracks longitudinal tremor intensity across medication cycles.
             </p>
           ) : (
-            <div className="mt-4 h-64 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-bg)] p-3">
+            <div className="h-64 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <LineChart data={trends}>
                   <CartesianGrid stroke="#CBD5CF" strokeDasharray="4 4" />
@@ -459,7 +463,7 @@ export function SessionHistory() {
                     contentStyle={{
                       backgroundColor: "#FFFFFF",
                       border: "2px solid #8C2113",
-                      borderRadius: "12px",
+                      borderRadius: "6px",
                       color: "#16201C",
                       fontWeight: 600,
                     }}
@@ -481,7 +485,7 @@ export function SessionHistory() {
 
       {/* Descriptive Sessions & Calibrations Tables */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6">
+        <section className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6">
           <h3 className="text-xl font-bold text-[var(--tc-ink)]">
             Recorded Motor Telemetry Sessions
           </h3>
@@ -527,7 +531,7 @@ export function SessionHistory() {
           )}
         </section>
 
-        <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6">
+        <section className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6">
           <h3 className="text-xl font-bold text-[var(--tc-ink)]">
             Saved Gaze Calibration Accuracy Records
           </h3>

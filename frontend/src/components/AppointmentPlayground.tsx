@@ -246,7 +246,7 @@ export function AppointmentPlayground({
           target.y - paddingPx,
           target.width + paddingPx * 2,
           target.height + paddingPx * 2,
-          14
+          8
         );
         ctx.fillStyle = isCandidate ? "#CFE5DA" : "#E3EFE9";
         ctx.fill();
@@ -257,7 +257,7 @@ export function AppointmentPlayground({
         ctx.restore();
       }
 
-      drawRoundedRect(ctx, target.x, target.y, target.width, target.height, 10);
+      drawRoundedRect(ctx, target.x, target.y, target.width, target.height, 6);
       ctx.fillStyle = isExpected ? "#014A35" : "#FFFFFF";
       ctx.fill();
       ctx.strokeStyle = isCandidate ? "#01305A" : isExpected ? "#013828" : "#5C6E66";
@@ -499,7 +499,7 @@ export function AppointmentPlayground({
                 assistance_enabled: true,
               })
             }
-            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-bold ${
+            className={`inline-flex min-h-14 items-center gap-3 rounded-lg border-2 px-5 text-base font-bold ${
               settings.simulate_tremor
                 ? "border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] text-[var(--tc-alert)]"
                 : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -514,7 +514,7 @@ export function AppointmentPlayground({
           <button
             type="button"
             onClick={handleResetTrial}
-            className="inline-flex min-h-14 items-center gap-3 rounded-xl bg-[var(--tc-primary)] px-6 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+            className="inline-flex min-h-14 items-center gap-3 rounded-lg bg-[var(--tc-primary)] px-6 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
           >
             {trialActive && trialStep > 0 ? (
               <RotateCcw className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -536,7 +536,7 @@ export function AppointmentPlayground({
               type="button"
               aria-pressed={selected}
               onClick={() => void handleSelectMode(item)}
-              className={`min-h-[84px] rounded-2xl border-2 p-4 text-left transition-colors ${
+              className={`min-h-[84px] rounded-lg border-2 p-4 text-left transition-colors ${
                 selected
                   ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
                   : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -552,8 +552,8 @@ export function AppointmentPlayground({
       </div>
 
       {/* Dual-Trace Real-Time HTML5 Canvas */}
-      <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div role="status" aria-live="polite" className="text-lg font-bold text-[var(--tc-ink)] tabular-nums">
             {expectedId !== null
               ? `Step ${trialStep + 1} of 10: Click ${STEP_LABELS[expectedId]}`
@@ -579,10 +579,10 @@ export function AppointmentPlayground({
           onPointerDown={(e) => void handleCanvasPointerDown(e)}
           onPointerLeave={() => setInside(false)}
           aria-label="Dual-trace HTML5 canvas showing raw tremor trail, stabilized pointer trail, and 5 appointment targets with extended boundaries"
-          className="w-full cursor-crosshair select-none rounded-2xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)]"
+          className="w-full cursor-crosshair select-none rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)]"
         />
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm font-semibold text-[var(--tc-ink-muted)]">
+        <div className="flex flex-wrap items-center justify-between gap-4 text-sm font-semibold text-[var(--tc-ink-muted)]">
           <span>
             Dashed red ring &amp; trail: raw shaky input | Solid green dot &amp; trail: One Euro stabilized path | Dashed green box: extended boundary
           </span>
@@ -602,8 +602,8 @@ export function AppointmentPlayground({
         onChange={setPaddingPx}
       />
 
-      {/* Everyday UI Target Sandbox */}
-      <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6">
+      {/* Everyday UI Target Sandbox (Flattened section, no outer wrapper card) */}
+      <section className="border-t-2 border-[var(--tc-border)] pt-6">
         <h3 className="text-xl font-bold text-[var(--tc-ink)]">
           Everyday Control Practice Area
         </h3>
@@ -628,10 +628,10 @@ export function AppointmentPlayground({
                     prev.map((v, i) => (i === idx ? !v : v))
                   )
                 }
-                className={`flex min-h-14 w-full items-center gap-3 rounded-xl border-2 px-4 text-left text-base font-semibold ${
+                className={`flex min-h-14 w-full items-center gap-3 rounded-lg border-2 px-4 text-left text-base font-semibold ${
                   sandboxChecks[idx]
                     ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
-                    : "border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
+                    : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
                 }`}
               >
                 {sandboxChecks[idx] ? (
@@ -657,18 +657,18 @@ export function AppointmentPlayground({
               value={sandboxNote}
               onChange={(e) => setSandboxNote(e.target.value)}
               placeholder="Click inside and type a short test note..."
-              className="min-h-14 w-full rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-4 text-base text-[var(--tc-ink)]"
+              className="min-h-14 w-full rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-4 text-base text-[var(--tc-ink)]"
             />
             <button
               type="button"
               onClick={() => setSandboxNote("")}
-              className="inline-flex min-h-14 items-center rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+              className="inline-flex min-h-14 items-center rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
             >
               Clear Note
             </button>
           </div>
 
-          <div className="flex flex-col justify-between rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-bg)] p-5">
+          <div className="flex flex-col justify-between rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div>
               <p className="text-base font-bold text-[var(--tc-ink)]">
                 Quick Target Tap Counter
@@ -680,7 +680,7 @@ export function AppointmentPlayground({
             <button
               type="button"
               onClick={() => setSandboxClickCount((c) => c + 1)}
-              className="mt-4 min-h-14 w-full rounded-xl bg-[var(--tc-primary)] px-5 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+              className="mt-4 min-h-14 w-full rounded-lg bg-[var(--tc-primary)] px-5 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)]"
             >
               Tap Cleanly to Test Click-Freeze
             </button>

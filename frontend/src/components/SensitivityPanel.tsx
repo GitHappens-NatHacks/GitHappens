@@ -93,7 +93,7 @@ export function SensitivityPanel({
         <button
           type="button"
           onClick={resetDefaults}
-          className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
+          className="inline-flex min-h-14 items-center gap-2 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
         >
           <RotateCcw className="h-5 w-5" aria-hidden="true" />
           <span>Reset Defaults</span>
@@ -111,7 +111,7 @@ export function SensitivityPanel({
               disabled={saving}
               aria-pressed={selected}
               onClick={() => void handleApplyPreset(preset)}
-              className={`min-h-[96px] rounded-2xl border-2 p-5 text-left transition-colors ${
+              className={`min-h-[96px] rounded-lg border-2 p-5 text-left transition-colors ${
                 selected
                   ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
                   : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -120,7 +120,7 @@ export function SensitivityPanel({
               <div className="flex items-center justify-between gap-4">
                 <span className="text-lg font-bold">{preset.label}</span>
                 <span
-                  className={`rounded-lg px-3 py-1 text-xs font-bold uppercase ${
+                  className={`rounded-sm px-3 py-1 text-xs font-bold uppercase ${
                     selected
                       ? "bg-[var(--tc-primary)] text-white"
                       : "bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
@@ -141,7 +141,7 @@ export function SensitivityPanel({
           type="button"
           aria-pressed={draft.gravity_wells}
           onClick={() => updateField("gravity_wells", !draft.gravity_wells)}
-          className={`flex min-h-16 items-center justify-between gap-4 rounded-2xl border-2 px-6 py-4 text-left text-base font-bold ${
+          className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
             draft.gravity_wells
               ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
               : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
@@ -155,7 +155,7 @@ export function SensitivityPanel({
           type="button"
           aria-pressed={draft.anti_drag}
           onClick={() => updateField("anti_drag", !draft.anti_drag)}
-          className={`flex min-h-16 items-center justify-between gap-4 rounded-2xl border-2 px-6 py-4 text-left text-base font-bold ${
+          className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
             draft.anti_drag
               ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
               : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
@@ -170,20 +170,20 @@ export function SensitivityPanel({
           onClick={() =>
             updateField("gaze_source", draft.gaze_source === "head" ? "eyes" : "head")
           }
-          className="flex min-h-16 items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 py-4 text-left text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
+          className="flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 py-4 text-left text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
         >
           <span>Gaze Input Source</span>
           <span className="uppercase">{draft.gaze_source}</span>
         </button>
       </div>
 
-      {/* Collapsible Advanced Tuning Drawer */}
-      <section className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+      {/* Expandable Advanced Tuning Section (Flattened without outer nested box) */}
+      <section className="border-t-2 border-[var(--tc-border)] pt-6">
         <button
           type="button"
           aria-expanded={advancedOpen}
           onClick={() => setAdvancedOpen((prev) => !prev)}
-          className="flex min-h-14 w-full items-center justify-between gap-4 rounded-xl bg-[var(--tc-surface-alt)] px-5 text-left text-lg font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+          className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-left text-lg font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
         >
           <span>Advanced Tuning (One Euro, Click-Freeze, Gravity Wells &amp; Dwell)</span>
           {advancedOpen ? (
@@ -295,7 +295,7 @@ export function SensitivityPanel({
         )}
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
         <div role="status" aria-live="polite" className="text-base font-semibold text-[var(--tc-primary)]">
           {savedNotice ? (
             <span className="inline-flex items-center gap-2">
@@ -313,7 +313,7 @@ export function SensitivityPanel({
           type="button"
           disabled={saving}
           onClick={() => void handleSave()}
-          className="inline-flex min-h-14 items-center gap-3 rounded-xl bg-[var(--tc-primary)] px-8 text-lg font-bold text-white hover:bg-[var(--tc-primary-hover)] disabled:opacity-50"
+          className="inline-flex min-h-14 items-center gap-3 rounded-lg bg-[var(--tc-primary)] px-8 text-lg font-bold text-white hover:bg-[var(--tc-primary-hover)] disabled:opacity-50"
         >
           <Save className="h-5 w-5" aria-hidden="true" />
           <span>{saving ? "Saving..." : "Save Settings"}</span>

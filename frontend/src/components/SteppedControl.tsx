@@ -34,7 +34,7 @@ export function SteppedControl({
   const formatted = decimals > 0 ? value.toFixed(decimals) : String(Math.round(value));
 
   return (
-    <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+    <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
         <div>
           <label
@@ -49,7 +49,7 @@ export function SteppedControl({
         </div>
         <div
           aria-live="polite"
-          className="rounded-xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface-alt)] px-4 py-2 text-lg font-bold text-[var(--tc-ink)] tabular-nums"
+          className="rounded-md border-2 border-[var(--tc-border)] bg-[var(--tc-surface-alt)] px-4 py-2 text-lg font-bold text-[var(--tc-ink)] tabular-nums"
         >
           {formatted}
           {unit ? ` ${unit}` : ""}
@@ -62,7 +62,7 @@ export function SteppedControl({
           onClick={() => onChange(clampAndRound(value - step))}
           disabled={value <= min}
           aria-label={`Decrease ${label} by ${step}${unit ? ` ${unit}` : ""}`}
-          className="inline-flex min-h-14 min-w-14 shrink-0 items-center justify-center rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)] hover:bg-[var(--tc-mint)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex min-h-14 min-w-14 shrink-0 items-center justify-center rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)] hover:bg-[var(--tc-mint)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Minus className="h-6 w-6" aria-hidden="true" />
         </button>
@@ -84,7 +84,7 @@ export function SteppedControl({
           onClick={() => onChange(clampAndRound(value + step))}
           disabled={value >= max}
           aria-label={`Increase ${label} by ${step}${unit ? ` ${unit}` : ""}`}
-          className="inline-flex min-h-14 min-w-14 shrink-0 items-center justify-center rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)] hover:bg-[var(--tc-mint)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex min-h-14 min-w-14 shrink-0 items-center justify-center rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)] hover:bg-[var(--tc-mint)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="h-6 w-6" aria-hidden="true" />
         </button>

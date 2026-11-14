@@ -80,6 +80,15 @@ export function useTelemetry(): UseTelemetryResult {
         }
         try {
           const parsed = JSON.parse(event.data) as TelemetryFrame;
+          if (
+            typeof parsed !== "object" ||
+            parsed === null ||
+            !Number.isFinite(parsed.stability_score) ||
+            !Number.isFinite(parsed.tremor_index)
+          ) {
+            setErrorMessage("Received incomplete telemetry payload.");
+            return;
+          }
           scoreRef.current =
             scoreRef.current + EMA_ALPHA * (parsed.stability_score - scoreRef.current);
           indexRef.current =
@@ -110,7 +119,7 @@ export function useTelemetry(): UseTelemetryResult {
           return;
         }
         setErrorMessage(
-          "WebSocket connection interrupted. Retrying connection to ws://localhost:8000/ws/telemetry."
+          `WebSocket connection interrupted. Retrying connection to ${url}.`
         );
       };
 

@@ -110,7 +110,7 @@ export function ControlDeck({
           <button
             type="button"
             onClick={onStartCalibration}
-            className="inline-flex min-h-14 items-center gap-3 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+            className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
           >
             <Eye className="h-5 w-5 shrink-0" aria-hidden="true" />
             <span>
@@ -129,7 +129,7 @@ export function ControlDeck({
                 disabled={toggling}
                 aria-pressed={selected}
                 onClick={() => void handleSelectPreset(preset)}
-                className={`flex min-h-[116px] flex-col justify-between rounded-2xl border-2 p-5 text-left transition-colors ${
+                className={`flex min-h-[116px] flex-col justify-between rounded-lg border-2 p-5 text-left transition-colors ${
                   selected
                     ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
                     : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -142,7 +142,7 @@ export function ControlDeck({
                   </span>
                 </div>
                 <span
-                  className={`mt-3 inline-block self-start rounded-lg px-3 py-1 text-xs font-bold uppercase ${
+                  className={`mt-3 inline-block self-start rounded-sm px-3 py-1 text-xs font-bold uppercase ${
                     selected
                       ? "bg-[var(--tc-primary)] text-white"
                       : "bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
@@ -170,7 +170,7 @@ export function ControlDeck({
             onClick={() =>
               void onToggle({ steady_hand: !steadyActive, assistance_enabled: true })
             }
-            className={`flex min-h-[112px] w-full items-center justify-between gap-6 rounded-2xl border-2 p-6 text-left transition-colors ${
+            className={`flex min-h-[112px] w-full items-center justify-between gap-6 rounded-lg border-2 p-6 text-left transition-colors ${
               steadyActive
                 ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
                 : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -178,7 +178,7 @@ export function ControlDeck({
           >
             <div className="flex items-start gap-4">
               <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-md ${
                   steadyActive
                     ? "bg-[var(--tc-primary)] text-white"
                     : "bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
@@ -194,7 +194,7 @@ export function ControlDeck({
               </div>
             </div>
             <span
-              className={`shrink-0 rounded-xl px-4 py-2 text-base font-bold ${
+              className={`shrink-0 rounded-sm px-4 py-2 text-base font-bold ${
                 steadyActive
                   ? "bg-[var(--tc-primary)] text-white"
                   : "border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
@@ -215,7 +215,7 @@ export function ControlDeck({
                 assistance_enabled: true,
               })
             }
-            className={`flex min-h-[112px] w-full items-center justify-between gap-6 rounded-2xl border-2 p-6 text-left transition-colors ${
+            className={`flex min-h-[112px] w-full items-center justify-between gap-6 rounded-lg border-2 p-6 text-left transition-colors ${
               gazeActive
                 ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
                 : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -223,7 +223,7 @@ export function ControlDeck({
           >
             <div className="flex items-start gap-4">
               <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-md ${
                   gazeActive
                     ? "bg-[var(--tc-primary)] text-white"
                     : "bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
@@ -239,7 +239,7 @@ export function ControlDeck({
               </div>
             </div>
             <span
-              className={`shrink-0 rounded-xl px-4 py-2 text-base font-bold ${
+              className={`shrink-0 rounded-sm px-4 py-2 text-base font-bold ${
                 gazeActive
                   ? "bg-[var(--tc-primary)] text-white"
                   : "border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] text-[var(--tc-ink)]"
@@ -257,7 +257,7 @@ export function ControlDeck({
             disabled={toggling}
             aria-pressed={sysMouseActive}
             onClick={() => void onToggle({ system_mouse: !sysMouseActive })}
-            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-bold ${
+            className={`inline-flex min-h-14 items-center gap-3 rounded-lg border-2 px-5 text-base font-bold ${
               sysMouseActive
                 ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-primary)]"
                 : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -274,7 +274,7 @@ export function ControlDeck({
             disabled={toggling}
             aria-pressed={simActive}
             onClick={() => void onToggle({ simulate_tremor: !simActive })}
-            className={`inline-flex min-h-14 items-center gap-3 rounded-xl border-2 px-5 text-base font-bold ${
+            className={`inline-flex min-h-14 items-center gap-3 rounded-lg border-2 px-5 text-base font-bold ${
               simActive
                 ? "border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] text-[var(--tc-alert)]"
                 : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)]"
@@ -284,7 +284,7 @@ export function ControlDeck({
             <span>4-7 Hz Tremor Simulation: {simActive ? "ON" : "OFF"}</span>
           </button>
 
-          <div className="inline-flex min-h-14 items-center gap-2 rounded-xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] px-4 text-sm font-semibold text-[var(--tc-ink)]">
+          <div className="inline-flex min-h-14 items-center gap-2 rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] px-4 text-sm font-semibold text-[var(--tc-ink)]">
             <Magnet className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
             <span>
               Gravity Wells:{" "}
@@ -300,7 +300,7 @@ export function ControlDeck({
         {tapError && sysMouseActive && (
           <div
             role="status"
-            className="mt-4 rounded-xl border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-4 text-sm font-semibold text-[var(--tc-alert)]"
+            className="mt-4 rounded-lg border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] p-4 text-sm font-semibold text-[var(--tc-alert)]"
           >
             OS Interception ({tapMode}): {tapError}
           </div>
@@ -308,7 +308,7 @@ export function ControlDeck({
       </section>
 
       {/* Live Telemetry & Stability Monitor */}
-      <section aria-labelledby="telemetry-heading">
+      <section aria-labelledby="telemetry-heading" className="border-t-2 border-[var(--tc-border)] pt-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <h2 id="telemetry-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
             Live Stability Monitor
@@ -319,7 +319,7 @@ export function ControlDeck({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div className="flex items-center justify-between text-sm font-semibold text-[var(--tc-ink-muted)]">
               <span>Stability Score</span>
               <ShieldCheck className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
@@ -334,7 +334,7 @@ export function ControlDeck({
           </div>
 
           <div
-            className={`rounded-2xl border-2 p-5 ${
+            className={`rounded-lg border-2 p-5 ${
               inParkinsonBand
                 ? "border-[var(--tc-alert)] bg-[var(--tc-alert-bg)]"
                 : "border-[var(--tc-border)] bg-[var(--tc-surface)]"
@@ -364,7 +364,7 @@ export function ControlDeck({
             </p>
           </div>
 
-          <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div className="flex items-center justify-between text-sm font-semibold text-[var(--tc-ink-muted)]">
               <span>Dampening &amp; Click-Freeze</span>
               <CheckCircle2 className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
@@ -379,7 +379,7 @@ export function ControlDeck({
             </p>
           </div>
 
-          <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div className="flex items-center justify-between text-sm font-semibold text-[var(--tc-ink-muted)]">
               <span>Gaze Pointer</span>
               <Eye className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
@@ -397,9 +397,9 @@ export function ControlDeck({
           </div>
         </div>
 
-        {/* Real-Time Recharts Trace + Practice Strip */}
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+        {/* Real-Time Recharts Trace + Practice Strip (Flattened without double container padding) */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-bold text-[var(--tc-ink)]">
                 Real-Time Stability Score Trace
@@ -408,7 +408,7 @@ export function ControlDeck({
                 Est. Med State: {frame?.medication_state_estimate ?? "N/A"}
               </span>
             </div>
-            <div className="h-40 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-bg)] p-2">
+            <div className="h-44 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart data={chartData}>
                   <YAxis domain={[0, 100]} width={32} stroke="#3D4C46" fontSize={12} />
@@ -416,7 +416,7 @@ export function ControlDeck({
                     contentStyle={{
                       backgroundColor: "#FFFFFF",
                       border: "2px solid #014A35",
-                      borderRadius: "12px",
+                      borderRadius: "6px",
                       color: "#16201C",
                       fontWeight: 600,
                     }}
@@ -434,7 +434,7 @@ export function ControlDeck({
             </div>
           </div>
 
-          <div className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+          <div>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-bold text-[var(--tc-ink)]">
                 Live Pointer Practice Strip
@@ -445,7 +445,7 @@ export function ControlDeck({
             </div>
             <div
               onPointerMove={handlePadPointerMove}
-              className="relative flex h-40 w-full items-center justify-center rounded-xl border-2 border-dashed border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-4 text-center"
+              className="relative flex h-44 w-full items-center justify-center rounded-lg border-2 border-dashed border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-4 text-center"
             >
               <p className="pointer-events-none text-base font-medium text-[var(--tc-ink-muted)]">
                 Move your cursor across this area to sample live 4-7 Hz Welch tremor power and One Euro smoothing.

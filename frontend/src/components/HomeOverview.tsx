@@ -33,10 +33,10 @@ function SafePhoto({ src, alt, fallbackTitle }: SafePhotoProps) {
       <div
         role="img"
         aria-label={alt}
-        className="flex h-full min-h-[240px] w-full flex-col items-center justify-center rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 text-center"
+        className="flex h-full min-h-[240px] w-full flex-col items-center justify-center rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 text-center"
       >
         <svg viewBox="0 0 180 110" className="h-28 w-44" aria-hidden="true">
-          <rect x="8" y="8" width="164" height="94" rx="16" fill="#FFFFFF" stroke="#014A35" strokeWidth="3" />
+          <rect x="8" y="8" width="164" height="94" rx="8" fill="#FFFFFF" stroke="#014A35" strokeWidth="3" />
           <circle cx="58" cy="55" r="24" fill="#E3EFE9" stroke="#014A35" strokeWidth="2.5" strokeDasharray="5 4" />
           <circle cx="58" cy="55" r="9" fill="#014A35" />
           <path d="M98 44H152M98 62H138" stroke="#16201C" strokeWidth="5" strokeLinecap="round" />
@@ -52,7 +52,7 @@ function SafePhoto({ src, alt, fallbackTitle }: SafePhotoProps) {
       alt={alt}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="h-full min-h-[240px] w-full rounded-2xl border-2 border-[var(--tc-border)] object-cover"
+      className="h-full min-h-[240px] w-full rounded-lg border-2 border-[var(--tc-border)] object-cover"
     />
   );
 }
@@ -124,9 +124,9 @@ export function HomeOverview({
   onOpenControlDeck,
 }: HomeOverviewProps) {
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       {/* Hero Banner */}
-      <section className="grid grid-cols-1 items-center gap-8 rounded-3xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6 lg:grid-cols-12 lg:p-10">
+      <section className="grid grid-cols-1 items-center gap-8 border-b-2 border-[var(--tc-border)] pb-10 lg:grid-cols-12">
         <div className="space-y-5 lg:col-span-7">
           <div className="flex items-center gap-4">
             <BrandLogo className="h-14 w-14 shrink-0" />
@@ -139,7 +139,7 @@ export function HomeOverview({
             Steadier clicks and calmer computing for trembling hands.
           </h2>
 
-          <p className="text-lg leading-relaxed text-[var(--tc-ink-muted)]">
+          <p className="max-w-2xl text-lg leading-relaxed text-[var(--tc-ink-muted)]">
             TrueCursor works alongside every app on your computer to smooth hand tremors, prevent accidental drags, gently guide you onto small buttons, and give you reliable hands-free gaze control whenever you want it.
           </p>
 
@@ -147,7 +147,7 @@ export function HomeOverview({
             <button
               type="button"
               onClick={onStartStabilizing}
-              className="inline-flex min-h-14 items-center gap-3 rounded-xl bg-[var(--tc-primary)] px-7 text-lg font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+              className="inline-flex min-h-14 items-center gap-3 rounded-lg bg-[var(--tc-primary)] px-7 text-lg font-bold text-white hover:bg-[var(--tc-primary-hover)]"
             >
               <span>{stabilizationActive ? "Open Control Deck" : "Start Stabilizing"}</span>
               <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -156,7 +156,7 @@ export function HomeOverview({
             <button
               type="button"
               onClick={onOpenPlayground}
-              className="inline-flex min-h-14 items-center gap-3 rounded-xl border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-6 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+              className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
             >
               <span>Try Sandbox Playground</span>
             </button>
@@ -173,7 +173,7 @@ export function HomeOverview({
       </section>
 
       {/* Who It's For */}
-      <section className="grid grid-cols-1 items-center gap-8 rounded-3xl border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 lg:grid-cols-12 lg:p-8">
+      <section className="grid grid-cols-1 items-center gap-8 rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 lg:grid-cols-12 lg:p-8">
         <div className="lg:col-span-5">
           <SafePhoto
             src="https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=900&q=80"
@@ -196,7 +196,7 @@ export function HomeOverview({
             <button
               type="button"
               onClick={onOpenControlDeck}
-              className="inline-flex min-h-14 items-center gap-3 rounded-xl border-2 border-[var(--tc-primary)] bg-[var(--tc-surface)] px-6 text-base font-bold text-[var(--tc-primary)] hover:bg-[var(--tc-surface-alt)]"
+              className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-[var(--tc-primary)] bg-[var(--tc-surface)] px-6 text-base font-bold text-[var(--tc-primary)] hover:bg-[var(--tc-surface-alt)]"
             >
               <span>Choose Your Comfort Preset</span>
               <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -205,8 +205,8 @@ export function HomeOverview({
         </div>
       </section>
 
-      {/* The Daily Challenges We Solve */}
-      <section aria-labelledby="challenges-heading" className="space-y-4">
+      {/* The Daily Challenges We Solve (Clean Horizontal Architecture) */}
+      <section aria-labelledby="challenges-heading" className="space-y-6">
         <div>
           <h2 id="challenges-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
             The Daily Challenges We Solve
@@ -216,29 +216,30 @@ export function HomeOverview({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="divide-y-2 divide-[var(--tc-border)] border-y-2 border-[var(--tc-border)]">
           {CHALLENGES.map((item) => {
             const Icon = item.icon;
             return (
               <div
                 key={item.title}
-                className="flex flex-col justify-between rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6"
+                className="grid grid-cols-1 items-center gap-6 py-5 md:grid-cols-12"
               >
-                <div>
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--tc-alert-bg)] text-[var(--tc-alert)]">
+                <div className="flex items-start gap-4 md:col-span-8">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-[var(--tc-alert-bg)] text-[var(--tc-alert)]">
                     <Icon className="h-6 w-6" aria-hidden="true" />
                   </div>
-                  <h3 className="text-xl font-bold text-[var(--tc-ink)]">{item.title}</h3>
-                  <p className="mt-2 text-base text-[var(--tc-ink-muted)]">{item.body}</p>
+                  <div>
+                    <h3 className="text-xl font-bold text-[var(--tc-ink)]">{item.title}</h3>
+                    <p className="mt-1 text-base text-[var(--tc-ink-muted)]">{item.body}</p>
+                  </div>
                 </div>
 
-                {/* Plain visual diagram per challenge */}
-                <div className="mt-5 rounded-xl border border-[var(--tc-border)] bg-[var(--tc-bg)] p-3">
+                <div className="rounded-md border border-[var(--tc-border)] bg-[var(--tc-surface)] p-3 md:col-span-4">
                   <svg viewBox="0 0 220 56" className="h-12 w-full" aria-hidden="true">
                     {item.diagram === "hitbox" ? (
                       <>
-                        <rect x="64" y="10" width="92" height="36" rx="8" fill="#E3EFE9" stroke="#014A35" strokeWidth="1.5" strokeDasharray="5 3" />
-                        <rect x="82" y="18" width="56" height="20" rx="5" fill="#014A35" />
+                        <rect x="64" y="10" width="92" height="36" rx="6" fill="#E3EFE9" stroke="#014A35" strokeWidth="1.5" strokeDasharray="5 3" />
+                        <rect x="82" y="18" width="56" height="20" rx="4" fill="#014A35" />
                         <circle cx="72" cy="28" r="6" fill="none" stroke="#8C2113" strokeWidth="2.5" />
                         <circle cx="96" cy="28" r="5" fill="#014A35" />
                       </>
@@ -247,7 +248,7 @@ export function HomeOverview({
                         <circle cx="52" cy="28" r="14" fill="#E3EFE9" stroke="#014A35" strokeWidth="2" />
                         <circle cx="52" cy="28" r="5" fill="#014A35" />
                         <path d="M72 28C96 14 114 42 140 28" stroke="#8C2113" strokeWidth="2.5" fill="none" strokeDasharray="4 3" />
-                        <rect x="148" y="16" width="54" height="24" rx="6" fill="#014A35" />
+                        <rect x="148" y="16" width="54" height="24" rx="4" fill="#014A35" />
                       </>
                     ) : (
                       <>
@@ -265,7 +266,7 @@ export function HomeOverview({
       </section>
 
       {/* How Our App Solves It */}
-      <section aria-labelledby="solutions-heading" className="space-y-4">
+      <section aria-labelledby="solutions-heading" className="space-y-6">
         <div>
           <h2 id="solutions-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
             How TrueCursor Helps in Real Time
@@ -275,15 +276,12 @@ export function HomeOverview({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {SOLUTIONS.map((item) => {
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:divide-x-2 md:divide-[var(--tc-border)]">
+          {SOLUTIONS.map((item, idx) => {
             const Icon = item.icon;
             return (
-              <div
-                key={item.title}
-                className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--tc-mint)] text-[var(--tc-primary)]">
+              <div key={item.title} className={idx > 0 ? "md:pl-8" : ""}>
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-md bg-[var(--tc-mint)] text-[var(--tc-primary)]">
                   <Icon className="h-6 w-6" aria-hidden="true" />
                 </div>
                 <h3 className="text-xl font-bold text-[var(--tc-ink)]">{item.title}</h3>
@@ -295,27 +293,24 @@ export function HomeOverview({
       </section>
 
       {/* How to Use (3 Easy Steps) */}
-      <section
-        aria-labelledby="steps-heading"
-        className="rounded-3xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6 lg:p-8"
-      >
+      <section aria-labelledby="steps-heading" className="border-t-2 border-[var(--tc-border)] pt-8">
         <h2 id="steps-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
           How to Use in 3 Easy Steps
         </h2>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
           {STEPS.map((item) => {
             const Icon = item.icon;
             return (
               <div
                 key={item.step}
-                className="rounded-2xl border-2 border-[var(--tc-border)] bg-[var(--tc-bg)] p-5"
+                className="border-t-2 border-[var(--tc-primary)] pt-4"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold uppercase tracking-wide text-[var(--tc-primary)]">
                     {item.step}
                   </span>
-                  <Icon className="h-6 w-6 text-[var(--tc-primary)]" aria-hidden="true" />
+                  <Icon className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
                 </div>
                 <h3 className="mt-3 text-xl font-bold text-[var(--tc-ink)]">{item.title}</h3>
                 <p className="mt-2 text-base text-[var(--tc-ink-muted)]">{item.body}</p>

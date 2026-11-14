@@ -50,7 +50,7 @@ export function TopBar({
     <header className="border-b-2 border-[var(--tc-border)] bg-[var(--tc-primary)] text-[var(--tc-on-primary)]">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
         <div className="flex items-center gap-4">
-          <BrandLogo className="h-12 w-12 shrink-0 rounded-xl border-2 border-white" />
+          <BrandLogo className="h-12 w-12 shrink-0 rounded-lg border-2 border-white" />
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white">
               TrueCursor
@@ -71,7 +71,7 @@ export function TopBar({
                 type="button"
                 onClick={() => onNavigate(item.id)}
                 aria-current={selected ? "page" : undefined}
-                className={`inline-flex min-h-14 items-center gap-3 rounded-xl px-4 text-base font-semibold transition-colors ${
+                className={`inline-flex min-h-14 items-center gap-3 rounded-lg px-4 text-base font-semibold transition-colors ${
                   selected
                     ? "bg-[var(--tc-surface)] text-[var(--tc-primary)]"
                     : "border-2 border-[#8FBAA9] bg-transparent text-white hover:bg-[#013828]"
@@ -88,7 +88,7 @@ export function TopBar({
           <button
             type="button"
             onClick={onStartCalibration}
-            className="inline-flex min-h-14 items-center gap-3 rounded-xl border-2 border-white bg-[#013828] px-5 text-base font-semibold text-white hover:bg-[#01291D]"
+            className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-white bg-[#013828] px-5 text-base font-semibold text-white hover:bg-[#01291D]"
           >
             <Crosshair className="h-5 w-5 shrink-0" aria-hidden="true" />
             <span>Guided Calibration</span>
@@ -99,7 +99,7 @@ export function TopBar({
             onClick={onReconnect}
             title="Click to reconnect telemetry stream"
             aria-label={`WebSocket status: ${statusLabel}. Click to reconnect.`}
-            className={`inline-flex min-h-14 items-center gap-2.5 rounded-xl px-4 text-sm font-semibold ${
+            className={`inline-flex min-h-14 items-center gap-2.5 rounded-lg px-4 text-sm font-semibold ${
               isConnected
                 ? "bg-[var(--tc-mint)] text-[var(--tc-ink)]"
                 : "bg-[var(--tc-alert-bg)] text-[var(--tc-alert)]"

@@ -25,7 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     throw new Error(
-      "Could not reach the TrueCursor Python backend on port 8000. Verify uvicorn is running and retry."
+      `Could not reach the TrueCursor Python backend at ${apiBase}. Verify the local engine is running and retry.`
     );
   }
 

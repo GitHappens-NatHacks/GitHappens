@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.api.schemas import (
     CalibrateRequest,
@@ -95,7 +95,11 @@ def toggle_engine(payload: EngineToggleRequest, request: Request) -> EngineToggl
 
 
 @router.get("/history")
-def get_history(request: Request, limit: int = 200, session_only: bool = False) -> dict:
+def get_history(
+    request: Request,
+    limit: int = Query(200, ge=1, le=1000),
+    session_only: bool = False,
+) -> dict:
     coord = _coordinator(request)
     session_id = coord.session_id if session_only else None
     return {
@@ -106,7 +110,11 @@ def get_history(request: Request, limit: int = 200, session_only: bool = False) 
 
 
 @router.get("/sessions")
-def get_sessions(request: Request, days: int = 14, limit: int = 30) -> dict:
+def get_sessions(
+    request: Request,
+    days: int = Query(14, ge=1, le=365),
+    limit: int = Query(30, ge=1, le=500),
+) -> dict:
     coord = _coordinator(request)
     summary = coord.db.get_session_summaries(days=days, limit=limit)
     return {

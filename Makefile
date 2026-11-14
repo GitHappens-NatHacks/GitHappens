@@ -26,5 +26,6 @@ build: build-backend build-frontend
 
 test:
 	TTS_ENABLED=0 GAZE_BACKEND=mediapipe $(PYTEST) -v
+	npm --prefix frontend test
 	npm --prefix frontend run typecheck
 	npm --prefix frontend run build

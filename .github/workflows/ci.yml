@@ -45,8 +45,36 @@ jobs:
           python -c "from backend.api.main import app; assert app.title == 'TrueCursor API'"
           python -c "import backend.sidecar_main"
 
+      - name: Live sidecar HTTP & WebSocket smoke test
+        env:
+          TTS_ENABLED: "0"
+          GAZE_BACKEND: "mediapipe"
+          TRUECURSOR_DB_PATH: "/tmp/truecursor-ci.db"
+        run: |
+          python -m backend.sidecar_main 8123 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+          python - <<'PY'
+          import json, time, urllib.request
+          url = "http://127.0.0.1:8123/api/health"
+          for _ in range(40):
+              try:
+                  with urllib.request.urlopen(url, timeout=1.0) as resp:
+                      payload = json.loads(resp.read().decode("utf-8"))
+                      assert payload["status"] == "ok"
+                      break
+              except Exception:
+                  time.sleep(0.25)
+          else:
+              raise SystemExit("Sidecar failed to become healthy within timeout")
+
+          for endpoint in ("/api/settings", "/api/sessions"):
+              with urllib.request.urlopen(f"http://127.0.0.1:8123{endpoint}", timeout=2.0) as resp:
+                  assert resp.status == 200
+          PY
+
   frontend-checks:
-    name: Frontend Typecheck & Production Build (Node 22)
+    name: Frontend Tests, Typecheck & Build (Node 22)
     runs-on: ubuntu-latest
 
     steps:
@@ -63,8 +91,47 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
+      - name: Frontend unit & component tests (Vitest)
+        run: npm --prefix frontend test
+
       - name: TypeScript typecheck
         run: npm --prefix frontend run typecheck
 
       - name: Vite production build
         run: npm --prefix frontend run build
+
+  tauri-rust-check:
+    name: Tauri Shell Check (Rust)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Tauri Linux system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend dist for Tauri embed check
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+
+      - name: Stage dummy sidecar binary for Cargo compile check
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/truecursor-backend-x86_64-unknown-linux-gnu
+          chmod +x src-tauri/binaries/truecursor-backend-x86_64-unknown-linux-gnu
+
+      - name: Check & test Rust Tauri crate
+        run: |
+          cargo check --manifest-path src-tauri/Cargo.toml
+          cargo test --manifest-path src-tauri/Cargo.toml
