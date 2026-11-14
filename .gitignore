@@ -48,6 +48,11 @@ assets/models/*.pt
 node_modules/
 *.tsbuildinfo
 
+# Tauri / PyInstaller desktop packaging artifacts
+src-tauri/target/
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+
 # Superpowers plan workspace (local scratch)
 .superpowers/
 

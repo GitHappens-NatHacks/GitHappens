@@ -7,14 +7,13 @@ import type {
   SessionsResponse,
   SettingsPayload,
   SettingsUpdate,
+  SteadyHandSampleSnapshot,
 } from "../types/telemetry";
-
-const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ??
-  "";
+import { resolveApiBaseUrl } from "./runtime";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const apiBase = await resolveApiBaseUrl();
+  const url = `${apiBase}${path}`;
   let response: Response;
   try {
     response = await fetch(url, {
@@ -92,8 +91,8 @@ export function pushSteadyHandSample(
   x: number,
   y: number,
   pressed?: boolean
-): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>("/api/steadyhand/sample", {
+): Promise<SteadyHandSampleSnapshot> {
+  return request<SteadyHandSampleSnapshot>("/api/steadyhand/sample", {
     method: "POST",
     body: JSON.stringify({ x, y, pressed }),
   });

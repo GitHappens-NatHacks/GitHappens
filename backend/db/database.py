@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import sys
 import threading
 import time
 from pathlib import Path
@@ -11,7 +13,24 @@ from typing import Any
 
 from backend.core.engine.settings import AccessibilitySettings
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent / "truecursor.db"
+
+def default_user_db_path() -> Path:
+    """Return a writable per-user SQLite path for packaged desktop runs."""
+    override = os.environ.get("TRUECURSOR_DB_PATH", "").strip()
+    if override:
+        return Path(override)
+    if getattr(sys, "frozen", False):
+        if sys.platform == "darwin":
+            return Path.home() / "Library" / "Application Support" / "TrueCursor" / "truecursor.db"
+        if sys.platform.startswith("win"):
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+            return base / "TrueCursor" / "truecursor.db"
+        xdg = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        return xdg / "TrueCursor" / "truecursor.db"
+    return Path(__file__).resolve().parent / "truecursor.db"
+
+
+DEFAULT_DB_PATH = default_user_db_path()
 
 
 class Database:

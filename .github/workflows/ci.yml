@@ -40,6 +40,31 @@ jobs:
           GAZE_BACKEND: "mediapipe"
         run: pytest -v
 
-      - name: Verify FastAPI app import
+      - name: Verify FastAPI and sidecar imports
         run: |
           python -c "from backend.api.main import app; assert app.title == 'TrueCursor API'"
+          python -c "import backend.sidecar_main"
+
+  frontend-checks:
+    name: Frontend Typecheck & Production Build (Node 22)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: TypeScript typecheck
+        run: npm --prefix frontend run typecheck
+
+      - name: Vite production build
+        run: npm --prefix frontend run build

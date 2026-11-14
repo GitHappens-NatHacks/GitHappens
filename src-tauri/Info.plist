@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>TrueCursor uses the webcam locally for MediaPipe head and gaze tracking. Video frames stay on your device and are never uploaded.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>TrueCursor requires input monitoring and accessibility permissions when OS pointer stabilization is enabled.</string>
+</dict>
+</plist>

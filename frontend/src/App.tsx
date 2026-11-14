@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchSettings, saveSettings, toggleEngine } from "./api/client";
+import { AppointmentPlayground } from "./components/AppointmentPlayground";
 import { CalibrationWizard } from "./components/CalibrationWizard";
 import { ControlDeck } from "./components/ControlDeck";
 import { SensitivityPanel } from "./components/SensitivityPanel";
@@ -166,6 +167,12 @@ export function App() {
             toggling={busy}
             onToggle={handleToggle}
             onStartCalibration={() => setCalibrating(true)}
+          />
+        ) : activeView === "playground" ? (
+          <AppointmentPlayground
+            settings={settings}
+            toggling={busy}
+            onToggle={handleToggle}
           />
         ) : activeView === "sensitivity" ? (
           <SensitivityPanel

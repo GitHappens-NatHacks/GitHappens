@@ -1,7 +1,7 @@
-import { Activity, Crosshair, History, SlidersHorizontal, Wifi, WifiOff } from "lucide-react";
+import { Activity, Crosshair, History, SlidersHorizontal, Target, Wifi, WifiOff } from "lucide-react";
 import type { ConnectionState } from "../hooks/useTelemetry";
 
-export type AppView = "deck" | "sensitivity" | "history";
+export type AppView = "deck" | "playground" | "sensitivity" | "history";
 
 interface TopBarProps {
   activeView: AppView;
@@ -13,6 +13,7 @@ interface TopBarProps {
 
 const NAV_ITEMS: { id: AppView; label: string; icon: typeof Activity }[] = [
   { id: "deck", label: "Control Deck", icon: Activity },
+  { id: "playground", label: "Appointment Lab", icon: Target },
   { id: "sensitivity", label: "Sensitivity & Filter", icon: SlidersHorizontal },
   { id: "history", label: "Session History", icon: History },
 ];

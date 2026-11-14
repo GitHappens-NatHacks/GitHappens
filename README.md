@@ -1,145 +1,102 @@
-# Younify
+# TrueCursor
 
-Desktop accessibility tools for everyday healthcare workflows: pointer stabilization for tremor, head-and-blink hands-free control, and a calmer appointment form. Built for natHacks 2026 (Healthcare & Accessibility).
+Desktop assistive motor stabilization and hands-free gaze control application for Parkinson's and neuromuscular accessibility workflows.
 
-**Repo:** [GitHappens-NatHacks/GitHappens](https://github.com/GitHappens-NatHacks/GitHappens) · **App name in the UI:** Younify
+## Architecture
 
----
+```mermaid
+flowchart LR
+  UI["React 19 + TypeScript + Tailwind UI<br/>(frontend/)"]
+  Shell["Tauri v2 Native Desktop Shell<br/>(src-tauri/src/lib.rs)"]
+  API["FastAPI + WebSocket Server<br/>(backend/api/ &amp; backend/sidecar_main.py)"]
+  Core["Decoupled Python Core Engine<br/>(One Euro + 4-7 Hz FFT + MediaPipe)"]
+  DB["Local SQLite Database<br/>(settings, calibration, sessions)"]
 
-## What it does
-
-Younify is a PySide6 (Qt) app with a Control Center, a Demo Lab, and three main features:
-
-| Feature | What you get |
-| :--- | :--- |
-| **SteadyHand** | Tremor filtering on a practice canvas, strength up to 200%, simulated tremor intensity, wider click zones, drag guard, session tremor chart, and trial export |
-| **Head movement** | Webcam head pointing with a guided 5-step calibration, select by holding still (Relaxed, Normal or Quick) or by blinking, a full-screen hands-free booking demo with large photo targets, live camera preview, and on-screen alerts. Leave by closing your eyes for 5 seconds or with Quit hands-free |
-| **SmartInterface** | Larger text, letter spacing, colour themes, screen tint, and a sample healthcare form that switches to a step-by-step layout |
-
-Profiles (Steadier pointing, Hands-free control, Clearer interfaces, Custom mix) turn combinations of those modules on. Preferences save on the device.
-
-
----
-
-## Tech stack
-
-| Piece | Used for |
-| :--- | :--- |
-| Python 3.10–3.12 | App runtime (MediaPipe Face Mesh needs ≤3.12) |
-| PySide6 | Control Center, Demo Lab, hands-free window |
-| OpenCV + MediaPipe | Head pose, face landmarks, blink |
-| Optional EyeTrax | Richer eye tracking when `GAZE_BACKEND=auto` / `eyetrax` / `hybrid` |
-| pynput | Optional system pointer hooks for SteadyHand |
-| pyttsx3 | Offline TTS in hands-free flows |
-
----
-
-## Repository layout
-
-```
-GitHappens/
-├── accessshift/              # Younify package
-│   ├── __main__.py           # python -m accessshift
-│   ├── app.py
-│   ├── engine/               # Profiles + AdaptiveEngine
-│   ├── modules/
-│   │   ├── gaze/             # Tracking, blink, dwell, calibration
-│   │   ├── steadyhand/       # Filter, hold, telemetry, targets
-│   │   ├── smartinterface/   # Themes, tint, form modes
-│   │   └── speech/           # TTS + optional prediction
-│   └── ui/                   # Control Center, Demo Lab, gaze booking, SteadyHand panel
-├── AccessShift_Extension/    # Standalone Chromium extension (reading, steady pointer); see its README
-├── steadyhand_demo/          # SteadyHand practice targets and metrics
-├── assets/
-│   ├── brand/                # Logo and mark
-│   ├── ui/                   # Photo headers
-│   └── portal/               # Design references (live form is Qt)
-├── docs/
-├── scripts/                  # setup.sh, packaging helpers
-├── tests/
-├── requirements.txt
-└── .env.example
+  Shell -->|"Spawns &amp; monitors sidecar"| API
+  Shell -->|"IPC get_backend_port"| UI
+  UI -->|"REST /api/* &amp; WS /ws/telemetry (25 Hz)"| API
+  API --> Core
+  API --> DB
 ```
 
----
+## Features
 
-## Demo flow
+- **Control Deck:** Oversized `56px+` toggle cards for SteadyHand stabilization, GazeControl webcam tracking, 4-7 Hz simulated tremor injection, and live stability telemetry (`ws://127.0.0.1:<port>/ws/telemetry`).
+- **10-Step Appointment Playground:** Interactive comparison canvas (`1. Doctor` -> `2. Date` -> `3. Time` -> `4. Review` -> `5. Book` repeated twice) showing inner vs. dashed extended click boundaries (`TargetManager`) alongside real-time shaky raw cursor (`raw_pos`) and One Euro stabilized cursor (`stable_pos`).
+- **Sensitivity & Filter Tuning:** Stepped `-` / `+` controls alongside wide-track sliders for One Euro cutoff (`min_cutoff`), speed coefficient (`beta`), Anti-Drag thresholds, and gaze dwell latency, persisted to SQLite (`POST /api/settings`).
+- **Guided Gaze Calibration:** Distraction-free 5-point or 9-point full-screen calibration modal saving affine profiles via `POST /api/calibrate`.
+- **Session History:** SQLite-backed daily average stability trend chart and saved calibration profile table (`GET /api/sessions`).
 
-1. **SteadyHand:** Turn on simulated tremor, try Baseline vs Full assist, watch the session chart, export if needed.
-2. **Head movement:** Start head control, follow the calibration arrows, then book an appointment by holding your head still on an option or blinking. Close your eyes for 5 seconds to leave.
-3. **SmartInterface:** Open the Demo Lab healthcare form; toggle SmartInterface and reading settings and watch the form update.
+## Repository Layout
 
----
+```text
+TrueCursor/
+├── backend/
+│   ├── api/                 # FastAPI REST endpoints & 25 Hz WebSocket hub
+│   ├── core/                # PySide6-free SteadyHand FFT/One Euro & MediaPipe Gaze workers
+│   ├── db/                  # Thread-safe SQLite repository
+│   └── sidecar_main.py      # Standalone Uvicorn launcher & signal cleanup for PyInstaller
+├── frontend/                # Vite + React + TypeScript + Tailwind CSS UI
+├── legacy_ui/               # Archived PySide6 desktop prototype kept for reference
+├── scripts/
+│   └── build_backend.py     # Cross-platform PyInstaller --onefile sidecar bundler
+├── src-tauri/               # Tauri v2 native desktop shell, permissions, and icons
+└── tests/                   # Backend, core motor/gaze, API, and sidecar pytest suite
+```
 
-## Prerequisites
+## Local Development
 
-- Python **3.10, 3.11, or 3.12** (3.13+ is not supported with the pinned MediaPipe build)
-- Webcam for Head movement
-- macOS: Camera permission for gaze; Accessibility if you use system-wide pointer control
-- Windows: allow permission prompts on first run
+### Prerequisites
+- **Python 3.10, 3.11, or 3.12** (MediaPipe requires `<= 3.12`)
+- **Node.js 20+** and `npm`
+- **Rust (`rustup` / `cargo`)** if building or running the native Tauri v2 desktop wrapper (`cargo tauri dev` / `build`)
 
----
-
-## Setup
+### Setup
 
 ```bash
-git clone https://github.com/GitHappens-NatHacks/GitHappens.git
-cd GitHappens
-
-python3.12 -m venv .venv          # or python3.11 / python3.10
+python3.12 -m venv .venv
 source .venv/bin/activate         # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env              # optional camera / gaze backend tweaks
+pip install -r requirements.txt -r requirements-dev.txt
+npm --prefix frontend install
 ```
 
-Or:
+### Run Web Dev Stack (FastAPI + Vite)
 
 ```bash
-bash scripts/setup.sh
+# Terminal 1: FastAPI backend & WebSocket telemetry on port 8000
+.venv/bin/uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2: React frontend on http://localhost:5173
+npm --prefix frontend run dev
 ```
 
-`setup.sh` picks a 3.10–3.12 interpreter, creates `.venv`, and copies `.env.example` when `.env` is missing.
-
----
-
-## Run
+Or run both concurrently via:
 
 ```bash
-source .venv/bin/activate
-python -m accessshift
+make dev
 ```
 
-### Package (optional)
+### Run Tests & Checks
 
 ```bash
-bash scripts/build_app.sh
+make test
 ```
 
-Build on the OS you ship (Mac binary on Mac, Windows binary on Windows).
+## Packaging a Standalone Desktop Installer
 
----
+1. Build the standalone PyInstaller backend sidecar into `src-tauri/binaries/`:
+   ```bash
+   .venv/bin/python scripts/build_backend.py
+   ```
+2. Build the production React frontend (`frontend/dist/`) and package the native Tauri installer (`.app`/`.dmg` on macOS, `.exe`/`.msi` on Windows):
+   ```bash
+   npm install
+   make build
+   ```
 
-## Team
+Build installers on the target OS (macOS builds produce Apple Silicon / Intel `.app` & `.dmg`; Windows builds produce `.exe` / `.msi`). Automated tag builds (`v*`) are configured in `.github/workflows/release.yml`.
 
-| Member | Focus |
-| :--- | :--- |
-| Adnan | Architecture, integration and UI |
-| Pragati Puri | Head movement (head pointing, calibration, hands-free booking) |
-| Yee | SteadyHand filters |
-| Dipta | SteadyHand targets & metrics |
-| Avneet and Elizabeth | UI / SmartInterface |
+## End-User Installation & Permissions
 
-## Credits
-
-- MediaPipe Face Mesh (Google)
-- 1-Euro filter (Casiez et al.)
-- Qt / PySide6, OpenCV, pyttsx3, pynput
-
-## Known limitations
-
-- Head tracking depends on lighting, camera angle, and calibration quality.
-- Shipping pointing mode is **head**; eye pointing is experimental via env (`GAZE_BACKEND`, `GAZE_INPUT`).
-- SteadyHand’s primary demo is the in-app canvas; system-wide pointer control needs OS Accessibility permission and is secondary.
-- SmartInterface reshapes the bundled healthcare form. It does not restyle arbitrary third-party websites.
-- ONNX text prediction is optional and off by default (`PREDICTION_ENABLED=0`).
-- PyInstaller output must be built on the target OS.
+- **macOS:** Open the `.dmg`, drag **TrueCursor.app** into **Applications**, and grant **Camera** access on first GazeControl launch plus **Accessibility / Input Monitoring** in *System Settings -> Privacy & Security* if enabling OS-wide pointer stabilization.
+- **Windows:** Run the `.msi` / NSIS `.exe` installer and allow webcam access when prompted.

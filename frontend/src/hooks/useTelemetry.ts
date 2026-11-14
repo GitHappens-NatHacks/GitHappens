@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { resolveTelemetryWsUrl } from "../api/runtime";
 import type { TelemetryFrame } from "../types/telemetry";
 
 export type ConnectionState =
@@ -24,17 +25,8 @@ export interface UseTelemetryResult {
   reconnect: () => void;
 }
 
-const DEFAULT_WS_URL = "ws://localhost:8000/ws/telemetry?hz=25";
 const MAX_HISTORY_POINTS = 75;
 const EMA_ALPHA = 0.25;
-
-function resolveWsUrl(): string {
-  const configured = import.meta.env.VITE_WS_URL as string | undefined;
-  if (configured && configured.trim().length > 0) {
-    return configured.trim();
-  }
-  return DEFAULT_WS_URL;
-}
 
 export function useTelemetry(): UseTelemetryResult {
   const [frame, setFrame] = useState<TelemetryFrame | null>(null);
@@ -55,12 +47,15 @@ export function useTelemetry(): UseTelemetryResult {
     let reconnectTimer: number | null = null;
     let attempt = 0;
 
-    const connect = () => {
+    const connect = async () => {
       if (!active) {
         return;
       }
       setConnectionState(attempt === 0 ? "connecting" : "reconnecting");
-      const url = resolveWsUrl();
+      const url = await resolveTelemetryWsUrl();
+      if (!active) {
+        return;
+      }
 
       try {
         socket = new WebSocket(url);
@@ -126,11 +121,13 @@ export function useTelemetry(): UseTelemetryResult {
         attempt += 1;
         const delayMs = Math.min(8000, 1000 * Math.pow(2, Math.min(attempt - 1, 3)));
         setConnectionState("reconnecting");
-        reconnectTimer = window.setTimeout(connect, delayMs);
+        reconnectTimer = window.setTimeout(() => {
+          void connect();
+        }, delayMs);
       };
     };
 
-    connect();
+    void connect();
 
     return () => {
       active = false;

@@ -59,6 +59,22 @@ export interface SteadyHandTelemetry {
   system_mouse_enabled: boolean;
 }
 
+export interface SteadyHandSampleSnapshot {
+  running: boolean;
+  stabilization_active: boolean;
+  strength: number;
+  simulate_tremor: boolean;
+  tremor_intensity: number;
+  tremor_hz: number | null;
+  tremor_index: number;
+  medication_state_estimate: "ON" | "OFF" | null;
+  stability_score: number;
+  raw_pos: [number, number];
+  stable_pos: [number, number];
+  spastic_drags_prevented: number;
+  slip_clicks_rescued: number;
+}
+
 export interface ActiveModes {
   profile: string;
   assistance_enabled: boolean;
