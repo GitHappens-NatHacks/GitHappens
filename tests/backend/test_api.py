@@ -19,11 +19,23 @@ def test_rest_settings_calibration_toggle_and_history(tmp_path):
 
         s1 = client.post(
             "/api/settings",
-            json={"tremor_strength": 150, "gaze_dwell_ms": 900, "blink_select": False},
+            json={
+                "tremor_strength": 150,
+                "one_euro_min_cutoff": 0.45,
+                "one_euro_beta": 0.008,
+                "anti_drag_threshold_px": 12.0,
+                "anti_drag_hold_ms": 450,
+                "gaze_dwell_ms": 900,
+                "blink_select": False,
+            },
         )
         assert s1.status_code == 200
         body = s1.json()
         assert body["tremor_strength"] == 150
+        assert body["one_euro_min_cutoff"] == 0.45
+        assert body["one_euro_beta"] == 0.008
+        assert body["anti_drag_threshold_px"] == 12.0
+        assert body["anti_drag_hold_ms"] == 450
         assert body["gaze_dwell_ms"] == 900
         assert body["blink_select"] is False
 
@@ -92,6 +104,13 @@ def test_rest_settings_calibration_toggle_and_history(tmp_path):
         assert len(hist_json["calibration_profiles"]) == 2
         latest_row = hist_json["tremor_history"][0]
         assert 4.0 <= latest_row["dominant_hz"] <= 7.0
+
+        sessions = client.get("/api/sessions")
+        assert sessions.status_code == 200
+        sess_json = sessions.json()
+        assert len(sess_json["sessions"]) >= 1
+        assert len(sess_json["daily_trends"]) >= 1
+        assert sess_json["daily_trends"][0]["sample_count"] >= 1
 
     # Verify settings and calibration persist across app restarts.
     app2 = create_app(db_path=db_path, auto_start_workers=False)

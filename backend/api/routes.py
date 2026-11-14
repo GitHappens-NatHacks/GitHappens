@@ -105,6 +105,17 @@ def get_history(request: Request, limit: int = 200, session_only: bool = False) 
     }
 
 
+@router.get("/sessions")
+def get_sessions(request: Request, days: int = 14, limit: int = 30) -> dict:
+    coord = _coordinator(request)
+    summary = coord.db.get_session_summaries(days=days, limit=limit)
+    return {
+        "active_session_id": coord.session_id,
+        **summary,
+        "calibration_profiles": coord.db.list_calibration_profiles(limit=10),
+    }
+
+
 @router.post("/steadyhand/sample")
 def push_steadyhand_sample(payload: PointerSampleRequest, request: Request) -> dict:
     coord = _coordinator(request)

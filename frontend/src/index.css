@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+:root {
+  --tc-bg: #FAF7F0;
+  --tc-surface: #FFFFFF;
+  --tc-surface-alt: #F0ECE0;
+  --tc-mint: #E3EFE9;
+  --tc-ink: #16201C;
+  --tc-ink-muted: #3D4C46;
+  --tc-primary: #014A35;
+  --tc-primary-hover: #013828;
+  --tc-on-primary: #FFFFFF;
+  --tc-focus: #01305A;
+  --tc-alert: #8C2113;
+  --tc-alert-bg: #FDF1EE;
+  --tc-border: #C7D3CC;
+  --tc-border-strong: #5C6E66;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--tc-bg);
+  color: var(--tc-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: var(--tc-primary);
+  color: var(--tc-on-primary);
+}
+
+:focus-visible {
+  outline: 3px solid var(--tc-focus);
+  outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom oversized 56px accessible range slider hitbox and thumb */
+input[type="range"].tc-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 56px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"].tc-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--tc-surface-alt);
+  border: 2px solid var(--tc-border-strong);
+}
+
+input[type="range"].tc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  margin-top: -13px;
+  border-radius: 9999px;
+  background: var(--tc-primary);
+  border: 3px solid var(--tc-on-primary);
+  box-shadow: 0 2px 6px rgba(1, 48, 90, 0.25);
+  cursor: pointer;
+}
+
+input[type="range"].tc-slider::-moz-range-track {
+  width: 100%;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--tc-surface-alt);
+  border: 2px solid var(--tc-border-strong);
+}
+
+input[type="range"].tc-slider::-moz-range-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: var(--tc-primary);
+  border: 3px solid var(--tc-on-primary);
+  box-shadow: 0 2px 6px rgba(1, 48, 90, 0.25);
+  cursor: pointer;
+}
+
+/* Subtle custom scrollbar matching the warm parchment shell */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--tc-surface-alt);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--tc-border-strong);
+  border-radius: 6px;
+  border: 2px solid var(--tc-surface-alt);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -46,6 +46,7 @@ assets/models/*.pt
 
 # Node leftovers (if any)
 node_modules/
+*.tsbuildinfo
 
 # Superpowers plan workspace (local scratch)
 .superpowers/

@@ -271,3 +271,69 @@ class Database:
                 }
                 for r in rows
             ]
+
+    def get_session_summaries(self, *, days: int = 14, limit: int = 30) -> dict[str, Any]:
+        with self._lock:
+            session_rows = self._conn.execute(
+                """
+                SELECT
+                    session_id,
+                    MIN(timestamp) AS started_at,
+                    MAX(timestamp) AS ended_at,
+                    COUNT(*) AS sample_count,
+                    ROUND(AVG(stability_score), 2) AS avg_stability_score,
+                    ROUND(AVG(tremor_index), 2) AS avg_tremor_index,
+                    ROUND(AVG(dominant_hz), 2) AS avg_tremor_hz,
+                    MAX(stabilization_active) AS had_stabilization
+                FROM tremor_history
+                GROUP BY session_id
+                ORDER BY ended_at DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            ).fetchall()
+
+            daily_rows = self._conn.execute(
+                """
+                SELECT
+                    date(timestamp, 'unixepoch', 'localtime') AS day,
+                    COUNT(*) AS sample_count,
+                    COUNT(DISTINCT session_id) AS session_count,
+                    ROUND(AVG(stability_score), 2) AS avg_stability_score,
+                    ROUND(AVG(tremor_index), 2) AS avg_tremor_index,
+                    ROUND(AVG(dominant_hz), 2) AS avg_tremor_hz
+                FROM tremor_history
+                GROUP BY day
+                ORDER BY day DESC
+                LIMIT ?
+                """,
+                (max(1, int(days)),),
+            ).fetchall()
+
+            sessions = [
+                {
+                    "session_id": r["session_id"],
+                    "started_at": r["started_at"],
+                    "ended_at": r["ended_at"],
+                    "sample_count": r["sample_count"],
+                    "avg_stability_score": r["avg_stability_score"],
+                    "avg_tremor_index": r["avg_tremor_index"],
+                    "avg_tremor_hz": r["avg_tremor_hz"],
+                    "had_stabilization": bool(r["had_stabilization"]),
+                }
+                for r in session_rows
+            ]
+
+            daily_trends = [
+                {
+                    "date": r["day"],
+                    "sample_count": r["sample_count"],
+                    "session_count": r["session_count"],
+                    "avg_stability_score": r["avg_stability_score"],
+                    "avg_tremor_index": r["avg_tremor_index"],
+                    "avg_tremor_hz": r["avg_tremor_hz"],
+                }
+                for r in reversed(daily_rows)
+            ]
+
+            return {"sessions": sessions, "daily_trends": daily_trends}

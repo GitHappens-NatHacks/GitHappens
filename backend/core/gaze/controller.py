@@ -359,6 +359,8 @@ class GazeController:
 
     def snapshot(self) -> dict:
         with self._lock:
+            raw = self._last_raw or {}
+            feat = raw.get("feature")
             return {
                 "running": self.running,
                 "source": self.source,
@@ -368,6 +370,8 @@ class GazeController:
                 "face_detected": self._last_face,
                 "x": self._last_point[0] if self._last_point is not None else None,
                 "y": self._last_point[1] if self._last_point is not None else None,
+                "raw_feature": [float(feat[0]), float(feat[1])] if feat is not None else None,
+                "ear": round(self._last_ear, 4) if self._last_ear is not None else None,
                 "dwell_progress": round(self._last_dwell_progress, 3),
                 "dwell_ms": self.dwell_ms,
                 "blink": self._last_blink,

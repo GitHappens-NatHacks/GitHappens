@@ -46,6 +46,8 @@ class SteadyHandController:
 
         self._controller = None
         self.last_system_error: str | None = None
+        self.base_min_cutoff = 0.65
+        self.base_beta = 0.004
 
         initial_strength = (
             os.getenv("STEADYHAND_STRENGTH", "0.95")
@@ -83,11 +85,29 @@ class SteadyHandController:
         # Above 100%, strengthen the filter.
         extra = max(0.0, self._strength - 1.0)
 
-        cutoff = 0.65 * (0.15 / 0.65) ** extra
-        beta = 0.004 * (0.001 / 0.004) ** extra
+        cutoff = self.base_min_cutoff * (0.15 / 0.65) ** extra
+        beta = self.base_beta * (0.001 / 0.004) ** extra
 
         self.fx.configure(cutoff, beta)
         self.fy.configure(cutoff, beta)
+
+    def configure_filter(
+        self,
+        *,
+        min_cutoff: float | None = None,
+        beta: float | None = None,
+    ) -> None:
+        if min_cutoff is not None:
+            val = float(min_cutoff)
+            if not math.isfinite(val) or val <= 0:
+                raise ValueError("min_cutoff must be positive and finite.")
+            self.base_min_cutoff = val
+        if beta is not None:
+            val = float(beta)
+            if not math.isfinite(val) or val < 0:
+                raise ValueError("beta must be nonnegative and finite.")
+            self.base_beta = val
+        self.strength = self._strength
 
     @property
     def simulate_tremor(self) -> bool:
@@ -299,7 +319,10 @@ class SteadyHandController:
         if self.enabled:
             extra = max(1.0 if high else 0.0, self.strength - 1)
             for axis in (self.fx, self.fy):
-                axis.configure(.65 * (.15 / .65) ** extra, .004 * .25 ** extra)
+                axis.configure(
+                    self.base_min_cutoff * (0.15 / 0.65) ** extra,
+                    self.base_beta * 0.25 ** extra,
+                )
             filtered_x = self.fx.filter(x, now)
             filtered_y = self.fy.filter(y, now)
 

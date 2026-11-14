@@ -18,8 +18,12 @@ class SettingsPayload(BaseModel):
     reduce_complexity: bool
     tremor_strength: int
     tremor_intensity: int
+    one_euro_min_cutoff: float
+    one_euro_beta: float
     simulate_tremor: bool
     anti_drag: bool
+    anti_drag_threshold_px: float
+    anti_drag_hold_ms: int
     system_mouse: bool
     gaze_source: str
     gaze_dwell_ms: int
@@ -45,8 +49,12 @@ class SettingsUpdateRequest(BaseModel):
     reduce_complexity: bool | None = None
     tremor_strength: int | None = Field(default=None, ge=0, le=200)
     tremor_intensity: int | None = Field(default=None, ge=0, le=100)
+    one_euro_min_cutoff: float | None = Field(default=None, ge=0.05, le=5.0)
+    one_euro_beta: float | None = Field(default=None, ge=0.0, le=0.2)
     simulate_tremor: bool | None = None
     anti_drag: bool | None = None
+    anti_drag_threshold_px: float | None = Field(default=None, ge=2.0, le=40.0)
+    anti_drag_hold_ms: int | None = Field(default=None, ge=100, le=1500)
     system_mouse: bool | None = None
     gaze_source: Literal["head", "eyes"] | None = None
     gaze_dwell_ms: int | None = Field(default=None, ge=600, le=2000)

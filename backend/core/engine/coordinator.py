@@ -122,9 +122,13 @@ class EngineCoordinator:
             self.steady_worker.configure(
                 enabled=effective_steady,
                 strength=validated.tremor_strength / 100.0,
+                min_cutoff=validated.one_euro_min_cutoff,
+                beta=validated.one_euro_beta,
                 simulate_tremor=validated.simulate_tremor,
                 tremor_intensity=validated.tremor_intensity,
                 anti_drag=validated.anti_drag,
+                anti_drag_threshold_px=validated.anti_drag_threshold_px,
+                anti_drag_hold_ms=validated.anti_drag_hold_ms,
             )
             self.steady_worker.set_system_mouse(
                 enabled=validated.system_mouse and effective_steady,
@@ -293,6 +297,8 @@ class EngineCoordinator:
                 "gaze": {
                     "x": gaze["x"],
                     "y": gaze["y"],
+                    "raw_feature": gaze["raw_feature"],
+                    "ear": gaze["ear"],
                     "face_detected": gaze["face_detected"],
                     "dwell_progress": gaze["dwell_progress"],
                     "blink": gaze["blink"],

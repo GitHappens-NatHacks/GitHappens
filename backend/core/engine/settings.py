@@ -18,8 +18,12 @@ class AccessibilitySettings:
     reduce_complexity: bool = True
     tremor_strength: int = 95
     tremor_intensity: int = 55
+    one_euro_min_cutoff: float = 0.65
+    one_euro_beta: float = 0.004
     simulate_tremor: bool = False
     anti_drag: bool = True
+    anti_drag_threshold_px: float = 8.0
+    anti_drag_hold_ms: int = 300
     system_mouse: bool = False
     gaze_source: str = "head"
     gaze_dwell_ms: int = 1100
@@ -55,6 +59,10 @@ class AccessibilitySettings:
             self.tint_color = "warm"
         self.tremor_strength = max(0, min(200, int(self.tremor_strength)))
         self.tremor_intensity = max(0, min(100, int(self.tremor_intensity)))
+        self.one_euro_min_cutoff = round(max(0.05, min(5.0, float(self.one_euro_min_cutoff))), 4)
+        self.one_euro_beta = round(max(0.0, min(0.2, float(self.one_euro_beta))), 5)
+        self.anti_drag_threshold_px = round(max(2.0, min(40.0, float(self.anti_drag_threshold_px))), 1)
+        self.anti_drag_hold_ms = max(100, min(1500, int(self.anti_drag_hold_ms)))
         self.gaze_dwell_ms = max(600, min(2000, int(self.gaze_dwell_ms)))
         self.target_size_pct = max(100, min(200, int(self.target_size_pct)))
         self.font_size_pct = max(90, min(160, int(self.font_size_pct)))

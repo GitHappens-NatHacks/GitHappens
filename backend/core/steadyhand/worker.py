@@ -47,13 +47,19 @@ class SteadyHandWorker:
         *,
         enabled: bool | None = None,
         strength: float | None = None,
+        min_cutoff: float | None = None,
+        beta: float | None = None,
         simulate_tremor: bool | None = None,
         tremor_intensity: int | None = None,
         anti_drag: bool | None = None,
+        anti_drag_threshold_px: float | None = None,
+        anti_drag_hold_ms: int | None = None,
     ) -> None:
         with self._lock:
             if enabled is not None:
                 self.controller.enabled = bool(enabled)
+            if min_cutoff is not None or beta is not None:
+                self.controller.configure_filter(min_cutoff=min_cutoff, beta=beta)
             if strength is not None:
                 self.controller.strength = float(strength)
             if simulate_tremor is not None:
@@ -62,6 +68,11 @@ class SteadyHandWorker:
                 self.controller.tremor_intensity = int(tremor_intensity)
             if anti_drag is not None:
                 self.controller.hold.enabled = bool(anti_drag)
+            if anti_drag_threshold_px is not None or anti_drag_hold_ms is not None:
+                self.controller.hold.configure(
+                    drag_threshold_px=anti_drag_threshold_px,
+                    hold_seconds=(anti_drag_hold_ms / 1000.0) if anti_drag_hold_ms is not None else None,
+                )
 
     def set_system_mouse(self, enabled: bool, listen_os_mouse: bool = False) -> tuple[bool, str | None]:
         """Enable/disable OS pointer positioning and optional global mouse listener."""

@@ -99,6 +99,23 @@ class IntentionalHold:
         self.metrics = metrics
         self.enabled = True
         self.anchor = None
+        self.drag_threshold_px = 8.0
+        self.hold_seconds = 0.3
+        self.latch_distance_px = 35.0
+
+    def configure(
+        self,
+        *,
+        drag_threshold_px: float | None = None,
+        hold_seconds: float | None = None,
+        latch_distance_px: float | None = None,
+    ) -> None:
+        if drag_threshold_px is not None:
+            self.drag_threshold_px = max(2.0, min(40.0, float(drag_threshold_px)))
+        if hold_seconds is not None:
+            self.hold_seconds = max(0.1, min(1.5, float(hold_seconds)))
+        if latch_distance_px is not None:
+            self.latch_distance_px = max(10.0, min(120.0, float(latch_distance_px)))
 
     def press(self, stable, raw, now):
         self.anchor = stable
@@ -122,10 +139,13 @@ class IntentionalHold:
                 self.steady_since = now
             self.previous = raw
             self.last_motion = now
-            if now - self.steady_since > .3 and math.dist(raw, self.origin) > 35:
+            if (
+                now - self.steady_since > self.hold_seconds
+                and math.dist(raw, self.origin) > self.latch_distance_px
+            ):
                 self.dragging = True
                 return stable
-        self.exceeded_drag_threshold |= math.dist(raw, self.origin) >= 8
+        self.exceeded_drag_threshold |= math.dist(raw, self.origin) >= self.drag_threshold_px
         if not self.blocked and self.exceeded_drag_threshold and changed_direction:
             self.metrics.spastic_drags_prevented += 1
             self.blocked = True
