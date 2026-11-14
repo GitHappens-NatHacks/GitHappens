@@ -378,6 +378,8 @@ class GazeController:
                 "blink_select": self.blink_select,
                 "exit_progress": round(self._exit_shown, 3),
                 "target_id": self._target.id if self._target is not None else None,
+                "lighting_quality": str(raw.get("lighting_quality", "ok")),
+                "luma": round(float(raw["luma"]), 1) if "luma" in raw else None,
             }
 
     def start(

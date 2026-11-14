@@ -99,27 +99,51 @@ def _macos_ax_probe(x: float, y: float) -> list[GravityTarget]:
     return list(seen.values())
 
 
+INTERACTIVE_UIA_CONTROLS = frozenset(
+    {
+        "ButtonControl",
+        "CheckBoxControl",
+        "RadioButtonControl",
+        "HyperlinkControl",
+        "MenuItemControl",
+        "ComboBoxControl",
+        "TabItemControl",
+        "SplitButtonControl",
+    }
+)
+
+
 def _windows_uia_probe(x: float, y: float) -> list[GravityTarget]:
-    """Query interactive UI Automation elements near (x, y) on Windows."""
+    """Query interactive UI Automation elements around (x, y) on Windows."""
     try:
         import uiautomation as auto  # type: ignore[import-not-found]
     except Exception:
         return []
 
-    try:
-        ctrl = auto.ControlFromPoint(int(round(x)), int(round(y)))
-        if ctrl is None:
-            return []
-        rect = ctrl.BoundingRectangle
-        w = float(rect.right - rect.left)
-        h = float(rect.bottom - rect.top)
-        if w <= 2.0 or h <= 2.0 or w > 640.0 or h > 220.0:
-            return []
-        role = str(getattr(ctrl, "ControlTypeName", "Button"))
-        title = str(getattr(ctrl, "Name", "") or "")[:48]
-        return [GravityTarget(role=role, x=float(rect.left), y=float(rect.top), width=w, height=h, title=title)]
-    except Exception:
-        return []
+    offsets = ((0.0, 0.0), (-32.0, 0.0), (32.0, 0.0), (0.0, -24.0), (0.0, 24.0))
+    seen: dict[tuple[str, int, int, int, int], GravityTarget] = {}
+    for dx, dy in offsets:
+        try:
+            ctrl = auto.ControlFromPoint(int(round(x + dx)), int(round(y + dy)))
+            if ctrl is None:
+                continue
+            role = str(getattr(ctrl, "ControlTypeName", "") or "")
+            if INTERACTIVE_UIA_CONTROLS and role and role not in INTERACTIVE_UIA_CONTROLS:
+                continue
+            rect = ctrl.BoundingRectangle
+            w = float(rect.right - rect.left)
+            h = float(rect.bottom - rect.top)
+            if w <= 2.0 or h <= 2.0 or w > 640.0 or h > 220.0:
+                continue
+            gx, gy = float(rect.left), float(rect.top)
+            title = str(getattr(ctrl, "Name", "") or "")[:48]
+            key = (role or "Button", round(gx), round(gy), round(w), round(h))
+            seen[key] = GravityTarget(
+                role=role or "Button", x=gx, y=gy, width=w, height=h, title=title
+            )
+        except Exception:
+            continue
+    return list(seen.values())
 
 
 class AccessibilityGravityWells:

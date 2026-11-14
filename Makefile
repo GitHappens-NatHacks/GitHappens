@@ -29,3 +29,4 @@ test:
 	npm --prefix frontend test
 	npm --prefix frontend run typecheck
 	npm --prefix frontend run build
+	npm --prefix chrome-extension test

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchSettings, saveSettings, toggleEngine } from "./api/client";
+import {
+  fetchSettings,
+  fetchSystemPermissions,
+  promptSystemPermissions,
+  saveSettings,
+  toggleEngine,
+} from "./api/client";
 import { AppointmentPlayground } from "./components/AppointmentPlayground";
 import { CalibrationWizard } from "./components/CalibrationWizard";
 import { ControlDeck } from "./components/ControlDeck";
@@ -13,6 +19,7 @@ import type {
   EngineToggleRequest,
   SettingsPayload,
   SettingsUpdate,
+  SystemPermissionsResponse,
 } from "./types/telemetry";
 
 const DEFAULT_SETTINGS: SettingsPayload = {
@@ -57,6 +64,8 @@ export function App() {
   const [busy, setBusy] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [calibrating, setCalibrating] = useState<boolean>(false);
+  const [permissions, setPermissions] = useState<SystemPermissionsResponse | null>(null);
+  const [promptingPerm, setPromptingPerm] = useState<boolean>(false);
 
   const {
     frame,
@@ -68,12 +77,22 @@ export function App() {
     reconnect,
   } = useTelemetry();
 
+  const refreshPermissions = useCallback(async () => {
+    try {
+      const perms = await fetchSystemPermissions();
+      setPermissions(perms);
+    } catch {
+      // Ignore if backend is offline; existing connection alert covers it.
+    }
+  }, []);
+
   const loadInitialSettings = useCallback(async () => {
     setLoadingSettings(true);
     setApiError(null);
     try {
       const loaded = await fetchSettings();
       setSettings(loaded);
+      void refreshPermissions();
     } catch (err) {
       setApiError(
         err instanceof Error
@@ -83,7 +102,7 @@ export function App() {
     } finally {
       setLoadingSettings(false);
     }
-  }, []);
+  }, [refreshPermissions]);
 
   useEffect(() => {
     void loadInitialSettings();
@@ -163,6 +182,32 @@ export function App() {
     setActiveView("deck");
   };
 
+  const handlePermissionAction = async (openSettings: boolean) => {
+    setPromptingPerm(true);
+    try {
+      const target =
+        permissions && !permissions.accessibility_trusted
+          ? "accessibility"
+          : "input_monitoring";
+      const updated = await promptSystemPermissions(target, openSettings);
+      setPermissions(updated);
+    } catch {
+      // keep existing state
+    } finally {
+      setPromptingPerm(false);
+    }
+  };
+
+  const lightingQuality = frame?.gaze.running ? frame.gaze.lighting_quality : "ok";
+  const lightingMessage =
+    lightingQuality === "low_light"
+      ? "Low webcam lighting detected. Adaptive enhancement is active, and facing a soft lamp will further steady gaze tracking."
+      : lightingQuality === "backlit"
+      ? "Bright background light behind you. Adaptive contrast is active; dimming a bright window behind you helps landmark stability."
+      : lightingQuality === "overexposed"
+      ? "Strong glare on your face detected. Lowering screen brightness or tilting away from direct sunlight helps eye tracking."
+      : null;
+
   return (
     <div className="min-h-screen bg-[var(--tc-bg)] text-[var(--tc-ink)]">
       <TopBar
@@ -174,6 +219,49 @@ export function App() {
       />
 
       <main className="mx-auto max-w-6xl px-6 py-8">
+        {permissions?.needs_prompt && (
+          <div
+            role="status"
+            className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-warn)] bg-[var(--tc-warn-bg)] p-5 text-[var(--tc-warn)]"
+          >
+            <div className="space-y-1">
+              <p className="text-base font-bold">System Pointer Permission Needed</p>
+              <p className="text-sm font-medium text-[var(--tc-ink)]">
+                {permissions.message ??
+                  "Grant Accessibility & Input Monitoring access for system-wide smoothing and button magnetism."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={promptingPerm}
+                onClick={() => void handlePermissionAction(false)}
+                className="min-h-14 rounded-lg border-2 border-[var(--tc-warn)] bg-[var(--tc-surface)] px-5 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-surface-alt)] disabled:opacity-50"
+              >
+                Prompt Permission
+              </button>
+              <button
+                type="button"
+                disabled={promptingPerm}
+                onClick={() => void handlePermissionAction(true)}
+                className="min-h-14 rounded-lg bg-[var(--tc-primary)] px-5 text-base font-bold text-white hover:bg-[var(--tc-primary-hover)] disabled:opacity-50"
+              >
+                Open System Settings
+              </button>
+            </div>
+          </div>
+        )}
+
+        {lightingMessage && (
+          <div
+            role="status"
+            className="mb-6 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 py-4 text-sm font-semibold text-[var(--tc-ink)]"
+          >
+            <span className="font-bold text-[var(--tc-primary)]">Camera Lighting Adaptation: </span>
+            {lightingMessage}
+          </div>
+        )}
+
         {(apiError || errorMessage) && (
           <div
             role="alert"

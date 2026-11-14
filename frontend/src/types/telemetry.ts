@@ -50,6 +50,38 @@ export interface GazeTelemetry {
   calibrated: boolean;
   target_id: string | null;
   running: boolean;
+  lighting_quality?: "ok" | "low_light" | "backlit" | "overexposed";
+  luma?: number | null;
+}
+
+export interface SystemPermissionsResponse {
+  platform: string;
+  accessibility_trusted: boolean;
+  input_monitoring_trusted: boolean;
+  needs_prompt: boolean;
+  message: string | null;
+  settings_opened?: boolean;
+}
+
+export interface DisplayDescriptor {
+  id: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  scale_factor: number;
+  refresh_hz: number;
+  is_primary: boolean;
+}
+
+export interface DisplaysResponse {
+  virtual_rect: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  displays: DisplayDescriptor[];
 }
 
 export interface SteadyHandTelemetry {

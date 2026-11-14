@@ -130,7 +130,7 @@ class SteadyHandWorker:
         y: float,
         now: float,
     ) -> tuple[float, float] | None:
-        in_place_tap = self._interceptor.mode == "quartz_cgeventtap"
+        in_place_tap = self._interceptor.mode in ("quartz_cgeventtap", "win32_wh_mouse_ll")
         with self._lock:
             if not in_place_tap and kind == "move" and self._is_echo_move(x, y, now):
                 return None

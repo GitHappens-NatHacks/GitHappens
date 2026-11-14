@@ -1,6 +1,7 @@
 import type {
   CalibrateRequest,
   CalibrateResponse,
+  DisplaysResponse,
   EngineToggleRequest,
   EngineToggleResponse,
   HealthResponse,
@@ -8,6 +9,7 @@ import type {
   SettingsPayload,
   SettingsUpdate,
   SteadyHandSampleSnapshot,
+  SystemPermissionsResponse,
 } from "../types/telemetry";
 import { resolveApiBaseUrl } from "./runtime";
 
@@ -96,4 +98,22 @@ export function pushSteadyHandSample(
     method: "POST",
     body: JSON.stringify({ x, y, pressed }),
   });
+}
+
+export function fetchSystemPermissions(): Promise<SystemPermissionsResponse> {
+  return request<SystemPermissionsResponse>("/api/system/permissions");
+}
+
+export function promptSystemPermissions(
+  target: "accessibility" | "input_monitoring" | "camera" = "accessibility",
+  openSettings = false
+): Promise<SystemPermissionsResponse> {
+  return request<SystemPermissionsResponse>("/api/system/permissions/prompt", {
+    method: "POST",
+    body: JSON.stringify({ target, open_settings: openSettings }),
+  });
+}
+
+export function fetchDisplays(): Promise<DisplaysResponse> {
+  return request<DisplaysResponse>("/api/system/displays");
 }

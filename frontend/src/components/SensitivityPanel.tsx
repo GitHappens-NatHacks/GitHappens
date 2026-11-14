@@ -1,7 +1,8 @@
-import { Check, ChevronDown, ChevronUp, RotateCcw, Save } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Monitor, RotateCcw, Save } from "lucide-react";
 import { useEffect, useState } from "react";
+import { fetchDisplays } from "../api/client";
 import { CLINICAL_PRESETS, type ClinicalPreset } from "../presets";
-import type { SettingsPayload, SettingsUpdate } from "../types/telemetry";
+import type { DisplaysResponse, SettingsPayload, SettingsUpdate } from "../types/telemetry";
 import { SteppedControl } from "./SteppedControl";
 
 interface SensitivityPanelProps {
@@ -18,10 +19,27 @@ export function SensitivityPanel({
   const [draft, setDraft] = useState<SettingsPayload>(settings);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
+  const [displaySummary, setDisplaySummary] = useState<DisplaysResponse | null>(null);
 
   useEffect(() => {
     setDraft(settings);
   }, [settings]);
+
+  useEffect(() => {
+    let active = true;
+    void fetchDisplays()
+      .then((res) => {
+        if (active) {
+          setDisplaySummary(res);
+        }
+      })
+      .catch(() => {
+        // Ignore offline display lookup
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const updateField = <K extends keyof SettingsPayload>(
     key: K,
@@ -291,6 +309,34 @@ export function SensitivityPanel({
               unit="ms"
               onChange={(v) => updateField("anti_drag_hold_ms", v)}
             />
+
+            {displaySummary && displaySummary.displays.length > 0 && (
+              <div className="border-t-2 border-[var(--tc-border)] pt-5">
+                <div className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[var(--tc-primary)]">
+                  <Monitor className="h-4 w-4" aria-hidden="true" />
+                  <span>
+                    Active Displays ({displaySummary.displays.length}) &amp; Virtual Bounds (
+                    {displaySummary.virtual_rect.width}x{displaySummary.virtual_rect.height})
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {displaySummary.displays.map((disp, idx) => (
+                    <div
+                      key={disp.id}
+                      className="rounded-md border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] px-4 py-3 text-sm"
+                    >
+                      <p className="font-bold text-[var(--tc-ink)]">
+                        Display {idx + 1} {disp.is_primary ? "(Primary)" : "(External)"}
+                      </p>
+                      <p className="mt-0.5 tabular-nums text-[var(--tc-ink-muted)]">
+                        {disp.width}x{disp.height} at ({disp.left}, {disp.top}) | {disp.refresh_hz} Hz |{" "}
+                        {disp.scale_factor}x DPI
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

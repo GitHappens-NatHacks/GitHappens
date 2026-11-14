@@ -141,9 +141,19 @@ class EngineCoordinator:
             if self.gaze_controller.source != validated.gaze_source:
                 self.gaze_controller.set_source(validated.gaze_source)
                 self._restore_calibration()
-            self.gaze_controller.set_screen_rect(
-                ScreenRect(0, 0, validated.screen_width, validated.screen_height)
-            )
+
+            from backend.core.steadyhand.displays import detect_displays, virtual_screen_rect
+
+            displays = detect_displays(validated.screen_width, validated.screen_height)
+            if len(displays) > 1 or any(d.left != 0 or d.top != 0 for d in displays):
+                screen_rect = virtual_screen_rect(
+                    displays,
+                    fallback_width=validated.screen_width,
+                    fallback_height=validated.screen_height,
+                )
+            else:
+                screen_rect = ScreenRect(0, 0, validated.screen_width, validated.screen_height)
+            self.gaze_controller.set_screen_rect(screen_rect)
             self.gaze_controller.set_dwell_ms(validated.gaze_dwell_ms)
             self.gaze_controller.blink_select = validated.blink_select
             self.gaze_controller.set_system_mouse(
@@ -310,6 +320,8 @@ class EngineCoordinator:
                     "calibrated": gaze["calibrated"],
                     "target_id": gaze["target_id"],
                     "running": gaze["running"],
+                    "lighting_quality": gaze.get("lighting_quality", "ok"),
+                    "luma": gaze.get("luma"),
                 },
                 "steadyhand": {
                     "raw_pos": steady["raw_pos"],

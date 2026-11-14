@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as client from "../api/client";
+import { App } from "../App";
 import { AppointmentPlayground } from "../components/AppointmentPlayground";
 import { CalibrationWizard } from "../components/CalibrationWizard";
 import { ControlDeck } from "../components/ControlDeck";
@@ -343,5 +344,32 @@ describe("TrueCursor Phase 5 Frontend Suite", () => {
     await waitFor(() => expect(screen.getByText("Calibration Complete")).toBeInTheDocument());
     expect(spy.mock.calls[1][0].features).toHaveLength(5);
     expect(onCompleted).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows macOS Accessibility prompt banner and triggers prompt endpoint on click", async () => {
+    vi.spyOn(client, "fetchSettings").mockResolvedValueOnce(BASE_SETTINGS);
+    vi.spyOn(client, "fetchSystemPermissions").mockResolvedValueOnce({
+      platform: "macos",
+      accessibility_trusted: false,
+      input_monitoring_trusted: true,
+      needs_prompt: true,
+      message: "macOS Accessibility permission is needed.",
+    });
+    const promptSpy = vi.spyOn(client, "promptSystemPermissions").mockResolvedValueOnce({
+      platform: "macos",
+      accessibility_trusted: true,
+      input_monitoring_trusted: true,
+      needs_prompt: false,
+      message: null,
+    });
+
+    render(<App />);
+    await waitFor(() =>
+      expect(screen.getByText("System Pointer Permission Needed")).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Prompt Permission/i }));
+    await waitFor(() =>
+      expect(promptSpy).toHaveBeenCalledWith("accessibility", false)
+    );
   });
 });

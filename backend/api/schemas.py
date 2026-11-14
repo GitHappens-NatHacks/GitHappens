@@ -115,3 +115,8 @@ class PointerSampleRequest(BaseModel):
     y: float
     timestamp: float | None = None
     pressed: bool | None = None
+
+
+class PermissionPromptRequest(BaseModel):
+    target: Literal["accessibility", "input_monitoring", "camera"] = "accessibility"
+    open_settings: bool = False

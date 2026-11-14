@@ -34,6 +34,35 @@ fn get_backend_port(state: tauri::State<'_, SidecarState>) -> u16 {
     state.port.load(Ordering::SeqCst)
 }
 
+#[tauri::command]
+fn open_permission_settings(target: String) -> bool {
+    let key = target.trim().to_ascii_lowercase();
+    #[cfg(target_os = "macos")]
+    {
+        let uri = match key.as_str() {
+            "input_monitoring" => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+            }
+            "camera" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
+            _ => "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        };
+        return std::process::Command::new("open").arg(uri).spawn().is_ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let uri = match key.as_str() {
+            "camera" => "ms-settings:privacy-webcam",
+            _ => "ms-settings:easeofaccess-mouse",
+        };
+        return std::process::Command::new("cmd")
+            .args(["/c", "start", "", uri])
+            .spawn()
+            .is_ok();
+    }
+    #[allow(unreachable_code)]
+    false
+}
+
 fn check_health(port: u16) -> bool {
     let addr: SocketAddr = match format!("127.0.0.1:{}", port).parse() {
         Ok(a) => a,
@@ -150,7 +179,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![get_backend_port])
+        .invoke_handler(tauri::generate_handler![get_backend_port, open_permission_settings])
         .setup(|app| {
             let handle = app.handle().clone();
 

@@ -9,11 +9,17 @@ from backend.api.schemas import (
     CalibrateResponse,
     EngineToggleRequest,
     EngineToggleResponse,
+    PermissionPromptRequest,
     PointerSampleRequest,
     SettingsPayload,
     SettingsUpdateRequest,
 )
 from backend.core.engine.coordinator import EngineCoordinator
+from backend.core.steadyhand.displays import detect_displays, virtual_screen_rect
+from backend.core.steadyhand.permissions import (
+    get_system_permissions,
+    open_permission_settings,
+)
 
 router = APIRouter(prefix="/api", tags=["truecursor"])
 
@@ -135,3 +141,38 @@ def push_steadyhand_sample(payload: PointerSampleRequest, request: Request) -> d
     )
     coord.persist_pending_fft()
     return snap
+
+
+@router.get("/system/permissions")
+def system_permissions() -> dict:
+    return get_system_permissions(prompt=False)
+
+
+@router.post("/system/permissions/prompt")
+def prompt_system_permissions(payload: PermissionPromptRequest) -> dict:
+    perms = get_system_permissions(prompt=True)
+    opened = open_permission_settings(payload.target) if payload.open_settings else False
+    return {
+        **perms,
+        "settings_opened": opened,
+    }
+
+
+@router.get("/system/displays")
+def system_displays(request: Request) -> dict:
+    coord = _coordinator(request)
+    displays = detect_displays(coord.settings.screen_width, coord.settings.screen_height)
+    vrect = virtual_screen_rect(
+        displays,
+        fallback_width=coord.settings.screen_width,
+        fallback_height=coord.settings.screen_height,
+    )
+    return {
+        "virtual_rect": {
+            "left": vrect.left,
+            "top": vrect.top,
+            "width": vrect.width,
+            "height": vrect.height,
+        },
+        "displays": [d.as_dict() for d in displays],
+    }

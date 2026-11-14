@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrueCursor Web Assist</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="popup">
+    <header class="header">
+      <div>
+        <h1>TrueCursor</h1>
+        <p class="subtitle">Browser Tremor &amp; Gravity Well Assist</p>
+      </div>
+      <button id="sync-btn" type="button" class="btn-outline">Sync App</button>
+    </header>
+
+    <section class="section">
+      <h2>Comfort Preset</h2>
+      <div class="preset-grid">
+        <button type="button" data-preset="mild" class="preset-btn">Mild</button>
+        <button type="button" data-preset="moderate" class="preset-btn selected">Moderate</button>
+        <button type="button" data-preset="high" class="preset-btn">High</button>
+      </div>
+    </section>
+
+    <section class="section toggles">
+      <label class="toggle-row">
+        <input id="pointerEnabled" type="checkbox" checked />
+        <span>One-Euro Virtual Pointer Overlay</span>
+      </label>
+      <label class="toggle-row">
+        <input id="gravityWells" type="checkbox" checked />
+        <span>DOM Button Gravity Wells (2.5x Hitbox)</span>
+      </label>
+      <label class="toggle-row">
+        <input id="highContrastCues" type="checkbox" />
+        <span>High-Contrast Interactive Outlines</span>
+      </label>
+      <label class="toggle-row">
+        <input id="largeReadableText" type="checkbox" />
+        <span>Large Readable Text (18px+, 1.65x line height)</span>
+      </label>
+    </section>
+
+    <section class="section">
+      <label class="range-label" for="clickFreezeMs">
+        <span>Click-Freeze Anti-Slip Lock</span>
+        <strong id="clickFreezeLabel">180 ms</strong>
+      </label>
+      <input id="clickFreezeMs" type="range" min="0" max="400" step="20" value="180" />
+    </section>
+
+    <footer class="actions">
+      <button id="apply-btn" type="button" class="btn-primary">Apply to Tab</button>
+      <button id="restore-btn" type="button" class="btn-outline">Restore</button>
+    </footer>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script src="lib/stabilizer.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

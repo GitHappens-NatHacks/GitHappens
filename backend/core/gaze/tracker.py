@@ -12,11 +12,51 @@ import time
 
 import cv2
 import mediapipe as mp
+import numpy as np
 
 from backend.core.gaze.blink import BlinkDetector, eye_aspect_ratio
 from backend.core.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
 
 BACKENDS = ("auto", "mediapipe", "eyetrax", "hybrid")
+
+
+def normalize_frame_lighting(frame: np.ndarray) -> tuple[np.ndarray, str, float]:
+    """Stabilize extreme dark/backlit webcam frames via YCrCb CLAHE and classify luma.
+
+    Returns (normalized_bgr, lighting_quality, mean_luma) where lighting_quality is one of:
+    'ok', 'low_light', 'backlit', or 'overexposed'.
+    """
+    if frame is None or frame.size == 0:
+        return frame, "ok", 128.0
+
+    ycrcb = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
+    y_chan = ycrcb[:, :, 0]
+    h, w = y_chan.shape[:2]
+    mean_luma = float(np.mean(y_chan[::4, ::4]))
+
+    y0, y1 = h // 4, max(h // 4 + 1, (3 * h) // 4)
+    x0, x1 = w // 4, max(w // 4 + 1, (3 * w) // 4)
+    center_luma = float(np.mean(y_chan[y0:y1:2, x0:x1:2]))
+
+    if mean_luma < 68.0:
+        quality = "low_light"
+    elif mean_luma > 215.0:
+        quality = "overexposed"
+    elif mean_luma - center_luma > 32.0 and center_luma < 92.0 and mean_luma > 125.0:
+        quality = "backlit"
+    else:
+        quality = "ok"
+
+    if quality in ("low_light", "backlit"):
+        gamma = 0.72 if quality == "backlit" else 0.78
+        lifted = np.clip(((y_chan.astype(np.float32) / 255.0) ** gamma) * 255.0, 0, 255).astype(
+            np.uint8
+        )
+        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+        ycrcb[:, :, 0] = clahe.apply(lifted)
+        return cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR), quality, mean_luma
+
+    return frame, quality, mean_luma
 
 
 class GazeTracker:
@@ -56,13 +96,16 @@ class GazeTracker:
 
         frame = cv2.flip(frame, 1)
         h, w = frame.shape[:2]
-        result = self._mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        processed, lighting_quality, luma = normalize_frame_lighting(frame)
+        result = self._mesh.process(cv2.cvtColor(processed, cv2.COLOR_BGR2RGB))
         payload = {
             "camera_ok": True,
             "face": False,
             "ts_ms": ts_ms,
             "frame": frame,
             "backend": self.backend_name,
+            "lighting_quality": lighting_quality,
+            "luma": round(luma, 1),
         }
 
         if not result.multi_face_landmarks:
