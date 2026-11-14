@@ -11,12 +11,12 @@ import time
 
 import cv2
 
-from accessshift.modules.gaze.blink import BlinkDetector, eye_aspect_ratio
-from accessshift.modules.gaze.eyetrax_tracker import (
+from backend.core.gaze.blink import BlinkDetector, eye_aspect_ratio
+from backend.core.gaze.eyetrax_tracker import (
     EYETRAX_AVAILABLE,
     features_to_eye_point,
 )
-from accessshift.modules.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
+from backend.core.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
 
 try:
     import mediapipe as mp

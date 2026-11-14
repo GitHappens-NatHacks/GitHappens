@@ -13,8 +13,8 @@ import time
 import cv2
 import mediapipe as mp
 
-from accessshift.modules.gaze.blink import BlinkDetector, eye_aspect_ratio
-from accessshift.modules.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
+from backend.core.gaze.blink import BlinkDetector, eye_aspect_ratio
+from backend.core.gaze.features import LEFT_EYE, RIGHT_EYE, gaze_feature, head_feature
 
 BACKENDS = ("auto", "mediapipe", "eyetrax", "hybrid")
 
@@ -107,7 +107,7 @@ def create_tracker(camera_index: int = 0, backend: str | None = None):
 
     # auto, eyetrax, and hybrid all keep MediaPipe head; EyeTrax only upgrades eyes.
     try:
-        from accessshift.modules.gaze.hybrid_tracker import HybridGazeTracker
+        from backend.core.gaze.hybrid_tracker import HybridGazeTracker
 
         return HybridGazeTracker(camera_index)
     except Exception as exc:

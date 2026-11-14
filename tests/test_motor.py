@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from accessshift.modules.steadyhand.controller import SteadyHandController
+from backend.core.steadyhand.controller import SteadyHandController
 
 
 class MotorTests(unittest.TestCase):

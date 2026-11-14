@@ -1,6 +1,6 @@
 import pytest
 
-from accessshift.modules.gaze.calibration import CALIBRATION_POINTS, GazeCalibration
+from backend.core.gaze.calibration import CALIBRATION_POINTS, GazeCalibration
 
 
 def test_recovers_affine_mapping():
@@ -75,7 +75,7 @@ def test_noisy_real_calibration_stays_usable():
 
 # --- head calibration from guided poses: straight, left, right, up, down -------------------
 
-from accessshift.modules.gaze.calibration import HEAD_REACH, head_calibration  # noqa: E402
+from backend.core.gaze.calibration import HEAD_REACH, head_calibration  # noqa: E402
 
 W, H = 1000, 800
 POSES = {

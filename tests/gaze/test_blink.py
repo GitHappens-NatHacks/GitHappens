@@ -1,6 +1,6 @@
 import pytest
 
-from accessshift.modules.gaze.blink import BlinkDetector, eye_aspect_ratio
+from backend.core.gaze.blink import BlinkDetector, eye_aspect_ratio
 
 
 def feed(det, samples):

@@ -1,4 +1,4 @@
-from accessshift.modules.gaze.metrics import GazeMetrics
+from backend.core.gaze.metrics import GazeMetrics
 
 
 def test_accuracy_and_time():

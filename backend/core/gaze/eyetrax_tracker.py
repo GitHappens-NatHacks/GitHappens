@@ -11,7 +11,7 @@ import time
 import cv2
 import numpy as np
 
-from accessshift.modules.gaze.blink import BlinkDetector
+from backend.core.gaze.blink import BlinkDetector
 
 try:
     from eyetrax import GazeEstimator

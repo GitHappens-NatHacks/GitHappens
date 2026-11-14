@@ -1,6 +1,6 @@
 import pytest
 
-from accessshift.modules.gaze.features import (
+from backend.core.gaze.features import (
     LEFT_EYE,
     LEFT_IRIS,
     LEFT_LID_MID,
@@ -59,7 +59,7 @@ def test_gaze_feature_vertical_uses_corner_and_lid():
 
 # --- head pointing: nose tip relative to the eyes -------------------------------------
 
-from accessshift.modules.gaze.features import EYE_OUTER, NOSE_TIP, head_feature  # noqa: E402
+from backend.core.gaze.features import EYE_OUTER, NOSE_TIP, head_feature  # noqa: E402
 
 
 def face(nose, left=(0.0, 0.0), right=(10.0, 0.0)):

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from accessshift.modules.gaze.tracker import BACKENDS, GazeTracker, create_tracker, resolve_backend
+from backend.core.gaze.tracker import BACKENDS, GazeTracker, create_tracker, resolve_backend
 
 
 def test_resolve_backend_defaults_and_rejects_unknown(monkeypatch):
@@ -31,15 +31,15 @@ def test_create_tracker_auto_keeps_mediapipe_head_path():
 def test_create_tracker_falls_back_when_hybrid_init_fails(monkeypatch):
     import types
 
-    import accessshift.modules.gaze.tracker as tracker_mod
+    import backend.core.gaze.tracker as tracker_mod
 
     class Boom:
         def __init__(self, camera_index=0):
             raise RuntimeError("no model")
 
-    fake = types.ModuleType("accessshift.modules.gaze.hybrid_tracker")
+    fake = types.ModuleType("backend.core.gaze.hybrid_tracker")
     fake.HybridGazeTracker = Boom
-    monkeypatch.setitem(__import__("sys").modules, "accessshift.modules.gaze.hybrid_tracker", fake)
+    monkeypatch.setitem(__import__("sys").modules, "backend.core.gaze.hybrid_tracker", fake)
 
     for backend in ("auto", "hybrid"):
         t = tracker_mod.create_tracker(0, backend=backend)
@@ -47,7 +47,7 @@ def test_create_tracker_falls_back_when_hybrid_init_fails(monkeypatch):
 
 
 def test_eyetrax_feature_helpers_when_installed():
-    from accessshift.modules.gaze import eyetrax_tracker as et
+    from backend.core.gaze import eyetrax_tracker as et
 
     if not et.EYETRAX_AVAILABLE:
         pytest.skip("eyetrax not installed")

@@ -1,7 +1,7 @@
 import sys
 
-from accessshift.modules.speech import tts
-from accessshift.modules.speech.tts import SpeechEngine
+from backend.core.speech import tts
+from backend.core.speech.tts import SpeechEngine
 
 
 def test_speak_async_on_mac_uses_say_without_blocking(monkeypatch):

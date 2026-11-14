@@ -1,6 +1,6 @@
 import pytest
 
-from accessshift.modules.gaze.calibration import DotCollector
+from backend.core.gaze.calibration import DotCollector
 
 SIZE = (1000, 800)
 

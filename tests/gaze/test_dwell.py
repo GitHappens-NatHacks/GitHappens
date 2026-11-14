@@ -1,6 +1,6 @@
 import pytest
 
-from accessshift.modules.gaze.dwell import DwellSelector, adaptive_dwell_ms, min_target_px
+from backend.core.gaze.dwell import DwellSelector, adaptive_dwell_ms, min_target_px
 
 
 def test_fires_after_dwell():
@@ -48,7 +48,7 @@ def test_reset_rearms_same_target():
 
 def test_adaptive_values():
     # Dwell is uniform for every button; error only affects snap size elsewhere.
-    from accessshift.modules.gaze.dwell import UNIFORM_DWELL_MS
+    from backend.core.gaze.dwell import UNIFORM_DWELL_MS
 
     for error_px in (0, 100, 800, -100):
         assert adaptive_dwell_ms(error_px) == UNIFORM_DWELL_MS

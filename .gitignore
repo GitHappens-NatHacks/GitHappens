@@ -49,3 +49,10 @@ node_modules/
 
 # Superpowers plan workspace (local scratch)
 .superpowers/
+
+# Local patches / update bundles / scratch
+*.patch
+apply_ir_update.py
+files/
+manifest.json
+native_movement_tests.py

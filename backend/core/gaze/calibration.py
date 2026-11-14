@@ -82,6 +82,23 @@ class GazeCalibration:
         predicted = np.asarray([self.map(f) for f in features], dtype=float)
         return float(np.mean(np.linalg.norm(predicted - np.asarray(targets, dtype=float), axis=1)))
 
+    def to_dict(self) -> dict:
+        if self._coef is None:
+            raise RuntimeError("GazeCalibration.to_dict called before fit")
+        return {
+            "coef": self._coef.tolist(),
+            "mean": self._mean.tolist(),
+            "std": self._std.tolist(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> GazeCalibration:
+        cal = cls()
+        cal._coef = np.asarray(data["coef"], dtype=float)
+        cal._mean = np.asarray(data["mean"], dtype=float)
+        cal._std = np.asarray(data["std"], dtype=float)
+        return cal
+
 
 # --- head pointing: guided poses instead of dots ---------------------------------------
 # The user faces forward, then turns left/right and tilts up/down as far as is comfortable.

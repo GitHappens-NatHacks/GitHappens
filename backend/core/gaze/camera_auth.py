@@ -1,7 +1,7 @@
 """macOS camera authorization helpers for OpenCV.
 
 OpenCV cannot show the system camera permission dialog from a worker thread.
-Authorize on the Qt main thread first. Then allow later opens to skip that prompt.
+Authorize on the calling main thread first. Then allow later opens to skip that prompt.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import time
 def prepare_camera_for_worker(camera_index: int = 0) -> tuple[bool, str]:
     """Open the camera once on the calling thread then arm worker-safe capture.
 
-    Returns (ok, message). Call this from the UI thread before GazeWorker starts.
+    Returns (ok, message). Call this from the main thread before GazeWorker starts.
     """
     import cv2
 
@@ -39,7 +39,7 @@ def prepare_camera_for_worker(camera_index: int = 0) -> tuple[bool, str]:
     ok, _frame = cap.read()
     cap.release()
 
-    # Later opens from GazeWorker happen off the UI thread.
+    # Later opens from GazeWorker happen on the background thread.
     os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = "1"
 
     if not ok:

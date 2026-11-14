@@ -11,8 +11,8 @@ import os
 import secrets
 import time
 
-from accessshift.modules.steadyhand.filter import OneEuroFilter, IntentionalHold
-from accessshift.modules.steadyhand.metrics import MotorTelemetry
+from backend.core.steadyhand.filter import OneEuroFilter, IntentionalHold
+from backend.core.steadyhand.metrics import MotorTelemetry
 
 
 class SteadyHandController:
