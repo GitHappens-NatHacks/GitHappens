@@ -71,6 +71,27 @@ export function toggleEngine(
   });
 }
 
+export function stopGazeEmergency(): Promise<EngineToggleResponse> {
+  return request<EngineToggleResponse>("/api/gaze/stop", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function pauseGaze(paused: boolean): Promise<{ paused: boolean }> {
+  return request<{ paused: boolean }>("/api/gaze/pause", {
+    method: "POST",
+    body: JSON.stringify({ paused }),
+  });
+}
+
+export function clearCalibration(): Promise<{ calibrated: boolean; source: string }> {
+  return request<{ calibrated: boolean; source: string }>("/api/gaze/clear-calibration", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export function submitCalibration(
   payload: CalibrateRequest
 ): Promise<CalibrateResponse> {

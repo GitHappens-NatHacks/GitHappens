@@ -23,9 +23,9 @@ STATUS_TRACKING = "Tracking"
 
 SNAP_HYSTERESIS_PX = 80
 
-SMOOTH_MIN_CUTOFF = 0.3
-SMOOTH_BETA = 0.0005
-HEAD_SMOOTH_MIN_CUTOFF = 0.15
+SMOOTH_MIN_CUTOFF = 0.45
+SMOOTH_BETA = 0.003
+HEAD_SMOOTH_MIN_CUTOFF = 0.55
 
 HEAD_REST_FRACTION = 0.12
 
@@ -130,6 +130,9 @@ class GazeController:
         self._last_blink = False
         self._last_ear: float | None = None
         self._last_raw: dict | None = None
+        self._latest_frame = None
+        self._latest_jpeg: bytes | None = None
+        self._frame_seq: int = 0
         self._system_mouse_enabled = False
         self._mouse_controller = None
 
@@ -205,6 +208,22 @@ class GazeController:
             self._user_dwell_ms = ms
             self._dwell.dwell_ms = ms if ms is not None else UNIFORM_DWELL_MS
 
+    def clear_calibration(self) -> None:
+        """Reset calibration so gaze cursor stays off until recalibrated."""
+        with self._lock:
+            self.calibration = GazeCalibration()
+            self.error_px = None
+            self._snap_px = 0.0
+            self._last_point = None
+            self._last_dwell_progress = 0.0
+            self._target = None
+            self._dwell.reset()
+            self._new_filters()
+            if self.running:
+                self._set_status(STATUS_UNCALIBRATED)
+            else:
+                self._set_status(STATUS_IDLE)
+
     def set_calibration(self, calibration: GazeCalibration, error_px: float) -> None:
         with self._lock:
             self.calibration = calibration
@@ -273,9 +292,15 @@ class GazeController:
 
     def process(self, sample: dict) -> None:
         with self._lock:
+            if sample.get("frame") is not None:
+                self._latest_frame = sample["frame"]
+                self._latest_jpeg = None
+                self._frame_seq += 1
             if self.source == "head" and "head" in sample:
                 sample = {**sample, "feature": sample["head"]}
             self._last_raw = dict(sample)
+            self._last_face = bool(sample.get("face"))
+            self._last_ear = float(sample["ear"]) if "ear" in sample else None
             if self._on_raw_sample is not None:
                 self._on_raw_sample(sample)
             if self.paused:
@@ -382,6 +407,32 @@ class GazeController:
                 "luma": round(float(raw["luma"]), 1) if "luma" in raw else None,
             }
 
+    def latest_preview_jpeg(self) -> bytes | None:
+        """Encode the most recent camera frame as a compact JPEG for UI preview."""
+        with self._lock:
+            if self._latest_jpeg is not None:
+                return self._latest_jpeg
+            frame = self._latest_frame
+            if frame is None:
+                return None
+
+        import cv2
+
+        h, w = frame.shape[:2]
+        if w > 420:
+            new_h = max(1, int(round(h * (420 / w))))
+            resized = cv2.resize(frame, (420, new_h), interpolation=cv2.INTER_AREA)
+        else:
+            resized = frame
+        ok, buf = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), 68])
+        if not ok:
+            return None
+        jpeg_bytes = buf.tobytes()
+        with self._lock:
+            if self._latest_frame is frame:
+                self._latest_jpeg = jpeg_bytes
+        return jpeg_bytes
+
     def start(
         self,
         camera_index: int = 0,
@@ -424,4 +475,6 @@ class GazeController:
             worker.stop()
         self._clear_worker()
         with self._lock:
+            self._latest_frame = None
+            self._latest_jpeg = None
             self._set_status(STATUS_IDLE)

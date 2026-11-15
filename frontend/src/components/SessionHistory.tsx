@@ -6,8 +6,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -95,11 +94,11 @@ export function SessionHistory() {
     };
 
     doc.setFontSize(18);
-    doc.setTextColor(1, 74, 53);
+    doc.setTextColor(15, 45, 89);
     doc.text("TrueCursor Clinician Motor Telemetry Report", 40, 48);
 
     doc.setFontSize(10);
-    doc.setTextColor(61, 76, 70);
+    doc.setTextColor(66, 82, 110);
     doc.text(`Generated: ${nowLabel}   |   Reporting Window: Last 14 Days`, 40, 66);
 
     // Executive Summary Table
@@ -113,14 +112,14 @@ export function SessionHistory() {
         ["Mean Dominant Tremor Frequency", meanHz !== null ? `${meanHz.toFixed(2)} Hz` : "None detected", formatFrequencyClinicalNote(meanHz)],
         ["Active Gaze Calibration Profiles", `${calibrations.length} stored profiles`, "Affine gaze mapping accuracy measured in mean pixel error."],
       ],
-      headStyles: { fillColor: [1, 74, 53], textColor: [255, 255, 255] },
+      headStyles: { fillColor: [15, 45, 89], textColor: [255, 255, 255] },
       styles: { fontSize: 9, cellPadding: 6 },
     });
 
     // How to Read This Data Guide
     const afterSummaryY = getNextY(220, 140);
     doc.setFontSize(13);
-    doc.setTextColor(1, 74, 53);
+    doc.setTextColor(15, 45, 89);
     doc.text("How to Read This Clinical Motor Report", 40, afterSummaryY);
 
     autoTable(doc, {
@@ -414,25 +413,42 @@ export function SessionHistory() {
             <div className="h-64 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart data={trends}>
-                  <CartesianGrid stroke="#CBD5CF" strokeDasharray="4 4" />
-                  <XAxis dataKey="date" stroke="#3D4C46" fontSize={12} />
-                  <YAxis domain={[0, 100]} stroke="#3D4C46" fontSize={12} />
+                  <defs>
+                    <linearGradient id="tcDailyStabilityGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#1D4ED8" stopOpacity={0.30} />
+                      <stop offset="95%" stopColor="#1D4ED8" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
+                  <ReferenceLine
+                    y={85}
+                    stroke="#0F2D59"
+                    strokeDasharray="5 4"
+                    strokeOpacity={0.55}
+                    label={{ value: "Optimal (85)", position: "insideTopRight", fill: "#0F2D59", fontSize: 11, fontWeight: 600 }}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#FFFFFF",
-                      border: "2px solid #014A35",
-                      borderRadius: "6px",
-                      color: "#16201C",
+                      backgroundColor: "#0F2D59",
+                      border: "1px solid #1E3A8A",
+                      borderRadius: "10px",
+                      color: "#FFFFFF",
                       fontWeight: 600,
+                      boxShadow: "0 10px 25px rgba(11, 19, 36, 0.2)",
                     }}
+                    itemStyle={{ color: "#DBEAFE" }}
+                    labelStyle={{ color: "#93C5FD" }}
                   />
                   <Area
                     type="monotone"
                     dataKey="avg_stability_score"
                     name="Stability Score"
-                    stroke="#014A35"
+                    stroke="#1D4ED8"
                     strokeWidth={3}
-                    fill="#E3EFE9"
+                    fill="url(#tcDailyStabilityGrad)"
+                    activeDot={{ r: 6, fill: "#0F2D59", stroke: "#FFFFFF", strokeWidth: 2 }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -442,41 +458,59 @@ export function SessionHistory() {
 
         <section
           aria-labelledby="tremor-trend-heading"
-          className="space-y-4 border-t-2 border-[var(--tc-border)] pt-5"
+          className="space-y-4 border-t border-[var(--tc-border)] pt-5"
         >
           <h3 id="tremor-trend-heading" className="text-xl font-bold text-[var(--tc-ink)]">
             Daily 4-7 Hz Tremor Power (%) Trend
           </h3>
 
           {trends.length === 0 ? (
-            <p className="rounded-md bg-[var(--tc-surface-alt)] p-5 text-base text-[var(--tc-ink-muted)]">
+            <p className="rounded-xl bg-[var(--tc-surface-alt)] p-5 text-base text-[var(--tc-ink-muted)]">
               Once sessions are recorded, this chart tracks longitudinal tremor intensity across medication cycles.
             </p>
           ) : (
-            <div className="h-64 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
+            <div className="h-64 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-4 shadow-[var(--tc-shadow)]">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <LineChart data={trends}>
-                  <CartesianGrid stroke="#CBD5CF" strokeDasharray="4 4" />
-                  <XAxis dataKey="date" stroke="#3D4C46" fontSize={12} />
-                  <YAxis domain={[0, 100]} stroke="#3D4C46" fontSize={12} />
+                <AreaChart data={trends}>
+                  <defs>
+                    <linearGradient id="tcDailyTremorGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#9F1239" stopOpacity={0.22} />
+                      <stop offset="95%" stopColor="#9F1239" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
+                  <ReferenceLine
+                    y={50}
+                    stroke="#9F1239"
+                    strokeDasharray="5 4"
+                    strokeOpacity={0.55}
+                    label={{ value: "OFF-Period (50%)", position: "insideTopRight", fill: "#9F1239", fontSize: 11, fontWeight: 600 }}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#FFFFFF",
-                      border: "2px solid #8C2113",
-                      borderRadius: "6px",
-                      color: "#16201C",
+                      backgroundColor: "#0F2D59",
+                      border: "1px solid #1E3A8A",
+                      borderRadius: "10px",
+                      color: "#FFFFFF",
                       fontWeight: 600,
+                      boxShadow: "0 10px 25px rgba(11, 19, 36, 0.2)",
                     }}
+                    itemStyle={{ color: "#FFE4E6" }}
+                    labelStyle={{ color: "#93C5FD" }}
                   />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="avg_tremor_index"
                     name="4-7 Hz Band Power (%)"
-                    stroke="#8C2113"
+                    stroke="#9F1239"
                     strokeWidth={3}
-                    dot={{ r: 5, fill: "#8C2113" }}
+                    fill="url(#tcDailyTremorGrad)"
+                    dot={{ r: 4, fill: "#9F1239", stroke: "#FFFFFF", strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: "#9F1239", stroke: "#FFFFFF", strokeWidth: 2 }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           )}

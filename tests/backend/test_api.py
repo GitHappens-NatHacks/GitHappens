@@ -146,3 +146,62 @@ def test_websocket_telemetry_stream(tmp_path):
             assert "stability_score" in frame
             assert "gaze" in frame and "x" in frame["gaze"] and "y" in frame["gaze"]
             assert "active_modes" in frame
+
+
+def test_gaze_pause_clear_and_emergency_stop(tmp_path):
+    db_path = tmp_path / "gaze_safety_test.db"
+    app = create_app(db_path=db_path, auto_start_workers=False)
+
+    with TestClient(app) as client:
+        cal_head = client.post(
+            "/api/calibrate",
+            json={
+                "mode": "head",
+                "source": "head",
+                "profile_name": "head-test",
+                "poses": {
+                    "center": [0.0, 0.3],
+                    "left": [-0.2, 0.3],
+                    "right": [0.2, 0.3],
+                    "up": [0.0, 0.15],
+                    "down": [0.0, 0.45],
+                },
+            },
+        )
+        assert cal_head.status_code == 200
+        assert client.get("/api/health").json()["calibrated"] is True
+
+        paused = client.post("/api/gaze/pause", json={"paused": True})
+        assert paused.status_code == 200
+        assert paused.json()["paused"] is True
+
+        resumed = client.post("/api/gaze/pause", json={"paused": False})
+        assert resumed.status_code == 200
+        assert resumed.json()["paused"] is False
+
+        cleared = client.post("/api/gaze/clear-calibration")
+        assert cleared.status_code == 200
+        assert cleared.json()["calibrated"] is False
+        assert client.get("/api/health").json()["calibrated"] is False
+
+        client.post(
+            "/api/engine/toggle",
+            json={"gaze_control": True, "system_mouse": True},
+        )
+        stopped = client.post("/api/gaze/stop")
+        assert stopped.status_code == 200
+        body = stopped.json()
+        assert body["camera_running"] is False
+        assert body["settings"]["gaze_control"] is False
+        assert body["settings"]["system_mouse"] is False
+
+    # Even if active previously, reboot must not auto-start gaze_control or system_mouse.
+    app2 = create_app(db_path=db_path, auto_start_workers=False)
+    with TestClient(app2) as client2:
+        client2.post("/api/engine/toggle", json={"gaze_control": True, "system_mouse": True})
+
+    app3 = create_app(db_path=db_path, auto_start_workers=False)
+    with TestClient(app3) as client3:
+        reloaded = client3.get("/api/settings").json()
+        assert reloaded["gaze_control"] is False
+        assert reloaded["system_mouse"] is False

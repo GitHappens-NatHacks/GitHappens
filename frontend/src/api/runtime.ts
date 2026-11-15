@@ -46,7 +46,7 @@ export async function resolveTelemetryWsUrl(): Promise<string> {
   }
   const tauriPort = await resolveTauriBackendPort();
   if (tauriPort !== null) {
-    return `ws://127.0.0.1:${tauriPort}/ws/telemetry?hz=25`;
+    return `ws://127.0.0.1:${tauriPort}/ws/telemetry?hz=30`;
   }
-  return "ws://localhost:8000/ws/telemetry?hz=25";
+  return "ws://localhost:8000/ws/telemetry?hz=30";
 }

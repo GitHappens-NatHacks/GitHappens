@@ -210,11 +210,11 @@ export function AppointmentPlayground({
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    ctx.fillStyle = "#FAF7F0";
+    ctx.fillStyle = "#F5F5F7";
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
     // Subtle calibration dot matrix background
-    ctx.fillStyle = "rgba(92, 110, 102, 0.3)";
+    ctx.fillStyle = "rgba(71, 85, 105, 0.25)";
     for (let gx = 20; gx < CANVAS_W; gx += 30) {
       for (let gy = 20; gy < CANVAS_H; gy += 30) {
         ctx.beginPath();
@@ -248,23 +248,23 @@ export function AppointmentPlayground({
           target.height + paddingPx * 2,
           8
         );
-        ctx.fillStyle = isCandidate ? "#CFE5DA" : "#E3EFE9";
+        ctx.fillStyle = isCandidate ? "#BFDBFE" : "#E8F0FE";
         ctx.fill();
         ctx.setLineDash([7, 5]);
-        ctx.strokeStyle = isExpected ? "#014A35" : "#3D4C46";
+        ctx.strokeStyle = isExpected ? "#0F2D59" : "#42526E";
         ctx.lineWidth = isCandidate ? 2.5 : 1.75;
         ctx.stroke();
         ctx.restore();
       }
 
-      drawRoundedRect(ctx, target.x, target.y, target.width, target.height, 6);
-      ctx.fillStyle = isExpected ? "#014A35" : "#FFFFFF";
+      drawRoundedRect(ctx, target.x, target.y, target.width, target.height, 8);
+      ctx.fillStyle = isExpected ? "#0F2D59" : "#FFFFFF";
       ctx.fill();
-      ctx.strokeStyle = isCandidate ? "#01305A" : isExpected ? "#013828" : "#5C6E66";
-      ctx.lineWidth = isCandidate ? 3.5 : 2;
+      ctx.strokeStyle = isCandidate ? "#1D4ED8" : isExpected ? "#0A1F3F" : "#64748B";
+      ctx.lineWidth = isCandidate ? 3.5 : 1.75;
       ctx.stroke();
 
-      ctx.fillStyle = isExpected ? "#FFFFFF" : "#16201C";
+      ctx.fillStyle = isExpected ? "#FFFFFF" : "#0B1324";
       ctx.font = "bold 16px -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -313,13 +313,13 @@ export function AppointmentPlayground({
 
       ctx.beginPath();
       ctx.arc(rx, ry, 10, 0, Math.PI * 2);
-      ctx.strokeStyle = "#8C2113";
+      ctx.strokeStyle = "#9F1239";
       ctx.lineWidth = 3;
       ctx.stroke();
 
       ctx.beginPath();
       ctx.arc(sx, sy, 7, 0, Math.PI * 2);
-      ctx.fillStyle = "#014A35";
+      ctx.fillStyle = "#1D4ED8";
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2.5;

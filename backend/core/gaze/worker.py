@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 
-PREVIEW_WIDTH = 320
+PREVIEW_WIDTH = 420
 
 
 class GazeWorker:

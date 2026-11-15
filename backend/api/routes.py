@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from backend.api.schemas import (
     CalibrateRequest,
@@ -97,6 +101,72 @@ def toggle_engine(payload: EngineToggleRequest, request: Request) -> EngineToggl
         settings=SettingsPayload(**result["settings"]),
         camera_running=result["camera_running"],
         steadyhand_running=result["steadyhand_running"],
+    )
+
+
+class GazePauseRequest(BaseModel):
+    paused: bool
+
+
+@router.post("/gaze/pause")
+def pause_gaze(payload: GazePauseRequest, request: Request) -> dict:
+    """Pause or resume GazeControl pointer/dwell output while keeping camera live."""
+    coord = _coordinator(request)
+    return coord.pause_gaze(payload.paused)
+
+
+@router.post("/gaze/stop", response_model=EngineToggleResponse)
+def stop_gaze_emergency(request: Request) -> EngineToggleResponse:
+    """Emergency stop for GazeControl, webcam capture, and system cursor interception."""
+    coord = _coordinator(request)
+    result = coord.emergency_stop_gaze()
+    return EngineToggleResponse(
+        settings=SettingsPayload(**result["settings"]),
+        camera_running=result["camera_running"],
+        steadyhand_running=result["steadyhand_running"],
+    )
+
+
+@router.post("/gaze/clear-calibration")
+def clear_gaze_calibration(request: Request) -> dict:
+    """Clear active gaze calibration so the cursor stops until recalibrated."""
+    coord = _coordinator(request)
+    return coord.clear_calibration()
+
+
+@router.get("/gaze/preview")
+async def gaze_preview(request: Request) -> StreamingResponse:
+    """Stream live mirrored webcam frames as MJPEG while GazeControl is running."""
+    coord = _coordinator(request)
+
+    async def frame_stream():
+        last_seq = -1
+        # Wait briefly if the worker thread is still opening the camera.
+        for _ in range(40):
+            if coord.gaze_controller.running:
+                break
+            if await request.is_disconnected():
+                return
+            await asyncio.sleep(0.05)
+
+        while coord.gaze_controller.running:
+            if await request.is_disconnected():
+                break
+            seq = coord.gaze_controller._frame_seq
+            if seq != last_seq:
+                jpeg = coord.gaze_controller.latest_preview_jpeg()
+                if jpeg is not None:
+                    last_seq = seq
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
+                    )
+            await asyncio.sleep(0.025)
+
+    return StreamingResponse(
+        frame_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 
 

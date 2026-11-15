@@ -164,6 +164,15 @@ class Database:
             self._conn.commit()
             return int(cur.lastrowid)
 
+    def deactivate_calibration(self, source: str) -> None:
+        """Mark all calibration profiles for `source` inactive."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE calibration_profiles SET is_active = 0 WHERE source = ?",
+                (source,),
+            )
+            self._conn.commit()
+
     def get_active_calibration(self, source: str | None = None) -> dict[str, Any] | None:
         with self._lock:
             if source is not None:

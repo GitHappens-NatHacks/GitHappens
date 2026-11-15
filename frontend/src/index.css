@@ -1,20 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --tc-bg: #FAF7F0;
+  --tc-bg: #F5F5F7;
   --tc-surface: #FFFFFF;
-  --tc-surface-alt: #F0ECE0;
-  --tc-mint: #E3EFE9;
-  --tc-ink: #16201C;
-  --tc-ink-muted: #3D4C46;
-  --tc-primary: #014A35;
-  --tc-primary-hover: #013828;
+  --tc-surface-alt: #EBEEF5;
+  --tc-mint: #E8F0FE;
+  --tc-ink: #0B1324;
+  --tc-ink-muted: #42526E;
+  --tc-primary: #0F2D59;
+  --tc-primary-hover: #0A1F3F;
+  --tc-accent: #1D4ED8;
   --tc-on-primary: #FFFFFF;
-  --tc-focus: #01305A;
-  --tc-alert: #8C2113;
-  --tc-alert-bg: #FDF1EE;
-  --tc-border: #C7D3CC;
-  --tc-border-strong: #5C6E66;
+  --tc-focus: #1D4ED8;
+  --tc-alert: #9F1239;
+  --tc-alert-bg: #FFF1F2;
+  --tc-warn: #854D0E;
+  --tc-warn-bg: #FEFCE8;
+  --tc-border: #D5DCE6;
+  --tc-border-strong: #475569;
+  --tc-shadow: 0 2px 12px rgba(11, 19, 36, 0.05), 0 1px 2px rgba(11, 19, 36, 0.04);
+  --tc-shadow-lg: 0 12px 32px rgba(11, 19, 36, 0.08), 0 2px 6px rgba(11, 19, 36, 0.04);
 }
 
 * {

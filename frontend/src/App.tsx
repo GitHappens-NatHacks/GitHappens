@@ -4,11 +4,14 @@ import {
   fetchSystemPermissions,
   promptSystemPermissions,
   saveSettings,
+  stopGazeEmergency,
   toggleEngine,
 } from "./api/client";
+import { resolveApiBaseUrl } from "./api/runtime";
 import { AppointmentPlayground } from "./components/AppointmentPlayground";
 import { CalibrationWizard } from "./components/CalibrationWizard";
 import { ControlDeck } from "./components/ControlDeck";
+import { GazeCursorOverlay } from "./components/GazeCursorOverlay";
 import { HomeOverview } from "./components/HomeOverview";
 import { SensitivityPanel } from "./components/SensitivityPanel";
 import { SessionHistory } from "./components/SessionHistory";
@@ -155,6 +158,56 @@ export function App() {
     }
   };
 
+  const handleEmergencyStopGaze = useCallback(async () => {
+    setBusy(true);
+    setApiError(null);
+    try {
+      const response = await stopGazeEmergency();
+      setSettings(response.settings);
+    } catch {
+      // ignore offline errors on emergency stop
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const anyGazeActive = Boolean(
+    settings.gaze_control || settings.system_mouse || frame?.gaze.running
+  );
+
+  // Global Escape key stops GazeCam & releases system mouse outside calibration.
+  useEffect(() => {
+    if (!anyGazeActive || calibrating) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        void handleEmergencyStopGaze();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [anyGazeActive, calibrating, handleEmergencyStopGaze]);
+
+  // Ensure closing or navigating away from the browser tab stops camera + cursor control.
+  useEffect(() => {
+    if (!anyGazeActive) {
+      return;
+    }
+    const onPageHide = () => {
+      void resolveApiBaseUrl().then((base) => {
+        void fetch(`${base}/api/gaze/stop`, {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        }).catch(() => undefined);
+      });
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [anyGazeActive]);
+
   const handleSaveSettings = async (updates: SettingsUpdate) => {
     setBusy(true);
     setApiError(null);
@@ -216,6 +269,8 @@ export function App() {
         onStartCalibration={() => setCalibrating(true)}
         connectionState={connectionState}
         onReconnect={reconnect}
+        gazeActive={anyGazeActive}
+        onStopGaze={() => void handleEmergencyStopGaze()}
       />
 
       <main className="mx-auto max-w-6xl px-6 py-8">
@@ -328,6 +383,7 @@ export function App() {
       {calibrating && (
         <CalibrationWizard
           initialSource={settings.gaze_source}
+          initialMode={settings.gaze_source === "head" ? "head_poses" : "5pt"}
           screenWidth={settings.screen_width}
           screenHeight={settings.screen_height}
           frame={frame}
@@ -335,6 +391,8 @@ export function App() {
           onCompleted={handleCalibrationComplete}
         />
       )}
+
+      {!calibrating && <GazeCursorOverlay frame={frame} settings={settings} />}
     </div>
   );
 }

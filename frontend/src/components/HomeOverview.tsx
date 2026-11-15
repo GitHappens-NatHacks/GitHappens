@@ -36,10 +36,10 @@ function SafePhoto({ src, alt, fallbackTitle }: SafePhotoProps) {
         className="flex h-full min-h-[240px] w-full flex-col items-center justify-center rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 text-center"
       >
         <svg viewBox="0 0 180 110" className="h-28 w-44" aria-hidden="true">
-          <rect x="8" y="8" width="164" height="94" rx="8" fill="#FFFFFF" stroke="#014A35" strokeWidth="3" />
-          <circle cx="58" cy="55" r="24" fill="#E3EFE9" stroke="#014A35" strokeWidth="2.5" strokeDasharray="5 4" />
-          <circle cx="58" cy="55" r="9" fill="#014A35" />
-          <path d="M98 44H152M98 62H138" stroke="#16201C" strokeWidth="5" strokeLinecap="round" />
+          <rect x="8" y="8" width="164" height="94" rx="10" fill="#FFFFFF" stroke="#0F2D59" strokeWidth="2.5" />
+          <circle cx="58" cy="55" r="24" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="2.5" strokeDasharray="5 4" />
+          <circle cx="58" cy="55" r="9" fill="#0F2D59" />
+          <path d="M98 44H152M98 62H138" stroke="#0B1324" strokeWidth="5" strokeLinecap="round" />
         </svg>
         <p className="mt-3 text-base font-bold text-[var(--tc-ink)]">{fallbackTitle}</p>
       </div>
@@ -147,7 +147,7 @@ export function HomeOverview({
             <button
               type="button"
               onClick={onStartStabilizing}
-              className="inline-flex min-h-14 items-center gap-3 rounded-lg bg-[var(--tc-primary)] px-7 text-lg font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+              className="inline-flex min-h-14 items-center gap-3 rounded-xl bg-[var(--tc-primary)] px-7 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-[var(--tc-primary-hover)]"
             >
               <span>{stabilizationActive ? "Open Control Deck" : "Start Stabilizing"}</span>
               <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -156,7 +156,7 @@ export function HomeOverview({
             <button
               type="button"
               onClick={onOpenPlayground}
-              className="inline-flex min-h-14 items-center gap-3 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 text-base font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+              className="inline-flex min-h-14 items-center gap-3 rounded-xl border border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-6 text-base font-semibold text-[var(--tc-ink)] shadow-sm transition-colors hover:bg-[var(--tc-mint)]"
             >
               <span>Try Sandbox Playground</span>
             </button>
@@ -173,7 +173,7 @@ export function HomeOverview({
       </section>
 
       {/* Who It's For */}
-      <section className="grid grid-cols-1 items-center gap-8 rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 lg:grid-cols-12 lg:p-8">
+      <section className="grid grid-cols-1 items-center gap-8 rounded-xl border border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 shadow-[var(--tc-shadow)] lg:grid-cols-12 lg:p-8">
         <div className="lg:col-span-5">
           <SafePhoto
             src="https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=900&q=80"
@@ -234,27 +234,27 @@ export function HomeOverview({
                   </div>
                 </div>
 
-                <div className="rounded-md border border-[var(--tc-border)] bg-[var(--tc-surface)] p-3 md:col-span-4">
+                <div className="rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-3 shadow-xs md:col-span-4">
                   <svg viewBox="0 0 220 56" className="h-12 w-full" aria-hidden="true">
                     {item.diagram === "hitbox" ? (
                       <>
-                        <rect x="64" y="10" width="92" height="36" rx="6" fill="#E3EFE9" stroke="#014A35" strokeWidth="1.5" strokeDasharray="5 3" />
-                        <rect x="82" y="18" width="56" height="20" rx="4" fill="#014A35" />
-                        <circle cx="72" cy="28" r="6" fill="none" stroke="#8C2113" strokeWidth="2.5" />
-                        <circle cx="96" cy="28" r="5" fill="#014A35" />
+                        <rect x="64" y="10" width="92" height="36" rx="6" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="1.5" strokeDasharray="5 3" />
+                        <rect x="82" y="18" width="56" height="20" rx="4" fill="#0F2D59" />
+                        <circle cx="72" cy="28" r="6" fill="none" stroke="#9F1239" strokeWidth="2.5" />
+                        <circle cx="96" cy="28" r="5" fill="#1D4ED8" />
                       </>
                     ) : item.diagram === "freeze" ? (
                       <>
-                        <circle cx="52" cy="28" r="14" fill="#E3EFE9" stroke="#014A35" strokeWidth="2" />
-                        <circle cx="52" cy="28" r="5" fill="#014A35" />
-                        <path d="M72 28C96 14 114 42 140 28" stroke="#8C2113" strokeWidth="2.5" fill="none" strokeDasharray="4 3" />
-                        <rect x="148" y="16" width="54" height="24" rx="4" fill="#014A35" />
+                        <circle cx="52" cy="28" r="14" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="2" />
+                        <circle cx="52" cy="28" r="5" fill="#0F2D59" />
+                        <path d="M72 28C96 14 114 42 140 28" stroke="#9F1239" strokeWidth="2.5" fill="none" strokeDasharray="4 3" />
+                        <rect x="148" y="16" width="54" height="24" rx="4" fill="#0F2D59" />
                       </>
                     ) : (
                       <>
-                        <path d="M16 38Q52 16 88 30T156 20T204 28" stroke="#014A35" strokeWidth="3" fill="none" />
-                        <circle cx="88" cy="30" r="5" fill="#014A35" />
-                        <circle cx="156" cy="20" r="5" fill="#8C2113" />
+                        <path d="M16 38Q52 16 88 30T156 20T204 28" stroke="#1D4ED8" strokeWidth="3" fill="none" />
+                        <circle cx="88" cy="30" r="5" fill="#0F2D59" />
+                        <circle cx="156" cy="20" r="5" fill="#9F1239" />
                       </>
                     )}
                   </svg>

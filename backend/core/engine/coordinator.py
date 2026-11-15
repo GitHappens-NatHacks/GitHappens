@@ -75,12 +75,20 @@ class EngineCoordinator:
         self.db = db or Database()
         self.adaptive = AdaptiveEngine()
         self.settings = self.db.load_settings()
+        # Never boot directly into active cursor interception or head tracking from a prior crash/session.
+        if self.settings.gaze_control or self.settings.system_mouse:
+            self.settings = self.db.save_settings(
+                AccessibilitySettings.from_dict(
+                    {**self.settings.as_dict(), "gaze_control": False, "system_mouse": False}
+                )
+            )
 
         self.steady_worker = steady_worker or SteadyHandWorker()
         self.gaze_controller = gaze_controller or GazeController(
             screen_rect=ScreenRect(
                 0, 0, self.settings.screen_width, self.settings.screen_height
-            )
+            ),
+            on_exit_requested=self.emergency_stop_gaze,
         )
 
         self._restore_calibration()
@@ -196,7 +204,10 @@ class EngineCoordinator:
 
             camera_started = self.gaze_controller.running
             if camera is True:
-                camera_started = self.gaze_controller.start(camera_index=camera_index)
+                camera_started = self.gaze_controller.start(
+                    camera_index=camera_index,
+                    preview=True,
+                )
             elif camera is False:
                 self.gaze_controller.stop()
                 camera_started = False
@@ -206,6 +217,33 @@ class EngineCoordinator:
                 "camera_running": camera_started,
                 "steadyhand_running": self.steady_worker.running,
             }
+
+    def emergency_stop_gaze(self) -> dict[str, Any]:
+        """Immediately stop camera tracking, disable gaze_control, and release system mouse."""
+        with self._lock:
+            self.gaze_controller.paused = False
+            self.gaze_controller.stop()
+            self.gaze_controller.set_system_mouse(False)
+            self.update_settings({"gaze_control": False, "system_mouse": False})
+            return {
+                "settings": self.settings.as_dict(),
+                "camera_running": False,
+                "steadyhand_running": self.steady_worker.running,
+            }
+
+    def pause_gaze(self, paused: bool) -> dict[str, Any]:
+        """Freeze gaze dwell/cursor output while keeping live raw landmarks flowing (for calibration)."""
+        with self._lock:
+            self.gaze_controller.paused = bool(paused)
+            return {"paused": self.gaze_controller.paused}
+
+    def clear_calibration(self) -> dict[str, Any]:
+        """Clear in-memory and active SQLite calibration for the current gaze source."""
+        with self._lock:
+            source = self.gaze_controller.source
+            self.gaze_controller.clear_calibration()
+            self.db.deactivate_calibration(source)
+            return {"calibrated": False, "source": source}
 
     def calibrate_dots(
         self,
