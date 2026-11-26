@@ -83,7 +83,7 @@ fn sync_tray_state(
             });
             let _ = item.set_text(label);
         }
-    }
+    };
 }
 
 #[tauri::command]
@@ -120,6 +120,7 @@ fn update_global_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<boo
 
 #[tauri::command]
 fn open_permission_settings(target: String) -> bool {
+    #[allow(unused_variables)]
     let key = target.trim().to_ascii_lowercase();
     #[cfg(target_os = "macos")]
     {
@@ -216,7 +217,7 @@ fn set_tray_status_label(app: &tauri::AppHandle, label: &str) {
         if let Some(item) = guard.as_ref() {
             let _ = item.set_text(label);
         }
-    }
+    };
 }
 
 fn trigger_stabilization_toggle(app: &tauri::AppHandle) {

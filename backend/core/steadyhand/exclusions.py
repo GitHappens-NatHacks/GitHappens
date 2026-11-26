@@ -121,6 +121,8 @@ class ActiveAppMonitor:
             return self._matched_rule
 
     def start(self) -> None:
+        if sys.platform != "darwin" and not sys.platform.startswith("win"):
+            return
         with self._lock:
             if not self._excluded_apps:
                 return

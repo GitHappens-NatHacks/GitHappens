@@ -177,6 +177,7 @@ def test_per_app_exclusions_bypass_stabilization():
 
     worker = SteadyHandWorker()
     worker.configure(enabled=True, excluded_apps=["Figma"])
+    worker.app_monitor.stop()
     worker.app_monitor.update_active_app("Figma")
     worker._interceptor._mode = "quartz_cgeventtap"
     worker._interceptor._set_event_info({"button": "left", "modifiers": set()})
