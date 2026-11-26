@@ -123,6 +123,46 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_clinical_events_ts
                 ON clinical_events (timestamp DESC);
+
+                CREATE TABLE IF NOT EXISTS motor_checkins (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    timestamp REAL NOT NULL,
+                    context_tag TEXT NOT NULL DEFAULT 'routine',
+                    duration_sec REAL NOT NULL DEFAULT 0.0,
+                    overall_score REAL NOT NULL,
+                    hold_stability_score REAL NOT NULL,
+                    hold_rms_px REAL NOT NULL DEFAULT 0.0,
+                    hold_rms_mm REAL NOT NULL DEFAULT 0.0,
+                    hold_dominant_hz REAL,
+                    hold_resting_band_pct REAL NOT NULL DEFAULT 0.0,
+                    hold_action_band_pct REAL NOT NULL DEFAULT 0.0,
+                    hold_tremor_index REAL NOT NULL DEFAULT 0.0,
+                    tap_count INTEGER NOT NULL DEFAULT 0,
+                    tap_accuracy_pct REAL,
+                    tap_mean_error_px REAL,
+                    tap_mean_reaction_ms REAL,
+                    notes TEXT NOT NULL DEFAULT ''
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_motor_checkins_ts
+                ON motor_checkins (timestamp DESC);
+
+                CREATE TABLE IF NOT EXISTS keyboard_cadence (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    timestamp REAL NOT NULL,
+                    sample_count INTEGER NOT NULL,
+                    mean_hold_ms REAL NOT NULL,
+                    std_hold_ms REAL NOT NULL,
+                    mean_flight_ms REAL NOT NULL,
+                    std_flight_ms REAL NOT NULL,
+                    typing_cadence_kpm REAL NOT NULL,
+                    rhythm_regularity_score REAL NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_keyboard_cadence_ts
+                ON keyboard_cadence (timestamp DESC);
                 """
             )
             existing_cols = {
@@ -452,6 +492,186 @@ class Database:
             self._conn.commit()
             return cur.rowcount > 0
 
+    def record_motor_checkin(
+        self,
+        *,
+        session_id: str,
+        scored: dict[str, Any],
+        timestamp: float | None = None,
+    ) -> dict[str, Any]:
+        ts = float(time.time() if timestamp is None else timestamp)
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                INSERT INTO motor_checkins (
+                    session_id, timestamp, context_tag, duration_sec,
+                    overall_score, hold_stability_score,
+                    hold_rms_px, hold_rms_mm, hold_dominant_hz,
+                    hold_resting_band_pct, hold_action_band_pct, hold_tremor_index,
+                    tap_count, tap_accuracy_pct, tap_mean_error_px, tap_mean_reaction_ms,
+                    notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    ts,
+                    str(scored.get("context_tag", "routine"))[:40],
+                    float(scored.get("duration_sec", 0.0)),
+                    float(scored["overall_score"]),
+                    float(scored["hold_stability_score"]),
+                    float(scored.get("hold_rms_px", 0.0)),
+                    float(scored.get("hold_rms_mm", 0.0)),
+                    float(scored["hold_dominant_hz"]) if scored.get("hold_dominant_hz") is not None else None,
+                    float(scored.get("hold_resting_band_pct", 0.0)),
+                    float(scored.get("hold_action_band_pct", 0.0)),
+                    float(scored.get("hold_tremor_index", 0.0)),
+                    int(scored.get("tap_count", 0)),
+                    float(scored["tap_accuracy_pct"]) if scored.get("tap_accuracy_pct") is not None else None,
+                    float(scored["tap_mean_error_px"]) if scored.get("tap_mean_error_px") is not None else None,
+                    float(scored["tap_mean_reaction_ms"]) if scored.get("tap_mean_reaction_ms") is not None else None,
+                    str(scored.get("notes", ""))[:400],
+                ),
+            )
+            self._conn.commit()
+            checkin_id = int(cur.lastrowid)
+        return {
+            "id": checkin_id,
+            "session_id": session_id,
+            "timestamp": ts,
+            **scored,
+        }
+
+    def list_motor_checkins(self, *, days: int = 30, limit: int = 100) -> list[dict[str, Any]]:
+        cutoff = time.time() - max(1, int(days)) * 86400.0
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT * FROM motor_checkins
+                WHERE timestamp >= ?
+                ORDER BY timestamp DESC, id DESC
+                LIMIT ?
+                """,
+                (cutoff, max(1, int(limit))),
+            ).fetchall()
+            return [
+                {
+                    "id": r["id"],
+                    "session_id": r["session_id"],
+                    "timestamp": r["timestamp"],
+                    "context_tag": r["context_tag"],
+                    "duration_sec": r["duration_sec"],
+                    "overall_score": r["overall_score"],
+                    "hold_stability_score": r["hold_stability_score"],
+                    "hold_rms_px": r["hold_rms_px"],
+                    "hold_rms_mm": r["hold_rms_mm"],
+                    "hold_dominant_hz": r["hold_dominant_hz"],
+                    "hold_resting_band_pct": r["hold_resting_band_pct"],
+                    "hold_action_band_pct": r["hold_action_band_pct"],
+                    "hold_tremor_index": r["hold_tremor_index"],
+                    "tap_count": r["tap_count"],
+                    "tap_accuracy_pct": r["tap_accuracy_pct"],
+                    "tap_mean_error_px": r["tap_mean_error_px"],
+                    "tap_mean_reaction_ms": r["tap_mean_reaction_ms"],
+                    "notes": r["notes"],
+                }
+                for r in rows
+            ]
+
+    def delete_motor_checkin(self, checkin_id: int) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM motor_checkins WHERE id = ?",
+                (int(checkin_id),),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def record_keyboard_cadence(
+        self,
+        *,
+        session_id: str,
+        window: dict[str, Any],
+    ) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                INSERT INTO keyboard_cadence (
+                    session_id, timestamp, sample_count,
+                    mean_hold_ms, std_hold_ms,
+                    mean_flight_ms, std_flight_ms,
+                    typing_cadence_kpm, rhythm_regularity_score
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    float(window.get("timestamp", time.time())),
+                    int(window["sample_count"]),
+                    float(window["mean_hold_ms"]),
+                    float(window["std_hold_ms"]),
+                    float(window["mean_flight_ms"]),
+                    float(window["std_flight_ms"]),
+                    float(window["typing_cadence_kpm"]),
+                    float(window["rhythm_regularity_score"]),
+                ),
+            )
+            self._conn.commit()
+            return int(cur.lastrowid)
+
+    def get_keyboard_cadence(self, *, days: int = 30, limit: int = 100) -> dict[str, Any]:
+        cutoff = time.time() - max(1, int(days)) * 86400.0
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT * FROM keyboard_cadence
+                WHERE timestamp >= ?
+                ORDER BY timestamp DESC, id DESC
+                LIMIT ?
+                """,
+                (cutoff, max(1, int(limit))),
+            ).fetchall()
+            windows = [
+                {
+                    "id": r["id"],
+                    "session_id": r["session_id"],
+                    "timestamp": r["timestamp"],
+                    "sample_count": r["sample_count"],
+                    "mean_hold_ms": r["mean_hold_ms"],
+                    "std_hold_ms": r["std_hold_ms"],
+                    "mean_flight_ms": r["mean_flight_ms"],
+                    "std_flight_ms": r["std_flight_ms"],
+                    "typing_cadence_kpm": r["typing_cadence_kpm"],
+                    "rhythm_regularity_score": r["rhythm_regularity_score"],
+                }
+                for r in rows
+            ]
+            if windows:
+                total_keys = sum(w["sample_count"] for w in windows)
+                summary = {
+                    "window_count": len(windows),
+                    "total_keystrokes": total_keys,
+                    "avg_hold_ms": round(sum(w["mean_hold_ms"] for w in windows) / len(windows), 2),
+                    "avg_flight_ms": round(sum(w["mean_flight_ms"] for w in windows) / len(windows), 2),
+                    "avg_cadence_kpm": round(sum(w["typing_cadence_kpm"] for w in windows) / len(windows), 1),
+                    "avg_regularity_score": round(
+                        sum(w["rhythm_regularity_score"] for w in windows) / len(windows), 2
+                    ),
+                }
+            else:
+                summary = {
+                    "window_count": 0,
+                    "total_keystrokes": 0,
+                    "avg_hold_ms": 0.0,
+                    "avg_flight_ms": 0.0,
+                    "avg_cadence_kpm": 0.0,
+                    "avg_regularity_score": 0.0,
+                }
+            return {
+                "summary": summary,
+                "windows": windows,
+            }
+
     def get_session_summaries(
         self,
         *,
@@ -527,6 +747,7 @@ class Database:
                 SELECT
                     CAST(strftime('%H', timestamp, 'unixepoch', 'localtime') AS INTEGER) AS hour_of_day,
                     COUNT(*) AS sample_count,
+                    COUNT(DISTINCT CAST(timestamp / 60 AS INTEGER)) AS active_minutes,
                     ROUND(AVG(stability_score), 2) AS avg_stability_score,
                     ROUND(AVG(tremor_index), 2) AS avg_tremor_index,
                     ROUND(AVG(resting_band_pct), 2) AS avg_resting_band_pct,
@@ -539,6 +760,28 @@ class Database:
                 """,
                 (cutoff_ts,),
             ).fetchall()
+
+            active_min_row = self._conn.execute(
+                f"""
+                SELECT COUNT(DISTINCT CAST(timestamp / 60 AS INTEGER)) AS total_active_minutes
+                FROM tremor_history
+                WHERE timestamp >= ?{sim_filter}
+                """,
+                (cutoff_ts,),
+            ).fetchone()
+            total_active_minutes = int(active_min_row["total_active_minutes"] or 0) if active_min_row else 0
+
+            checkin_cnt_row = self._conn.execute(
+                "SELECT COUNT(*) AS cnt FROM motor_checkins WHERE timestamp >= ?",
+                (cutoff_ts,),
+            ).fetchone()
+            checkin_count = int(checkin_cnt_row["cnt"] or 0) if checkin_cnt_row else 0
+
+            cadence_cnt_row = self._conn.execute(
+                "SELECT COUNT(*) AS cnt FROM keyboard_cadence WHERE timestamp >= ?",
+                (cutoff_ts,),
+            ).fetchone()
+            cadence_window_count = int(cadence_cnt_row["cnt"] or 0) if cadence_cnt_row else 0
 
             sessions = [
                 {
@@ -583,6 +826,8 @@ class Database:
                     "hour": int(r["hour_of_day"]),
                     "label": f"{int(r['hour_of_day']):02d}:00",
                     "sample_count": r["sample_count"],
+                    "active_minutes": int(r["active_minutes"] or 0),
+                    "has_data": True,
                     "avg_stability_score": r["avg_stability_score"],
                     "avg_tremor_index": r["avg_tremor_index"],
                     "avg_resting_band_pct": r["avg_resting_band_pct"] or 0.0,
@@ -591,6 +836,39 @@ class Database:
                 }
                 for r in hourly_rows
             ]
+
+            hourly_by_hour = {entry["hour"]: entry for entry in hourly_profile}
+            hourly_grid = [
+                hourly_by_hour[h]
+                if h in hourly_by_hour
+                else {
+                    "hour": h,
+                    "label": f"{h:02d}:00",
+                    "sample_count": 0,
+                    "active_minutes": 0,
+                    "has_data": False,
+                    "avg_stability_score": None,
+                    "avg_tremor_index": None,
+                    "avg_resting_band_pct": None,
+                    "avg_action_band_pct": None,
+                    "avg_rms_amplitude_mm": None,
+                }
+                for h in range(24)
+            ]
+
+            coverage_summary = {
+                "telemetry_scope": "functional_computer_use",
+                "scope_description": (
+                    "Passive functional motor telemetry captured during active pointer use, "
+                    "complemented by standardized 15-second motor check-ins and medication logs."
+                ),
+                "window_days": max(1, int(days)),
+                "active_days": len(daily_trends),
+                "active_hours_of_day": len(hourly_profile),
+                "total_active_minutes": total_active_minutes,
+                "checkin_count": checkin_count,
+                "keyboard_cadence_windows": cadence_window_count,
+            }
 
             total_samples = sum(s["sample_count"] for s in sessions)
             functional_summary = {
@@ -620,6 +898,8 @@ class Database:
                 "sessions": sessions,
                 "daily_trends": daily_trends,
                 "hourly_profile": hourly_profile,
+                "hourly_grid": hourly_grid,
+                "coverage_summary": coverage_summary,
                 "functional_summary": functional_summary,
                 "simulated_sample_count": simulated_sample_count,
             }

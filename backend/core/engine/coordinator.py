@@ -17,6 +17,8 @@ from backend.core.gaze.calibration import (
     head_calibration,
 )
 from backend.core.gaze.controller import GazeController, ScreenRect
+from backend.core.steadyhand.checkin import evaluate_motor_checkin
+from backend.core.steadyhand.keyboard_cadence import KeyboardCadenceMonitor
 from backend.core.steadyhand.worker import SteadyHandWorker
 from backend.db.database import Database
 
@@ -92,6 +94,11 @@ class EngineCoordinator:
 
         # Isolated worker for local canvas sandbox / practice strip (never touches OS cursor or DB).
         self.sandbox_worker = SteadyHandWorker(tick_hz=60.0)
+
+        # Opt-in timing-only keyboard cadence monitor (never inspects or stores key characters).
+        self.keyboard_monitor = KeyboardCadenceMonitor(
+            on_window_ready=self._persist_keyboard_cadence
+        )
 
         self.gaze_controller = gaze_controller or GazeController(
             screen_rect=ScreenRect(
@@ -186,6 +193,7 @@ class EngineCoordinator:
                 enabled=validated.system_mouse and effective_steady,
                 listen_os_mouse=validated.system_mouse and effective_steady,
             )
+            self.keyboard_monitor.set_enabled(validated.keyboard_cadence_telemetry)
 
             if self.gaze_controller.source != validated.gaze_source:
                 self.gaze_controller.set_source(validated.gaze_source)
@@ -398,6 +406,31 @@ class EngineCoordinator:
             preset_name=self.settings.profile,
         )
 
+    def _persist_keyboard_cadence(self, window: dict[str, Any]) -> None:
+        self.db.record_keyboard_cadence(session_id=self.session_id, window=window)
+
+    def record_motor_checkin(
+        self,
+        *,
+        hold_samples: list[dict[str, float]],
+        target_x: float,
+        target_y: float,
+        taps: list[dict[str, float]] | None = None,
+        tap_hit_radius_px: float = 28.0,
+        context_tag: str = "routine",
+        notes: str = "",
+    ) -> dict[str, Any]:
+        scored = evaluate_motor_checkin(
+            hold_samples=hold_samples,
+            target_x=target_x,
+            target_y=target_y,
+            taps=taps,
+            tap_hit_radius_px=tap_hit_radius_px,
+            context_tag=context_tag,
+            notes=notes,
+        )
+        return self.db.record_motor_checkin(session_id=self.session_id, scored=scored)
+
     def persist_pending_fft(self) -> dict | None:
         record = self.steady_worker.consume_latest_fft_record()
         if record is None:
@@ -468,11 +501,15 @@ class EngineCoordinator:
                     "smart_interface": s.smart_interface,
                     "predictive_speech": s.predictive_speech,
                     "simulate_tremor": s.simulate_tremor,
+                    "keyboard_cadence_telemetry": s.keyboard_cadence_telemetry,
                 },
+                "keyboard_cadence": self.keyboard_monitor.snapshot(),
             }
 
     def shutdown(self) -> None:
         self.gaze_controller.stop()
         self.steady_worker.stop()
         self.sandbox_worker.stop()
+        self.keyboard_monitor.flush()
+        self.keyboard_monitor.stop()
         self.db.close()

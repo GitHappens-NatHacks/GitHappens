@@ -14,6 +14,7 @@ from backend.api.schemas import (
     ClinicalEventRequest,
     EngineToggleRequest,
     EngineToggleResponse,
+    MotorCheckinRequest,
     PermissionPromptRequest,
     PointerSampleRequest,
     SettingsPayload,
@@ -215,11 +216,65 @@ def get_sessions(
     summary = coord.db.get_session_summaries(
         days=days, limit=limit, include_simulated=include_simulated
     )
+    cadence = coord.db.get_keyboard_cadence(days=days, limit=100)
     return {
         "active_session_id": coord.session_id,
         **summary,
         "clinical_events": coord.db.list_clinical_events(days=days, limit=200),
+        "motor_checkins": coord.db.list_motor_checkins(days=days, limit=100),
+        "keyboard_cadence_summary": cadence["summary"],
+        "keyboard_cadence_windows": cadence["windows"],
         "calibration_profiles": coord.db.list_calibration_profiles(limit=10),
+    }
+
+
+@router.get("/checkins")
+def list_checkins(
+    request: Request,
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict:
+    coord = _coordinator(request)
+    checkins = coord.db.list_motor_checkins(days=days, limit=limit)
+    return {"checkins": checkins}
+
+
+@router.post("/checkins")
+def create_checkin(payload: MotorCheckinRequest, request: Request) -> dict:
+    coord = _coordinator(request)
+    try:
+        return coord.record_motor_checkin(
+            hold_samples=[pt.model_dump() for pt in payload.hold_samples],
+            target_x=payload.target_x,
+            target_y=payload.target_y,
+            taps=[tp.model_dump() for tp in payload.taps],
+            tap_hit_radius_px=payload.tap_hit_radius_px,
+            context_tag=payload.context_tag,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/checkins/{checkin_id}")
+def delete_checkin(checkin_id: int, request: Request) -> dict:
+    coord = _coordinator(request)
+    deleted = coord.db.delete_motor_checkin(checkin_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Motor check-in not found.")
+    return {"deleted": True, "id": checkin_id}
+
+
+@router.get("/cadence")
+def get_keyboard_cadence(
+    request: Request,
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict:
+    coord = _coordinator(request)
+    return {
+        "enabled": coord.settings.keyboard_cadence_telemetry,
+        **coord.db.get_keyboard_cadence(days=days, limit=limit),
     }
 
 

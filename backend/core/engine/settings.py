@@ -50,6 +50,7 @@ class AccessibilitySettings:
     global_shortcut: str = "CommandOrControl+Shift+S"
     resume_stabilization_on_launch: bool = False
     minimize_to_tray: bool = True
+    keyboard_cadence_telemetry: bool = False
     system_mouse: bool = False
     gaze_source: str = "head"
     gaze_dwell_ms: int = 1100
@@ -121,6 +122,7 @@ class AccessibilitySettings:
         self.global_shortcut = shortcut[:64] if shortcut else "CommandOrControl+Shift+S"
         self.resume_stabilization_on_launch = bool(self.resume_stabilization_on_launch)
         self.minimize_to_tray = bool(self.minimize_to_tray)
+        self.keyboard_cadence_telemetry = bool(self.keyboard_cadence_telemetry)
 
         self.gaze_dwell_ms = max(600, min(2000, int(self.gaze_dwell_ms)))
         self.target_size_pct = max(100, min(200, int(self.target_size_pct)))
