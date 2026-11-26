@@ -1,4 +1,4 @@
-"""SQLite persistence package for TrueCursor backend."""
+"""SQLite persistence package for ClearCursor backend."""
 
 from backend.db.database import Database
 

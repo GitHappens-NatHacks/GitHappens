@@ -12,14 +12,19 @@ from backend.db.database import default_user_db_path
 
 def test_default_user_db_path_honors_env_and_frozen(monkeypatch, tmp_path: Path):
     explicit = tmp_path / "custom.db"
-    monkeypatch.setenv("TRUECURSOR_DB_PATH", str(explicit))
+    monkeypatch.setenv("CLEARCURSOR_DB_PATH", str(explicit))
     assert default_user_db_path() == explicit
+
+    monkeypatch.delenv("CLEARCURSOR_DB_PATH", raising=False)
+    legacy = tmp_path / "legacy.db"
+    monkeypatch.setenv("TRUECURSOR_DB_PATH", str(legacy))
+    assert default_user_db_path() == legacy
 
     monkeypatch.delenv("TRUECURSOR_DB_PATH", raising=False)
     monkeypatch.setattr(sidecar_main.sys, "frozen", True, raising=False)
     frozen_path = default_user_db_path()
-    assert frozen_path.name == "truecursor.db"
-    assert "TrueCursor" in str(frozen_path)
+    assert frozen_path.name == "clearcursor.db"
+    assert "ClearCursor" in str(frozen_path)
 
 
 def test_sidecar_bind_local_socket_falls_back_when_port_occupied():

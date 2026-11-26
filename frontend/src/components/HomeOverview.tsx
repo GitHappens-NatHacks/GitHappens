@@ -9,7 +9,6 @@ import {
   MousePointerClick,
   ShieldCheck,
 } from "lucide-react";
-import { useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 
 interface HomeOverviewProps {
@@ -19,41 +18,45 @@ interface HomeOverviewProps {
   onOpenControlDeck: () => void;
 }
 
-interface SafePhotoProps {
-  src: string;
-  alt: string;
-  fallbackTitle: string;
-}
-
-function SafePhoto({ src, alt, fallbackTitle }: SafePhotoProps) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    return (
-      <div
-        role="img"
-        aria-label={alt}
-        className="flex h-full min-h-[240px] w-full flex-col items-center justify-center rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 text-center"
-      >
-        <svg viewBox="0 0 180 110" className="h-28 w-44" aria-hidden="true">
-          <rect x="8" y="8" width="164" height="94" rx="10" fill="#FFFFFF" stroke="#0F2D59" strokeWidth="2.5" />
-          <circle cx="58" cy="55" r="24" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="2.5" strokeDasharray="5 4" />
-          <circle cx="58" cy="55" r="9" fill="#0F2D59" />
-          <path d="M98 44H152M98 62H138" stroke="#0B1324" strokeWidth="5" strokeLinecap="round" />
-        </svg>
-        <p className="mt-3 text-base font-bold text-[var(--tc-ink)]">{fallbackTitle}</p>
-      </div>
-    );
-  }
-
+function EditorialIllustration({
+  variant,
+  title,
+  subtitle,
+}: {
+  variant: "workspace" | "caregiver";
+  title: string;
+  subtitle: string;
+}) {
   return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className="h-full min-h-[240px] w-full rounded-lg border-2 border-[var(--tc-border)] object-cover"
-    />
+    <div
+      role="img"
+      aria-label={`${title} - ${subtitle}`}
+      className="flex h-full min-h-[240px] w-full flex-col items-center justify-center rounded-xl border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6 text-center shadow-[var(--tc-shadow)]"
+    >
+      {variant === "workspace" ? (
+        <svg viewBox="0 0 260 150" className="h-36 w-full max-w-[260px]" aria-hidden="true">
+          <rect x="16" y="14" width="228" height="122" rx="14" fill="#F8FAFC" stroke="#0F2D59" strokeWidth="2.5" />
+          <path d="M36 92 C66 64, 92 108, 124 78 C150 56, 178 96, 222 64" stroke="#9F1239" strokeWidth="2.5" strokeDasharray="5 4" fill="none" />
+          <path d="M36 86 C86 78, 152 72, 222 64" stroke="#1D4ED8" strokeWidth="4" strokeLinecap="round" fill="none" />
+          <circle cx="222" cy="64" r="16" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="2.5" strokeDasharray="4 3" />
+          <circle cx="222" cy="64" r="7" fill="#0F2D59" />
+          <rect x="36" y="30" width="94" height="12" rx="6" fill="#CBD5E1" />
+          <rect x="36" y="110" width="142" height="10" rx="5" fill="#E2E8F0" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 260 150" className="h-36 w-full max-w-[260px]" aria-hidden="true">
+          <rect x="16" y="14" width="228" height="122" rx="14" fill="#FFFFFF" stroke="#0F2D59" strokeWidth="2.5" />
+          <rect x="34" y="34" width="90" height="82" rx="10" fill="#EFF6FF" stroke="#1D4ED8" strokeWidth="2" />
+          <path d="M48 92 L68 72 L86 82 L110 56" stroke="#1D4ED8" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <rect x="138" y="36" width="86" height="14" rx="5" fill="#0F2D59" />
+          <rect x="138" y="60" width="72" height="10" rx="5" fill="#94A3B8" />
+          <rect x="138" y="78" width="84" height="10" rx="5" fill="#CBD5E1" />
+          <rect x="138" y="98" width="56" height="16" rx="6" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="1.5" />
+        </svg>
+      )}
+      <p className="mt-3 text-base font-bold text-[var(--tc-ink)]">{title}</p>
+      <p className="mt-0.5 text-sm text-[var(--tc-ink-muted)]">{subtitle}</p>
+    </div>
   );
 }
 
@@ -65,8 +68,8 @@ const CHALLENGES = [
     diagram: "hitbox",
   },
   {
-    title: "Accidental File Drags & Slips",
-    body: "Natural finger tremor during a click often looks like a swipe to your computer, dragging windows or files by mistake.",
+    title: "Accidental File Drags & Double-Clicks",
+    body: "Natural finger tremor during a click often looks like a swipe or double-tap to your computer, dragging windows or bouncing clicks by mistake.",
     icon: ShieldCheck,
     diagram: "freeze",
   },
@@ -81,17 +84,17 @@ const CHALLENGES = [
 const SOLUTIONS = [
   {
     title: "Smart Tremor Smoothing",
-    body: "Filters fast 4-7 Hz involuntary hand shaking in real time while preserving your natural, intentional arm movements.",
+    body: "Filters fast 4-12 Hz involuntary hand shaking (Parkinsonian & essential tremor) in delta space while preserving natural intentional movements.",
     icon: Hand,
   },
   {
-    title: "Gentle Button Magnetism",
-    body: "Silently widens everyday macOS and Windows button boundaries and steadies the click for 180ms when you press.",
+    title: "Gentle Button Magnetism & Bounce Guard",
+    body: "Silently widens everyday button boundaries, steadies clicks for 180ms, blocks tremor double-clicks, and dampens scroll jitter.",
     icon: Magnet,
   },
   {
-    title: "Hands-Free Head & Gaze Mode",
-    body: "Turn on your webcam anytime to point cleanly with gentle head movement and select by resting still or blinking.",
+    title: "Hands-Free Gaze & Physician Reports",
+    body: "Switch to webcam head/eye pointing anytime, and export longitudinal tremor spectra and medication logs for your neurologist.",
     icon: Eye,
   },
 ];
@@ -106,13 +109,13 @@ const STEPS = [
   {
     step: "Step 2",
     title: "Move naturally in any app",
-    body: "TrueCursor runs quietly in your menu bar or system tray so browsers, email, and documents all feel calm and forgiving.",
+    body: "ClearCursor runs quietly in your menu bar or system tray so browsers, email, and documents all feel calm and forgiving.",
     icon: HeartHandshake,
   },
   {
     step: "Step 3",
-    title: "Switch modes anytime",
-    body: "Press Command+Shift+S (Mac) or Ctrl+Shift+S (Windows), or open Hands-Free Gaze whenever your hands need a rest.",
+    title: "Bypass or toggle anytime",
+    body: "Hold Alt/Option for momentary precision bypass, press Command/Ctrl+Shift+S to pause, or export reports before clinic visits.",
     icon: Eye,
   },
 ];
@@ -131,7 +134,7 @@ export function HomeOverview({
           <div className="flex items-center gap-4">
             <BrandLogo className="h-14 w-14 shrink-0" />
             <span className="text-lg font-bold text-[var(--tc-primary)]">
-              TrueCursor Assistive Desktop
+              ClearCursor Assistive Desktop
             </span>
           </div>
 
@@ -140,7 +143,7 @@ export function HomeOverview({
           </h2>
 
           <p className="max-w-2xl text-lg leading-relaxed text-[var(--tc-ink-muted)]">
-            TrueCursor works alongside every app on your computer to smooth hand tremors, prevent accidental drags, gently guide you onto small buttons, and give you reliable hands-free gaze control whenever you want it.
+            ClearCursor works silently alongside every app on macOS and Windows to smooth 4-12 Hz tremors, block accidental double-clicks and drags, magnetize small buttons, and log objective tremor telemetry for your clinician.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -164,10 +167,10 @@ export function HomeOverview({
         </div>
 
         <div className="lg:col-span-5">
-          <SafePhoto
-            src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=900&q=80"
-            alt="Person comfortably using a laptop with relaxed posture on a warm wooden desk"
-            fallbackTitle="Calm Everyday Desktop Control"
+          <EditorialIllustration
+            variant="workspace"
+            title="Calm Everyday Desktop Control"
+            subtitle="100% local delta-space tremor filtering across every app"
           />
         </div>
       </section>
@@ -175,10 +178,10 @@ export function HomeOverview({
       {/* Who It's For */}
       <section className="grid grid-cols-1 items-center gap-8 rounded-xl border border-[var(--tc-border)] bg-[var(--tc-mint)] p-6 shadow-[var(--tc-shadow)] lg:grid-cols-12 lg:p-8">
         <div className="lg:col-span-5">
-          <SafePhoto
-            src="https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=900&q=80"
-            alt="Caregiver and older adult smiling together while reviewing information comfortably at home"
-            fallbackTitle="Built for Patients & Caregivers"
+          <EditorialIllustration
+            variant="caregiver"
+            title="Built for Patients, Caregivers & Clinicians"
+            subtitle="Objective motor logs paired with medication timing"
           />
         </div>
 
@@ -190,7 +193,7 @@ export function HomeOverview({
             Modern websites and desktop apps pack dozens of tiny icons, close buttons, and links close together. You should not have to fight your mouse or miss important health portals just because your hands are shaking.
           </p>
           <p className="text-base leading-relaxed text-[var(--tc-ink-muted)]">
-            Everything in TrueCursor runs locally on your computer for complete privacy. Caregivers can help pick a preset once, save clinician progress summaries as clean PDFs, and leave daily controls simple and oversized.
+            Everything in ClearCursor runs locally on your computer with zero cloud uploads. Caregivers can set presets once, log medication times, and export neurologist-ready PDFs directly from SQLite.
           </p>
           <div className="pt-2">
             <button
@@ -205,7 +208,7 @@ export function HomeOverview({
         </div>
       </section>
 
-      {/* The Daily Challenges We Solve (Clean Horizontal Architecture) */}
+      {/* The Daily Challenges We Solve */}
       <section aria-labelledby="challenges-heading" className="space-y-6">
         <div>
           <h2 id="challenges-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
@@ -269,7 +272,7 @@ export function HomeOverview({
       <section aria-labelledby="solutions-heading" className="space-y-6">
         <div>
           <h2 id="solutions-heading" className="text-2xl font-bold text-[var(--tc-ink)]">
-            How TrueCursor Helps in Real Time
+            How ClearCursor Helps in Real Time
           </h2>
           <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
             Calm, assistive technology working quietly beneath your normal mouse or trackpad.

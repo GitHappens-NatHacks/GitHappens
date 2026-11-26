@@ -1,4 +1,4 @@
-name: TrueCursor CI
+name: ClearCursor CI
 
 on:
   push:
@@ -42,14 +42,14 @@ jobs:
 
       - name: Verify FastAPI and sidecar imports
         run: |
-          python -c "from backend.api.main import app; assert app.title == 'TrueCursor API'"
+          python -c "from backend.api.main import app; assert app.title == 'ClearCursor API'"
           python -c "import backend.sidecar_main"
 
       - name: Live sidecar HTTP smoke test
         env:
           TTS_ENABLED: "0"
           GAZE_BACKEND: "mediapipe"
-          TRUECURSOR_DB_PATH: "/tmp/truecursor-ci.db"
+          CLEARCURSOR_DB_PATH: "/tmp/clearcursor-ci.db"
         run: |
           python -m backend.sidecar_main 8123 &
           SERVER_PID=$!
@@ -68,7 +68,7 @@ jobs:
           else:
               raise SystemExit("Sidecar failed to become healthy within timeout")
 
-          for endpoint in ("/api/settings", "/api/sessions"):
+          for endpoint in ("/api/settings", "/api/sessions", "/api/events"):
               with urllib.request.urlopen(f"http://127.0.0.1:8123{endpoint}", timeout=2.0) as resp:
                   assert resp.status == 200
           PY
@@ -128,8 +128,8 @@ jobs:
       - name: Stage dummy sidecar binary for Cargo compile check
         run: |
           mkdir -p src-tauri/binaries
-          touch src-tauri/binaries/truecursor-backend-x86_64-unknown-linux-gnu
-          chmod +x src-tauri/binaries/truecursor-backend-x86_64-unknown-linux-gnu
+          touch src-tauri/binaries/clearcursor-backend-x86_64-unknown-linux-gnu
+          chmod +x src-tauri/binaries/clearcursor-backend-x86_64-unknown-linux-gnu
 
       - name: Check & test Rust Tauri crate
         run: |
@@ -175,5 +175,5 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Run TrueCursor Chrome extension tests
+      - name: Run ClearCursor Chrome extension tests
         run: npm --prefix chrome-extension test

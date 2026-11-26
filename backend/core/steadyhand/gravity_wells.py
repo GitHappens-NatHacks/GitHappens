@@ -1,8 +1,8 @@
 """OS Accessibility target detection ("gravity wells") with expanded hitboxes.
 
 Queries interactive controls via macOS Accessibility (ApplicationServices) or
-Windows UI Automation fallback, expanding effective target envelopes by 2.5x-3x
-and gently pulling slowed pointers toward nearby interactive button centers.
+Windows UI Automation fallback on a throttled background thread so the low-level
+OS mouse hook never blocks on cross-process IPC.
 """
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ def _windows_uia_probe(x: float, y: float) -> list[GravityTarget]:
 
 
 class AccessibilityGravityWells:
-    """Throttled OS Accessibility gravity-well prober and magnetic pull solver."""
+    """Async background OS Accessibility prober and non-blocking magnetic pull solver."""
 
     def __init__(
         self,
@@ -156,20 +156,82 @@ class AccessibilityGravityWells:
         expansion: float = 2.6,
         strength: float = 0.35,
         velocity_threshold_px_s: float = 420.0,
-        probe_hz: float = 40.0,
+        probe_hz: float = 30.0,
     ):
         self._lock = threading.RLock()
         self.enabled = bool(enabled)
         self.expansion = max(1.5, min(3.5, float(expansion)))
         self.strength = max(0.0, min(0.85, float(strength)))
         self.velocity_threshold_px_s = max(50.0, float(velocity_threshold_px_s))
-        self.probe_interval = 1.0 / max(10.0, min(60.0, float(probe_hz)))
+        self.probe_interval = 1.0 / max(5.0, min(60.0, float(probe_hz)))
         self._last_probe_at = 0.0
         self._cached_targets: list[GravityTarget] = []
         self._active_role: str | None = None
         self._active_center: tuple[float, float] | None = None
         self._last_pos: tuple[float, float] | None = None
         self._last_ts: float | None = None
+
+        self._probe_pos: tuple[float, float] | None = None
+        self._probe_event = threading.Event()
+        self._stop_event = threading.Event()
+        self._probe_thread: threading.Thread | None = None
+
+    def start_prober(self) -> None:
+        with self._lock:
+            if self._probe_thread is not None and self._probe_thread.is_alive():
+                return
+            self._stop_event.clear()
+            self._probe_thread = threading.Thread(
+                target=self._probe_loop,
+                name="clearcursor-ax-prober",
+                daemon=True,
+            )
+            self._probe_thread.start()
+
+    def stop_prober(self, timeout: float = 1.0) -> None:
+        self._stop_event.set()
+        self._probe_event.set()
+        with self._lock:
+            thread = self._probe_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=timeout)
+        with self._lock:
+            if self._probe_thread is thread and (thread is None or not thread.is_alive()):
+                self._probe_thread = None
+
+    def _probe_once(self, x: float, y: float) -> list[GravityTarget]:
+        if sys.platform == "darwin":
+            return _macos_ax_probe(x, y)
+        if sys.platform.startswith("win"):
+            return _windows_uia_probe(x, y)
+        return []
+
+    def _probe_loop(self) -> None:
+        while not self._stop_event.is_set():
+            triggered = self._probe_event.wait(timeout=0.25)
+            if self._stop_event.is_set():
+                break
+            self._probe_event.clear()
+            if not triggered:
+                continue
+            with self._lock:
+                if not self.enabled or self.strength <= 0.0:
+                    continue
+                pos = self._probe_pos
+                if pos is None:
+                    continue
+                now = time.perf_counter()
+                if now - self._last_probe_at < self.probe_interval:
+                    continue
+                self._last_probe_at = now
+                px, py = pos
+
+            try:
+                results = self._probe_once(px, py)
+            except Exception:
+                results = []
+            with self._lock:
+                self._cached_targets = results
 
     def configure(
         self,
@@ -184,6 +246,7 @@ class AccessibilityGravityWells:
                 if not self.enabled:
                     self._active_role = None
                     self._active_center = None
+                    self._cached_targets = []
             if strength_pct is not None:
                 self.strength = max(0.0, min(0.8, float(strength_pct) / 100.0))
             if expansion is not None:
@@ -197,16 +260,12 @@ class AccessibilityGravityWells:
                 "gravity_target_center": list(self._active_center) if self._active_center else None,
             }
 
-    def _refresh_targets_if_due(self, x: float, y: float, now: float) -> list[GravityTarget]:
-        if now - self._last_probe_at < self.probe_interval:
-            return self._cached_targets
-        self._last_probe_at = now
-        if sys.platform == "darwin":
-            self._cached_targets = _macos_ax_probe(x, y)
-        elif sys.platform.startswith("win"):
-            self._cached_targets = _windows_uia_probe(x, y)
-        else:
-            self._cached_targets = []
+    def _schedule_probe_if_due(self, x: float, y: float, now: float) -> list[GravityTarget]:
+        self._probe_pos = (x, y)
+        if self._probe_thread is None or not self._probe_thread.is_alive():
+            self.start_prober()
+        if now - self._last_probe_at >= self.probe_interval:
+            self._probe_event.set()
         return self._cached_targets
 
     def apply_pull(
@@ -217,7 +276,7 @@ class AccessibilityGravityWells:
         *,
         targets: Iterable[GravityTarget] | None = None,
     ) -> tuple[float, float]:
-        """Pull slowed pointer toward nearby interactive target center."""
+        """Pull slowed pointer toward nearby interactive target center without blocking."""
         with self._lock:
             speed = 0.0
             if self._last_pos is not None and self._last_ts is not None:
@@ -238,7 +297,9 @@ class AccessibilityGravityWells:
                 self._active_center = None
                 return (x, y)
 
-            candidate_list = list(targets) if targets is not None else self._refresh_targets_if_due(x, y, now)
+            candidate_list = (
+                list(targets) if targets is not None else self._schedule_probe_if_due(x, y, now)
+            )
             in_range = [t for t in candidate_list if t.expanded_contains(x, y, self.expansion)]
             if not in_range:
                 self._active_role = None

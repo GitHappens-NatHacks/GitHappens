@@ -1,7 +1,7 @@
-"""Standalone desktop sidecar entry point for TrueCursor.
+"""Standalone desktop sidecar entry point for ClearCursor.
 
 Binds FastAPI + Uvicorn on localhost (default 8000 with automatic free-port fallback),
-prints a single readiness line (`TRUECURSOR_READY port=<PORT>`) once bound, and cleanly
+prints a single readiness line (`CLEARCURSOR_READY port=<PORT>`) once bound, and cleanly
 releases OpenCV camera captures and OS pointer hooks on SIGTERM/SIGINT.
 """
 
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import atexit
 import os
+import secrets
 import signal
 import socket
 import sys
@@ -16,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 if not os.environ.get("MPLCONFIGDIR"):
-    mpl_dir = Path(tempfile.gettempdir()) / "truecursor_mpl"
+    mpl_dir = Path(tempfile.gettempdir()) / "clearcursor_mpl"
     mpl_dir.mkdir(parents=True, exist_ok=True)
     os.environ["MPLCONFIGDIR"] = str(mpl_dir)
 
@@ -42,18 +43,30 @@ def _bind_local_socket(host: str, preferred_port: int) -> tuple[socket.socket, i
 
 def run_sidecar(host: str = "127.0.0.1", preferred_port: int = 8000) -> int:
     """Start Uvicorn with graceful shutdown handlers and readiness output."""
-    db_path = Path(os.environ.get("TRUECURSOR_DB_PATH") or default_user_db_path())
+    db_path = Path(
+        os.environ.get("CLEARCURSOR_DB_PATH")
+        or os.environ.get("TRUECURSOR_DB_PATH")
+        or default_user_db_path()
+    )
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    os.environ["TRUECURSOR_DB_PATH"] = str(db_path)
+    os.environ["CLEARCURSOR_DB_PATH"] = str(db_path)
 
-    app = create_app(db_path=db_path, auto_start_workers=True)
+    api_token = os.environ.get("CLEARCURSOR_API_TOKEN", "").strip() or None
+    if api_token is None and os.environ.get("CLEARCURSOR_REQUIRE_TOKEN") == "1":
+        api_token = secrets.token_hex(24)
+        os.environ["CLEARCURSOR_API_TOKEN"] = api_token
+
+    app = create_app(db_path=db_path, auto_start_workers=True, api_token=api_token)
     sock, port = _bind_local_socket(host, preferred_port)
 
     config = uvicorn.Config(
         app,
         host=host,
         port=port,
-        log_level=os.environ.get("TRUECURSOR_LOG_LEVEL", "warning"),
+        log_level=os.environ.get(
+            "CLEARCURSOR_LOG_LEVEL",
+            os.environ.get("TRUECURSOR_LOG_LEVEL", "warning"),
+        ),
         access_log=False,
     )
     server = uvicorn.Server(config)
@@ -81,7 +94,7 @@ def run_sidecar(host: str = "127.0.0.1", preferred_port: int = 8000) -> int:
     atexit.register(_shutdown_engine)
 
     # Emit machine-readable readiness line for Tauri sidecar stdout parser.
-    print(f"TRUECURSOR_READY port={port}", flush=True)
+    print(f"CLEARCURSOR_READY port={port}", flush=True)
     try:
         server.run(sockets=[sock])
     finally:
@@ -94,9 +107,10 @@ def run_sidecar(host: str = "127.0.0.1", preferred_port: int = 8000) -> int:
 
 
 def main() -> int:
-    host = os.environ.get("TRUECURSOR_HOST", "127.0.0.1")
+    host = os.environ.get("CLEARCURSOR_HOST", os.environ.get("TRUECURSOR_HOST", "127.0.0.1"))
+    raw_port = os.environ.get("CLEARCURSOR_PORT", os.environ.get("TRUECURSOR_PORT", "8000"))
     try:
-        preferred = int(os.environ.get("TRUECURSOR_PORT", "8000"))
+        preferred = int(raw_port)
     except ValueError:
         preferred = 8000
     if len(sys.argv) > 1:

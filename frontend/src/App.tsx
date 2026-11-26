@@ -7,7 +7,12 @@ import {
   stopGazeEmergency,
   toggleEngine,
 } from "./api/client";
-import { resolveApiBaseUrl } from "./api/runtime";
+import {
+  resolveApiBaseUrl,
+  resolveTauriBackendToken,
+  syncTauriTrayState,
+  updateTauriGlobalShortcut,
+} from "./api/runtime";
 import { AppointmentPlayground } from "./components/AppointmentPlayground";
 import { CalibrationWizard } from "./components/CalibrationWizard";
 import { ControlDeck } from "./components/ControlDeck";
@@ -38,14 +43,23 @@ const DEFAULT_SETTINGS: SettingsPayload = {
   tremor_intensity: 55,
   one_euro_min_cutoff: 0.6,
   one_euro_beta: 0.004,
+  adaptive_smoothing: true,
   simulate_tremor: false,
   anti_drag: true,
   anti_drag_threshold_px: 8.0,
-  anti_drag_hold_ms: 300,
+  anti_drag_hold_ms: 180,
   click_freeze_ms: 180,
+  click_debounce_ms: 70,
+  right_click_guard: true,
+  scroll_smoothing: true,
   gravity_wells: true,
   gravity_strength: 35,
+  bypass_key: "alt",
+  precision_key: "none",
+  excluded_apps: [],
   global_shortcut: "CommandOrControl+Shift+S",
+  resume_stabilization_on_launch: false,
+  minimize_to_tray: true,
   system_mouse: false,
   gaze_source: "head",
   gaze_dwell_ms: 1100,
@@ -96,6 +110,7 @@ export function App() {
       const loaded = await fetchSettings();
       setSettings(loaded);
       void refreshPermissions();
+      void updateTauriGlobalShortcut(loaded.global_shortcut);
     } catch (err) {
       setApiError(
         err instanceof Error
@@ -128,12 +143,14 @@ export function App() {
         prev.gaze_control === nextGaze &&
         prev.simulate_tremor === nextSim &&
         prev.system_mouse === nextSys &&
-        prev.assistance_enabled === nextAssist
+        prev.assistance_enabled === nextAssist &&
+        prev.profile === frame.active_modes.profile
       ) {
         return prev;
       }
       return {
         ...prev,
+        profile: frame.active_modes.profile,
         steady_hand: nextSteady,
         gaze_control: nextGaze,
         simulate_tremor: nextSim,
@@ -142,6 +159,26 @@ export function App() {
       };
     });
   }, [frame]);
+
+  // Keep Tauri menu bar / tray label and minimize-to-tray behavior synced with UI state
+  useEffect(() => {
+    const active = Boolean(settings.assistance_enabled && settings.steady_hand);
+    const statusText = frame?.steadyhand.excluded_app_active
+      ? `Status: Bypassed (${frame.steadyhand.excluded_app_active})`
+      : frame?.steadyhand.bypass_active
+        ? "Status: Bypass Key Held"
+        : active
+          ? `Status: Active (${settings.profile})`
+          : "Status: Stabilization Paused";
+    void syncTauriTrayState(active, statusText, settings.minimize_to_tray);
+  }, [
+    frame?.steadyhand.bypass_active,
+    frame?.steadyhand.excluded_app_active,
+    settings.assistance_enabled,
+    settings.minimize_to_tray,
+    settings.profile,
+    settings.steady_hand,
+  ]);
 
   const handleToggle = async (payload: EngineToggleRequest) => {
     setBusy(true);
@@ -171,11 +208,10 @@ export function App() {
     }
   }, []);
 
-  const anyGazeActive = Boolean(
-    settings.gaze_control || settings.system_mouse || frame?.gaze.running
-  );
+  // Only GazeCam triggers Escape / pagehide camera shutdown so SteadyHand stays live in tray.
+  const anyGazeActive = Boolean(settings.gaze_control || frame?.gaze.running);
 
-  // Global Escape key stops GazeCam & releases system mouse outside calibration.
+  // Global Escape key stops GazeCam outside calibration.
   useEffect(() => {
     if (!anyGazeActive || calibrating) {
       return;
@@ -189,20 +225,25 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [anyGazeActive, calibrating, handleEmergencyStopGaze]);
 
-  // Ensure closing or navigating away from the browser tab stops camera + cursor control.
+  // Ensure closing or navigating away from the browser tab stops webcam capture.
   useEffect(() => {
     if (!anyGazeActive) {
       return;
     }
     const onPageHide = () => {
-      void resolveApiBaseUrl().then((base) => {
-        void fetch(`${base}/api/gaze/stop`, {
-          method: "POST",
-          keepalive: true,
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        }).catch(() => undefined);
-      });
+      void Promise.all([resolveApiBaseUrl(), resolveTauriBackendToken()]).then(
+        ([base, token]) => {
+          void fetch(`${base}/api/gaze/stop`, {
+            method: "POST",
+            keepalive: true,
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "X-ClearCursor-Token": token } : {}),
+            },
+            body: "{}",
+          }).catch(() => undefined);
+        }
+      );
     };
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
@@ -214,6 +255,9 @@ export function App() {
     try {
       const updated = await saveSettings(updates);
       setSettings(updated);
+      if (updates.global_shortcut) {
+        void updateTauriGlobalShortcut(updated.global_shortcut);
+      }
     } catch (err) {
       setApiError(
         err instanceof Error ? err.message : "Failed to save settings."
@@ -283,7 +327,7 @@ export function App() {
               <p className="text-base font-bold">System Pointer Permission Needed</p>
               <p className="text-sm font-medium text-[var(--tc-ink)]">
                 {permissions.message ??
-                  "Grant Accessibility & Input Monitoring access for system-wide smoothing and button magnetism."}
+                  "Grant Accessibility & Input Monitoring access for system-wide smoothing and button Magnetism."}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -341,7 +385,7 @@ export function App() {
 
         {loadingSettings ? (
           <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-8 text-lg font-semibold text-[var(--tc-ink-muted)]">
-            Connecting to TrueCursor backend...
+            Connecting to ClearCursor backend...
           </div>
         ) : activeView === "home" ? (
           <HomeOverview

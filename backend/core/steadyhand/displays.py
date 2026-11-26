@@ -9,8 +9,10 @@ from __future__ import annotations
 import ctypes
 import sys
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from backend.core.gaze.controller import ScreenRect
+if TYPE_CHECKING:
+    from backend.core.gaze.controller import ScreenRect
 
 
 @dataclass(frozen=True)
@@ -209,6 +211,8 @@ def virtual_screen_rect(
     fallback_height: int = 900,
 ) -> ScreenRect:
     """Compute the combined bounding rectangle across all active displays."""
+    from backend.core.gaze.controller import ScreenRect
+
     items = displays if displays else detect_displays(fallback_width, fallback_height)
     left = min(d.left for d in items)
     top = min(d.top for d in items)

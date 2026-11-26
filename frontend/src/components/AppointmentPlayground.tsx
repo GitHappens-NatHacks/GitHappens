@@ -346,7 +346,7 @@ export function AppointmentPlayground({
       }
       inFlightRef.current = true;
       try {
-        const snap = await pushSteadyHandSample(x, y, pressed);
+        const snap = await pushSteadyHandSample(x, y, pressed, true);
         recordTrail(snap.raw_pos, snap.stable_pos);
         setLiveHz(snap.tremor_hz);
       } catch {
@@ -415,7 +415,7 @@ export function AppointmentPlayground({
     anchorPosRef.current = [x, y];
     setInside(true);
     try {
-      const snap = await pushSteadyHandSample(x, y, true);
+      const snap = await pushSteadyHandSample(x, y, true, true);
       recordTrail(snap.raw_pos, snap.stable_pos);
       const clickPos = activeMode.useSmoothing ? snap.stable_pos : snap.raw_pos;
       const hitTarget = selectTarget(
@@ -425,7 +425,7 @@ export function AppointmentPlayground({
         activeMode.useExtendedTargets,
         paddingPx
       );
-      void pushSteadyHandSample(x, y, false).catch(() => undefined);
+      void pushSteadyHandSample(x, y, false, true).catch(() => undefined);
 
       if (!trialActive || expectedId === null) {
         return;

@@ -1,6 +1,6 @@
 import { Camera, SunMedium, UserCheck, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
-import { resolveApiBaseUrl } from "../api/runtime";
+import { resolveApiBaseUrl, resolveTauriBackendToken } from "../api/runtime";
 import type { GazeTelemetry } from "../types/telemetry";
 
 interface GazePreviewFeedProps {
@@ -15,16 +15,20 @@ export function GazePreviewFeed({
   compact = false,
 }: GazePreviewFeedProps) {
   const [apiBase, setApiBase] = useState<string>("");
+  const [token, setToken] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<boolean>(false);
   const [streamNonce, setStreamNonce] = useState<number>(0);
 
   useEffect(() => {
     let mounted = true;
-    void resolveApiBaseUrl().then((base) => {
-      if (mounted) {
-        setApiBase(base);
+    void Promise.all([resolveApiBaseUrl(), resolveTauriBackendToken()]).then(
+      ([base, tok]) => {
+        if (mounted) {
+          setApiBase(base);
+          setToken(tok);
+        }
       }
-    });
+    );
     return () => {
       mounted = false;
     };
@@ -52,6 +56,7 @@ export function GazePreviewFeed({
 
   const faceDetected = Boolean(gaze?.face_detected);
   const lighting = gaze?.lighting_quality ?? "ok";
+  const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : "";
 
   return (
     <div
@@ -62,7 +67,7 @@ export function GazePreviewFeed({
       <div className="relative aspect-video w-full bg-[#0B1324]">
         {isRunning && !streamError ? (
           <img
-            src={`${apiBase}/api/gaze/preview?v=${streamNonce}`}
+            src={`${apiBase}/api/gaze/preview?v=${streamNonce}${tokenQuery}`}
             alt="Live GazeCam webcam preview"
             onError={() => setStreamError(true)}
             className="h-full w-full object-cover"
@@ -73,7 +78,7 @@ export function GazePreviewFeed({
             <span className="font-medium">
               {active
                 ? streamError
-                  ? "Camera stream unavailable. Check macOS Camera permission."
+                  ? "Camera stream unavailable. Check Camera permissions in System Settings."
                   : "Starting camera stream..."
                 : "Enable GazeControl Tracking to view live camera feed."}
             </span>

@@ -39,7 +39,6 @@ Thumbs.db
 dist/
 build/
 *.spec
-accessshift.spec
 
 # Models (keep placeholders, ignore large binaries)
 assets/models/*.onnx
@@ -55,12 +54,7 @@ src-tauri/target/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 
-# Superpowers plan workspace (local scratch)
+# Local scratch / root manifest
 .superpowers/
-
-# Local patches / update bundles / scratch
 *.patch
-apply_ir_update.py
-files/
-manifest.json
-native_movement_tests.py
+/manifest.json

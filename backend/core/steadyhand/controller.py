@@ -11,7 +11,12 @@ import os
 import secrets
 import time
 
-from backend.core.steadyhand.filter import OneEuroFilter, IntentionalHold
+from backend.core.steadyhand.filter import (
+    ClickBounceGuard,
+    IntentionalHold,
+    OneEuroFilter,
+    ScrollJitterFilter,
+)
 from backend.core.steadyhand.metrics import MotorTelemetry
 
 
@@ -19,12 +24,16 @@ class SteadyHandController:
     def __init__(self, strength: float | None = None):
         self.telemetry = MotorTelemetry()
         self.hold = IntentionalHold(self.telemetry)
+        self.bounce_guard = ClickBounceGuard(self.telemetry)
+        self.scroll_filter = ScrollJitterFilter(self.telemetry)
         self.fx = OneEuroFilter()
         self.fy = OneEuroFilter()
 
         self._enabled = os.getenv("STEADYHAND_ENABLED", "1") != "0"
         self._simulate_tremor = False
         self._strength = 0.0
+        self.adaptive_smoothing = True
+        self._adaptive_boost = 0.0
 
         self._last_timestamp: float | None = None
         self._simulation_start: float | None = None
@@ -84,10 +93,11 @@ class SteadyHandController:
 
         # Above 100%, strengthen the filter.
         extra = max(0.0, self._strength - 1.0)
+        self._apply_filter_params(extra)
 
+    def _apply_filter_params(self, extra: float) -> None:
         cutoff = self.base_min_cutoff * (0.15 / 0.65) ** extra
         beta = self.base_beta * (0.001 / 0.004) ** extra
-
         self.fx.configure(cutoff, beta)
         self.fy.configure(cutoff, beta)
 
@@ -96,6 +106,7 @@ class SteadyHandController:
         *,
         min_cutoff: float | None = None,
         beta: float | None = None,
+        adaptive_smoothing: bool | None = None,
     ) -> None:
         if min_cutoff is not None:
             val = float(min_cutoff)
@@ -107,6 +118,10 @@ class SteadyHandController:
             if not math.isfinite(val) or val < 0:
                 raise ValueError("beta must be nonnegative and finite.")
             self.base_beta = val
+        if adaptive_smoothing is not None:
+            self.adaptive_smoothing = bool(adaptive_smoothing)
+            if not self.adaptive_smoothing:
+                self._adaptive_boost = 0.0
         self.strength = self._strength
 
     @property
@@ -164,8 +179,11 @@ class SteadyHandController:
         """Clear smoothing history without clearing metrics."""
         self.telemetry.reset_window()
         self.hold.anchor = None
+        self.bounce_guard.reset()
+        self.scroll_filter.reset()
         self.fx.reset()
         self.fy.reset()
+        self._adaptive_boost = 0.0
         self._last_timestamp = None
 
     def restart_simulation(self) -> None:
@@ -273,6 +291,8 @@ class SteadyHandController:
         x: float,
         y: float,
         timestamp: float | None = None,
+        *,
+        dpi_scale: float = 1.0,
     ) -> tuple[float, float]:
         x = float(x)
         y = float(y)
@@ -288,6 +308,7 @@ class SteadyHandController:
                 "Coordinates and timestamp must be finite."
             )
 
+        dt = 1.0 / 60.0
         if self._last_timestamp is not None:
             dt = now - self._last_timestamp
 
@@ -297,7 +318,9 @@ class SteadyHandController:
             if dt > self.reset_after_seconds:
                 self.fx.reset()
                 self.fy.reset()
-                self.telemetry.reset_window()
+                if dt > 1.5:
+                    self.telemetry.reset_window()
+                    self._adaptive_boost = 0.0
 
         self.last_input = (x, y)
 
@@ -314,15 +337,19 @@ class SteadyHandController:
 
         self.last_raw = (x, y)
 
-        self.telemetry.sample(x, y, now, self.simulate_tremor)
-        high = self.telemetry.latest and self.telemetry.latest["medication_state_estimate"] == "OFF"
+        # Smooth, bounded adaptive boost (no discontinuous cutoff jumps between frames).
+        latest = self.telemetry.latest
+        if self.enabled and self.adaptive_smoothing and latest is not None:
+            tremor_idx = float(latest.get("tremor_index", 0.0))
+            target_boost = min(0.65, max(0.0, (tremor_idx - 25.0) / 55.0) * 0.65)
+            alpha = min(1.0, max(0.005, dt * 0.35))
+            self._adaptive_boost += alpha * (target_boost - self._adaptive_boost)
+        elif not self.adaptive_smoothing:
+            self._adaptive_boost = 0.0
+
         if self.enabled:
-            extra = max(1.0 if high else 0.0, self.strength - 1)
-            for axis in (self.fx, self.fy):
-                axis.configure(
-                    self.base_min_cutoff * (0.15 / 0.65) ** extra,
-                    self.base_beta * 0.25 ** extra,
-                )
+            extra = max(0.0, self._strength - 1.0) + self._adaptive_boost
+            self._apply_filter_params(extra)
             filtered_x = self.fx.filter(x, now)
             filtered_y = self.fy.filter(y, now)
 
@@ -335,6 +362,15 @@ class SteadyHandController:
             )
         else:
             result = (x, y)
+
+        self.telemetry.sample(
+            x,
+            y,
+            now,
+            self.simulate_tremor,
+            dpi_scale=dpi_scale,
+            filtered_pos=result,
+        )
 
         self.last_stable = result
         self._last_timestamp = now
@@ -357,6 +393,9 @@ class SteadyHandController:
 
     def try_enable_system_mouse(self) -> bool:
         """Initialize positioning, not system-wide stabilization."""
+        if self._controller is not None:
+            self.last_system_error = None
+            return True
         try:
             from pynput.mouse import Controller
 

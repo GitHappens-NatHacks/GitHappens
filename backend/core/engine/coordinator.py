@@ -1,4 +1,4 @@
-"""Thread-safe engine coordinator binding SteadyHand, Gaze, Speech, and SQLite."""
+"""Thread-safe engine coordinator binding SteadyHand, Sandbox Lab, Gaze, Speech, and SQLite."""
 
 from __future__ import annotations
 
@@ -75,21 +75,33 @@ class EngineCoordinator:
         self.db = db or Database()
         self.adaptive = AdaptiveEngine()
         self.settings = self.db.load_settings()
-        # Never boot directly into active cursor interception or head tracking from a prior crash/session.
-        if self.settings.gaze_control or self.settings.system_mouse:
+
+        # Always keep camera gaze tracking off on startup; optionally resume pointer smoothing if opted in.
+        boot_updates: dict[str, Any] = {}
+        if self.settings.gaze_control:
+            boot_updates["gaze_control"] = False
+        if self.settings.system_mouse and not self.settings.resume_stabilization_on_launch:
+            boot_updates["system_mouse"] = False
+        if boot_updates:
             self.settings = self.db.save_settings(
-                AccessibilitySettings.from_dict(
-                    {**self.settings.as_dict(), "gaze_control": False, "system_mouse": False}
-                )
+                AccessibilitySettings.from_dict({**self.settings.as_dict(), **boot_updates})
             )
 
         self.steady_worker = steady_worker or SteadyHandWorker()
+        self.steady_worker.set_fft_callback(self._persist_fft_record)
+
+        # Isolated worker for local canvas sandbox / practice strip (never touches OS cursor or DB).
+        self.sandbox_worker = SteadyHandWorker(tick_hz=60.0)
+
         self.gaze_controller = gaze_controller or GazeController(
             screen_rect=ScreenRect(
                 0, 0, self.settings.screen_width, self.settings.screen_height
             ),
             on_exit_requested=self.emergency_stop_gaze,
         )
+
+        self._cached_displays: list[Any] | None = None
+        self._cached_screen_dims: tuple[int, int] | None = None
 
         self._restore_calibration()
         self.apply_settings(self.settings, persist=False)
@@ -107,6 +119,23 @@ class EngineCoordinator:
                 self.gaze_controller.calibrate_blink(active["open_ears"])
         except Exception:
             pass
+
+    def _resolve_screen_rect(self, width: int, height: int) -> ScreenRect:
+        from backend.core.steadyhand.displays import detect_displays, virtual_screen_rect
+
+        dims = (int(width), int(height))
+        if self._cached_displays is None or self._cached_screen_dims != dims:
+            self._cached_displays = detect_displays(width, height)
+            self._cached_screen_dims = dims
+
+        displays = self._cached_displays
+        if len(displays) > 1 or any(d.left != 0 or d.top != 0 for d in displays):
+            return virtual_screen_rect(
+                displays,
+                fallback_width=width,
+                fallback_height=height,
+            )
+        return ScreenRect(0, 0, width, height)
 
     def apply_settings(
         self,
@@ -127,20 +156,32 @@ class EngineCoordinator:
             self.adaptive.set_module("predictive_speech", validated.predictive_speech)
 
             effective_steady = validated.assistance_enabled and validated.steady_hand
-            self.steady_worker.configure(
+            shared_cfg = dict(
                 enabled=effective_steady,
                 strength=validated.tremor_strength / 100.0,
                 min_cutoff=validated.one_euro_min_cutoff,
                 beta=validated.one_euro_beta,
+                adaptive_smoothing=validated.adaptive_smoothing,
                 simulate_tremor=validated.simulate_tremor,
                 tremor_intensity=validated.tremor_intensity,
                 anti_drag=validated.anti_drag,
                 anti_drag_threshold_px=validated.anti_drag_threshold_px,
                 anti_drag_hold_ms=validated.anti_drag_hold_ms,
                 click_freeze_ms=validated.click_freeze_ms,
+                click_debounce_ms=validated.click_debounce_ms,
+                right_click_guard=validated.right_click_guard,
+                scroll_smoothing=validated.scroll_smoothing,
                 gravity_wells=validated.gravity_wells,
                 gravity_strength=validated.gravity_strength,
+                bypass_key=validated.bypass_key,
+                precision_key=validated.precision_key,
             )
+            self.steady_worker.configure(
+                **shared_cfg,
+                excluded_apps=validated.excluded_apps,
+            )
+            self.sandbox_worker.configure(**{**shared_cfg, "gravity_wells": False})
+
             self.steady_worker.set_system_mouse(
                 enabled=validated.system_mouse and effective_steady,
                 listen_os_mouse=validated.system_mouse and effective_steady,
@@ -150,17 +191,9 @@ class EngineCoordinator:
                 self.gaze_controller.set_source(validated.gaze_source)
                 self._restore_calibration()
 
-            from backend.core.steadyhand.displays import detect_displays, virtual_screen_rect
-
-            displays = detect_displays(validated.screen_width, validated.screen_height)
-            if len(displays) > 1 or any(d.left != 0 or d.top != 0 for d in displays):
-                screen_rect = virtual_screen_rect(
-                    displays,
-                    fallback_width=validated.screen_width,
-                    fallback_height=validated.screen_height,
-                )
-            else:
-                screen_rect = ScreenRect(0, 0, validated.screen_width, validated.screen_height)
+            screen_rect = self._resolve_screen_rect(
+                validated.screen_width, validated.screen_height
+            )
             self.gaze_controller.set_screen_rect(screen_rect)
             self.gaze_controller.set_dwell_ms(validated.gaze_dwell_ms)
             self.gaze_controller.blink_select = validated.blink_select
@@ -220,6 +253,36 @@ class EngineCoordinator:
 
     def emergency_stop_gaze(self) -> dict[str, Any]:
         """Immediately stop camera tracking, disable gaze_control, and release system mouse."""
+        with self._lock:
+            self.gaze_controller.paused = False
+            self.gaze_controller.stop()
+            self.gaze_controller.set_system_mouse(False)
+            self.update_settings({"gaze_control": False, "system_mouse": False})
+            return {
+                "settings": self.settings.as_dict(),
+                "camera_running": False,
+                "steadyhand_running": self.steady_worker.running,
+            }
+
+    def stop_gaze_on_disconnect(self) -> dict[str, Any]:
+        """Stop camera when UI closes/minimizes, keeping SteadyHand tray stabilization active."""
+        with self._lock:
+            self.gaze_controller.paused = False
+            self.gaze_controller.stop()
+            self.gaze_controller.set_system_mouse(False)
+            if self.settings.gaze_control:
+                updates: dict[str, Any] = {"gaze_control": False}
+                if not self.settings.steady_hand:
+                    updates["system_mouse"] = False
+                self.update_settings(updates)
+            return {
+                "settings": self.settings.as_dict(),
+                "camera_running": False,
+                "steadyhand_running": self.steady_worker.running,
+            }
+
+    def emergency_stop_all(self) -> dict[str, Any]:
+        """Global emergency stop: halts GazeCam and releases OS pointer interception."""
         with self._lock:
             self.gaze_controller.paused = False
             self.gaze_controller.stop()
@@ -314,10 +377,7 @@ class EngineCoordinator:
                 "calibrated": True,
             }
 
-    def persist_pending_fft(self) -> dict | None:
-        record = self.steady_worker.consume_latest_fft_record()
-        if record is None:
-            return None
+    def _persist_fft_record(self, record: dict) -> None:
         self.db.record_tremor_sample(
             session_id=self.session_id,
             timestamp=record["timestamp"],
@@ -328,7 +388,21 @@ class EngineCoordinator:
             medication_state_estimate=record["medication_state_estimate"],
             stabilization_active=record["stabilization_active"],
             simulated=record["simulated"],
+            resting_band_pct=record.get("resting_band_pct", 0.0),
+            action_band_pct=record.get("action_band_pct", 0.0),
+            rms_amplitude_px=record.get("rms_amplitude_px", 0.0),
+            rms_amplitude_mm=record.get("rms_amplitude_mm", 0.0),
+            click_rescues=record.get("click_rescues", 0),
+            drags_prevented=record.get("drags_prevented", 0),
+            bounces_blocked=record.get("bounces_blocked", 0),
+            preset_name=self.settings.profile,
         )
+
+    def persist_pending_fft(self) -> dict | None:
+        record = self.steady_worker.consume_latest_fft_record()
+        if record is None:
+            return None
+        self._persist_fft_record(record)
         return record
 
     def telemetry_snapshot(self) -> dict[str, Any]:
@@ -342,6 +416,11 @@ class EngineCoordinator:
                 "session_id": self.session_id,
                 "tremor_hz": steady["tremor_hz"],
                 "tremor_index": steady["tremor_index"],
+                "resting_band_pct": steady["resting_band_pct"],
+                "action_band_pct": steady["action_band_pct"],
+                "rms_amplitude_px": steady["rms_amplitude_px"],
+                "rms_amplitude_mm": steady["rms_amplitude_mm"],
+                "tremor_severity": steady["tremor_severity"],
                 "stabilization_active": steady["stabilization_active"],
                 "stability_score": steady["stability_score"],
                 "medication_state_estimate": steady["medication_state_estimate"],
@@ -369,9 +448,14 @@ class EngineCoordinator:
                     "tremor_intensity": steady["tremor_intensity"],
                     "spastic_drags_prevented": steady["spastic_drags_prevented"],
                     "slip_clicks_rescued": steady["slip_clicks_rescued"],
+                    "double_clicks_blocked": steady["double_clicks_blocked"],
+                    "scroll_jitters_filtered": steady["scroll_jitters_filtered"],
                     "click_freeze_active": steady["click_freeze_active"],
                     "gravity_well_active": steady["gravity_well_active"],
                     "gravity_target_role": steady["gravity_target_role"],
+                    "bypass_active": steady["bypass_active"],
+                    "precision_active": steady["precision_active"],
+                    "excluded_app_active": steady["excluded_app_active"],
                     "os_tap_mode": steady["os_tap_mode"],
                     "os_tap_error": steady["os_tap_error"],
                     "system_mouse_enabled": steady["system_mouse_enabled"],
@@ -390,4 +474,5 @@ class EngineCoordinator:
     def shutdown(self) -> None:
         self.gaze_controller.stop()
         self.steady_worker.stop()
+        self.sandbox_worker.stop()
         self.db.close()

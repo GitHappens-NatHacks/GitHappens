@@ -1,14 +1,14 @@
 (() => {
-  if (window.__trueCursorWebAssist) {
+  if (window.__clearCursorWebAssist) {
     return;
   }
-  const S = globalThis.TrueCursorStabilizer;
+  const S = globalThis.ClearCursorStabilizer || globalThis.TrueCursorStabilizer;
   if (!S) {
-    throw new Error("TrueCursorStabilizer must be loaded before content.js");
+    throw new Error("ClearCursorStabilizer must be loaded before content.js");
   }
 
-  const HOST_ID = "truecursor-web-assist-host";
-  const STYLE_ID = "truecursor-web-assist-style";
+  const HOST_ID = "clearcursor-web-assist-host";
+  const STYLE_ID = "clearcursor-web-assist-style";
   const INTERACTIVE_SEL =
     'button, a[href], input[type="button"], input[type="submit"], input[type="reset"], [role="button"], [role="link"], label[for]';
   const EDITABLE_SEL =
@@ -148,7 +148,7 @@
       </style>
       <div class="tc-well"></div>
       <div class="tc-dot"></div>
-      <div class="tc-bar" role="region" aria-label="TrueCursor Web Assist">
+      <div class="tc-bar" role="region" aria-label="ClearCursor Web Assist">
         <p></p>
         <div class="tc-bar-actions">
           <button type="button" class="tc-pause">Pause Assist</button>
@@ -170,15 +170,15 @@
       return;
     }
     if (!prefs.pointerEnabled) {
-      bannerText.textContent = "TrueCursor: Page visual aids active.";
+      bannerText.textContent = "ClearCursor: Page visual aids active.";
       pauseBtn.style.display = "none";
       return;
     }
     pauseBtn.style.display = "inline-block";
     pauseBtn.textContent = paused ? "Resume Assist" : "Pause Assist";
     bannerText.textContent = paused
-      ? "TrueCursor paused. Press Esc or Resume to reactivate."
-      : `TrueCursor active (${S.PRESETS[prefs.preset].label}). Esc pauses anytime.`;
+      ? "ClearCursor paused. Press Esc or Resume to reactivate."
+      : `ClearCursor active (${S.PRESETS[prefs.preset].label}). Esc pauses anytime.`;
   }
 
   function setPaused(next) {
@@ -366,7 +366,7 @@
     return { active: false };
   }
 
-  window.__trueCursorWebAssist = Object.freeze({
+  window.__clearCursorWebAssist = Object.freeze({
     apply,
     restore,
     status: () => ({ active: Boolean(prefs), paused }),

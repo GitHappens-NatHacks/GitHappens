@@ -12,7 +12,6 @@ import {
 import { useRef, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { clearCalibration, pushSteadyHandSample } from "../api/client";
-import { GazePreviewFeed } from "./GazePreviewFeed";
 import type { ConnectionState, TelemetryPoint } from "../hooks/useTelemetry";
 import { CLINICAL_PRESETS, type ClinicalPreset } from "../presets";
 import type {
@@ -21,6 +20,7 @@ import type {
   SettingsUpdate,
   TelemetryFrame,
 } from "../types/telemetry";
+import { GazePreviewFeed } from "./GazePreviewFeed";
 
 interface ControlDeckProps {
   settings: SettingsPayload;
@@ -58,12 +58,20 @@ export function ControlDeck({
   const sysMouseActive = frame?.steadyhand.system_mouse_enabled ?? settings.system_mouse;
 
   const tremorHz = frame?.tremor_hz ?? null;
-  const inParkinsonBand = tremorHz !== null && tremorHz >= 4 && tremorHz <= 7;
+  const inTremorBand = tremorHz !== null && tremorHz >= 4 && tremorHz <= 12;
+  const restingPct = frame?.resting_band_pct ?? 0;
+  const actionPct = frame?.action_band_pct ?? 0;
+  const rmsMm = frame?.rms_amplitude_mm ?? 0;
   const dampeningPct = Math.round(
     (frame?.steadyhand.strength ?? settings.tremor_strength / 100) * 100
   );
   const dragsPrevented = frame?.steadyhand.spastic_drags_prevented ?? 0;
+  const clicksRescued = frame?.steadyhand.slip_clicks_rescued ?? 0;
+  const bouncesBlocked = frame?.steadyhand.double_clicks_blocked ?? 0;
   const gravityActive = frame?.steadyhand.gravity_well_active ?? false;
+  const bypassActive = frame?.steadyhand.bypass_active ?? false;
+  const precisionActive = frame?.steadyhand.precision_active ?? false;
+  const excludedApp = frame?.steadyhand.excluded_app_active ?? null;
   const tapMode = frame?.steadyhand.os_tap_mode ?? "idle";
   const tapError = frame?.steadyhand.os_tap_error ?? null;
 
@@ -76,7 +84,7 @@ export function ControlDeck({
     const now = performance.now();
     if (now - lastSentAtRef.current >= 32) {
       lastSentAtRef.current = now;
-      void pushSteadyHandSample(x, y).catch(() => undefined);
+      void pushSteadyHandSample(x, y, undefined, true).catch(() => undefined);
     }
   };
 
@@ -114,7 +122,7 @@ export function ControlDeck({
               Comfort &amp; Medication State Presets
             </h2>
             <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
-              Choose how much stabilization you want right now with one large tap. Shortcut:{" "}
+              Choose how much stabilization you want right now with one large tap. Toggle shortcut:{" "}
               <span className="font-bold text-[var(--tc-ink)]">{settings.global_shortcut}</span>
             </p>
           </div>
@@ -200,7 +208,7 @@ export function ControlDeck({
               <div>
                 <span className="block text-xl font-bold">SteadyHand Stabilization</span>
                 <span className="mt-1 block text-base text-[var(--tc-ink-muted)]">
-                  Adaptive smoothing, 180ms click-freeze, and button magnetism.
+                  Delta-space smoothing, click-freeze, bounce guard, and button magnetism.
                 </span>
               </div>
             </div>
@@ -315,6 +323,18 @@ export function ControlDeck({
                 : "Off"}
             </span>
           </div>
+
+          {(bypassActive || precisionActive || excludedApp) && (
+            <div className="inline-flex min-h-14 items-center gap-2 rounded-lg border-2 border-[var(--tc-warn)] bg-[var(--tc-warn-bg)] px-4 text-sm font-bold text-[var(--tc-warn)]">
+              <span>
+                {excludedApp
+                  ? `Auto-Paused for ${excludedApp}`
+                  : bypassActive
+                    ? `Bypass Key Held (${settings.bypass_key.toUpperCase()})`
+                    : `Precision Slow-Mode (${settings.precision_key.toUpperCase()})`}
+              </span>
+            </div>
+          )}
         </div>
 
         {tapError && sysMouseActive && (
@@ -334,7 +354,7 @@ export function ControlDeck({
             Live Stability Monitor
           </h2>
           <span className="text-sm font-semibold text-[var(--tc-ink-muted)]">
-            Stream: {connectionState === "connected" ? "25 Hz live" : connectionState} | OS Hook: {tapMode}
+            Stream: {connectionState === "connected" ? "30 Hz live" : connectionState} | OS Hook: {tapMode}
           </span>
         </div>
 
@@ -349,22 +369,22 @@ export function ControlDeck({
               <span className="ml-1 text-lg font-semibold text-[var(--tc-ink-muted)]">/ 100</span>
             </p>
             <p className="mt-2 text-sm text-[var(--tc-ink-muted)]">
-              {steadyActive ? "Smoothing active" : "Raw unfiltered cursor"}
+              {steadyActive ? `RMS jitter: ${rmsMm.toFixed(2)} mm` : "Raw unfiltered cursor"}
             </p>
           </div>
 
           <div
             className={`rounded-lg border-2 p-5 ${
-              inParkinsonBand
+              inTremorBand
                 ? "border-[var(--tc-alert)] bg-[var(--tc-alert-bg)]"
                 : "border-[var(--tc-border)] bg-[var(--tc-surface)]"
             }`}
           >
             <div className="flex items-center justify-between text-sm font-semibold text-[var(--tc-ink-muted)]">
-              <span>Tremor Frequency</span>
+              <span>Tremor Spectrum (4-12 Hz)</span>
               <Activity
                 className={`h-5 w-5 ${
-                  inParkinsonBand ? "text-[var(--tc-alert)]" : "text-[var(--tc-primary)]"
+                  inTremorBand ? "text-[var(--tc-alert)]" : "text-[var(--tc-primary)]"
                 }`}
                 aria-hidden="true"
               />
@@ -375,27 +395,29 @@ export function ControlDeck({
             </p>
             <p
               className={`mt-2 text-sm font-semibold ${
-                inParkinsonBand ? "text-[var(--tc-alert)]" : "text-[var(--tc-ink-muted)]"
+                inTremorBand ? "text-[var(--tc-alert)]" : "text-[var(--tc-ink-muted)]"
               }`}
             >
-              {inParkinsonBand
-                ? `4-7 Hz Welch power: ${smoothedTremorIndex.toFixed(1)}%`
-                : "No sustained 4-7 Hz tremor"}
+              {inTremorBand
+                ? `Power ${smoothedTremorIndex.toFixed(0)}% (Rest ${restingPct.toFixed(0)}% | Act ${actionPct.toFixed(0)}%)`
+                : "No sustained 4-12 Hz tremor"}
             </p>
           </div>
 
           <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
             <div className="flex items-center justify-between text-sm font-semibold text-[var(--tc-ink-muted)]">
-              <span>Dampening &amp; Click-Freeze</span>
+              <span>Click &amp; Drag Protection</span>
               <CheckCircle2 className="h-5 w-5 text-[var(--tc-primary)]" aria-hidden="true" />
             </div>
             <p className="mt-3 text-4xl font-bold text-[var(--tc-ink)] tabular-nums">
               {dampeningPct}
               <span className="ml-1 text-lg font-semibold text-[var(--tc-ink-muted)]">%</span>
             </p>
-            <p className="mt-2 text-sm text-[var(--tc-ink-muted)]">
-              Drags prevented: <span className="font-bold tabular-nums">{dragsPrevented}</span>
-              {frame?.steadyhand.click_freeze_active ? " | Click-Freeze locked" : ""}
+            <p className="mt-2 text-sm text-[var(--tc-ink-muted)] tabular-nums">
+              Rescued: <span className="font-bold">{clicksRescued}</span> | Drags:{" "}
+              <span className="font-bold">{dragsPrevented}</span> | Bounces:{" "}
+              <span className="font-bold">{bouncesBlocked}</span>
+              {frame?.steadyhand.click_freeze_active ? " | Frozen" : ""}
             </p>
           </div>
 
@@ -499,7 +521,7 @@ export function ControlDeck({
                           : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
                       }`}
                     >
-                      Move macOS Cursor: {sysMouseActive ? "ON" : "OFF"}
+                      Move System Cursor: {sysMouseActive ? "ON" : "OFF"}
                     </button>
                     <button
                       type="button"
@@ -522,7 +544,7 @@ export function ControlDeck({
           </div>
         )}
 
-        {/* Real-Time Recharts Trace + Practice Strip (Flattened without double container padding) */}
+        {/* Real-Time Recharts Trace + Practice Strip */}
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div>
             <div className="mb-3 flex items-center justify-between">
@@ -530,7 +552,7 @@ export function ControlDeck({
                 Real-Time Stability Score Trace
               </h3>
               <span className="text-sm font-semibold text-[var(--tc-ink-muted)] tabular-nums">
-                Est. Med State: {frame?.medication_state_estimate ?? "N/A"}
+                Tremor Level: {frame?.tremor_severity ?? "minimal"}
               </span>
             </div>
             <div className="h-44 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-3.5 shadow-[var(--tc-shadow)]">
@@ -585,7 +607,7 @@ export function ControlDeck({
               className="relative flex h-44 w-full items-center justify-center rounded-lg border-2 border-dashed border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-4 text-center"
             >
               <p className="pointer-events-none text-base font-medium text-[var(--tc-ink-muted)]">
-                Move your cursor across this area to sample live 4-7 Hz Welch tremor power and One Euro smoothing.
+                Move your cursor across this isolated practice area to test One Euro smoothing without affecting OS cursor logs.
               </p>
             </div>
           </div>

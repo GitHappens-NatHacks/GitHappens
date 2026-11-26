@@ -1,6 +1,8 @@
 import type {
   CalibrateRequest,
   CalibrateResponse,
+  ClinicalEventCreateRequest,
+  ClinicalEventRecord,
   DisplaysResponse,
   EngineToggleRequest,
   EngineToggleResponse,
@@ -11,10 +13,13 @@ import type {
   SteadyHandSampleSnapshot,
   SystemPermissionsResponse,
 } from "../types/telemetry";
-import { resolveApiBaseUrl } from "./runtime";
+import { resolveApiBaseUrl, resolveTauriBackendToken } from "./runtime";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const apiBase = await resolveApiBaseUrl();
+  const [apiBase, token] = await Promise.all([
+    resolveApiBaseUrl(),
+    resolveTauriBackendToken(),
+  ]);
   const url = `${apiBase}${path}`;
   let response: Response;
   try {
@@ -22,12 +27,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { "X-ClearCursor-Token": token } : {}),
         ...(init?.headers ?? {}),
       },
     });
   } catch {
     throw new Error(
-      `Could not reach the TrueCursor Python backend at ${apiBase}. Verify the local engine is running and retry.`
+      `Could not reach the ClearCursor Python backend at ${apiBase}. Verify the local engine is running and retry.`
     );
   }
 
@@ -103,21 +109,40 @@ export function submitCalibration(
 
 export function fetchSessions(
   days = 14,
-  limit = 30
+  limit = 30,
+  includeSimulated = false
 ): Promise<SessionsResponse> {
   return request<SessionsResponse>(
-    `/api/sessions?days=${encodeURIComponent(days)}&limit=${encodeURIComponent(limit)}`
+    `/api/sessions?days=${encodeURIComponent(days)}&limit=${encodeURIComponent(limit)}&include_simulated=${includeSimulated ? "true" : "false"}`
   );
+}
+
+export function createClinicalEvent(
+  payload: ClinicalEventCreateRequest
+): Promise<ClinicalEventRecord> {
+  return request<ClinicalEventRecord>("/api/events", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteClinicalEvent(
+  eventId: number
+): Promise<{ deleted: boolean; id: number }> {
+  return request<{ deleted: boolean; id: number }>(`/api/events/${encodeURIComponent(eventId)}`, {
+    method: "DELETE",
+  });
 }
 
 export function pushSteadyHandSample(
   x: number,
   y: number,
-  pressed?: boolean
+  pressed?: boolean,
+  sandbox = false
 ): Promise<SteadyHandSampleSnapshot> {
   return request<SteadyHandSampleSnapshot>("/api/steadyhand/sample", {
     method: "POST",
-    body: JSON.stringify({ x, y, pressed }),
+    body: JSON.stringify({ x, y, pressed, sandbox }),
   });
 }
 

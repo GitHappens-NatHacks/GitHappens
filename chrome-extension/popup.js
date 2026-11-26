@@ -1,5 +1,5 @@
 (() => {
-  const S = globalThis.TrueCursorStabilizer;
+  const S = globalThis.ClearCursorStabilizer || globalThis.TrueCursorStabilizer;
   const $ = (id) => document.getElementById(id);
 
   let selectedPreset = "moderate";
@@ -44,15 +44,15 @@
 
   async function saveLocal(settings) {
     if (globalThis.chrome?.storage?.local) {
-      await chrome.storage.local.set({ truecursorPrefs: settings });
+      await chrome.storage.local.set({ clearcursorPrefs: settings });
     }
   }
 
   async function loadLocal() {
     try {
       if (globalThis.chrome?.storage?.local) {
-        const res = await chrome.storage.local.get("truecursorPrefs");
-        applySettingsToForm(res.truecursorPrefs);
+        const res = await chrome.storage.local.get(["clearcursorPrefs", "truecursorPrefs"]);
+        applySettingsToForm(res.clearcursorPrefs || res.truecursorPrefs);
         return;
       }
     } catch {
@@ -79,7 +79,7 @@
       });
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: (action, payload) => window.__trueCursorWebAssist[action](payload),
+        func: (action, payload) => window.__clearCursorWebAssist[action](payload),
         args: [actionName, settings],
       });
       if (actionName === "apply") {
@@ -94,7 +94,7 @@
   }
 
   async function syncFromDesktopBackend() {
-    setStatus("Checking TrueCursor desktop backend (127.0.0.1:8000)...");
+    setStatus("Checking ClearCursor desktop backend (127.0.0.1:8000)...");
     try {
       const resp = await fetch("http://127.0.0.1:8000/api/settings", { method: "GET" });
       if (!resp.ok) {
@@ -113,7 +113,7 @@
       });
       applySettingsToForm(next);
       await saveLocal(next);
-      setStatus(`Synced "${S.PRESETS[next.preset].label}" preset from TrueCursor desktop.`);
+      setStatus(`Synced "${S.PRESETS[next.preset].label}" preset from ClearCursor desktop.`);
     } catch {
       setStatus("Desktop app offline; using local extension preferences.");
     }

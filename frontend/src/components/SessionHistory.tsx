@@ -1,19 +1,22 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { FileDown, FileSpreadsheet, Info, RefreshCw } from "lucide-react";
+import { FileDown, FileSpreadsheet, Info, Pill, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Legend,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { fetchSessions } from "../api/client";
-import type { SessionsResponse } from "../types/telemetry";
+import { createClinicalEvent, deleteClinicalEvent, fetchSessions } from "../api/client";
+import type { ClinicalEventType, SessionsResponse } from "../types/telemetry";
 
 function formatStabilityBand(score: number): string {
   if (score >= 85) {
@@ -22,29 +25,49 @@ function formatStabilityBand(score: number): string {
   if (score >= 65) {
     return "Moderate Tremor Burden (65-84)";
   }
-  return "Elevated Tremor / OFF-Period Risk (<65)";
+  return "Elevated Tremor Burden (<65)";
 }
 
 function formatFrequencyClinicalNote(hz: number | null): string {
   if (hz === null) {
-    return "No sustained 4-7 Hz oscillation detected";
+    return "No sustained 4-12 Hz oscillation detected";
   }
-  if (hz >= 4.0 && hz <= 7.0) {
-    return `${hz.toFixed(2)} Hz (Classic Parkinsonian 4-7 Hz band)`;
+  if (hz >= 4.0 && hz < 6.0) {
+    return `${hz.toFixed(2)} Hz (4-6 Hz resting tremor band)`;
   }
-  return `${hz.toFixed(2)} Hz (Outside 4-7 Hz primary band)`;
+  if (hz >= 6.0 && hz <= 12.0) {
+    return `${hz.toFixed(2)} Hz (6-12 Hz action / postural band)`;
+  }
+  return `${hz.toFixed(2)} Hz (Outside 4-12 Hz primary band)`;
 }
 
+const DATE_WINDOWS = [
+  { days: 7, label: "7 Days" },
+  { days: 14, label: "14 Days" },
+  { days: 30, label: "30 Days" },
+  { days: 90, label: "90 Days" },
+];
+
 export function SessionHistory() {
+  const [days, setDays] = useState<number>(14);
+  const [includeSimulated, setIncludeSimulated] = useState<boolean>(false);
   const [data, setData] = useState<SessionsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Clinical Event Diary state
+  const [eventType, setEventType] = useState<ClinicalEventType>("medication");
+  const [eventLabel, setEventLabel] = useState<string>("");
+  const [eventDosage, setEventDosage] = useState<string>("");
+  const [eventSeverity, setEventSeverity] = useState<string>("");
+  const [eventNotes, setEventNotes] = useState<string>("");
+  const [savingEvent, setSavingEvent] = useState<boolean>(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchSessions(14, 30);
+      const res = await fetchSessions(days, 50, includeSimulated);
       setData(res);
     } catch (err) {
       setError(
@@ -55,7 +78,7 @@ export function SessionHistory() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [days, includeSimulated]);
 
   useEffect(() => {
     void load();
@@ -63,7 +86,11 @@ export function SessionHistory() {
 
   const trends = data?.daily_trends ?? [];
   const sessions = data?.sessions ?? [];
+  const hourly = data?.hourly_profile ?? [];
+  const events = data?.clinical_events ?? [];
   const calibrations = data?.calibration_profiles ?? [];
+  const functional = data?.functional_summary;
+  const simulatedCount = data?.simulated_sample_count ?? 0;
 
   const totalSamples = sessions.reduce((acc, s) => acc + s.sample_count, 0);
   const meanStability =
@@ -74,11 +101,69 @@ export function SessionHistory() {
     sessions.length > 0
       ? sessions.reduce((acc, s) => acc + s.avg_tremor_index, 0) / sessions.length
       : 0;
+  const meanRestingPct = functional?.avg_resting_band_pct ?? 0;
+  const meanActionPct = functional?.avg_action_band_pct ?? 0;
+  const meanRmsMm = functional?.avg_rms_amplitude_mm ?? 0;
   const hzSessions = sessions.filter((s) => s.avg_tremor_hz !== null);
   const meanHz =
     hzSessions.length > 0
       ? hzSessions.reduce((acc, s) => acc + (s.avg_tremor_hz ?? 0), 0) / hzSessions.length
       : null;
+
+  const handleQuickEvent = async (
+    type: ClinicalEventType,
+    label: string,
+    severity?: number
+  ) => {
+    setSavingEvent(true);
+    try {
+      await createClinicalEvent({
+        event_type: type,
+        label,
+        severity: severity ?? null,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save diary entry.");
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
+  const handleSubmitEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventLabel.trim()) {
+      return;
+    }
+    setSavingEvent(true);
+    try {
+      await createClinicalEvent({
+        event_type: eventType,
+        label: eventLabel.trim(),
+        dosage: eventDosage.trim(),
+        severity: eventSeverity ? Number(eventSeverity) : null,
+        notes: eventNotes.trim(),
+      });
+      setEventLabel("");
+      setEventDosage("");
+      setEventSeverity("");
+      setEventNotes("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save diary entry.");
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: number) => {
+    try {
+      await deleteClinicalEvent(eventId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete diary entry.");
+    }
+  };
 
   const exportClinicianPdf = () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
@@ -95,78 +180,214 @@ export function SessionHistory() {
 
     doc.setFontSize(18);
     doc.setTextColor(15, 45, 89);
-    doc.text("TrueCursor Clinician Motor Telemetry Report", 40, 48);
+    doc.text("ClearCursor Clinician Motor Telemetry Report", 40, 46);
 
     doc.setFontSize(10);
     doc.setTextColor(66, 82, 110);
-    doc.text(`Generated: ${nowLabel}   |   Reporting Window: Last 14 Days`, 40, 66);
+    doc.text(
+      `Generated: ${nowLabel}   |   Window: Last ${days} Days   |   Source: ${includeSimulated ? "Includes Simulated Demos" : "Real Usage Only"}`,
+      40,
+      64
+    );
+    doc.setFontSize(8.5);
+    doc.text(
+      "Assistive Wellness Telemetry Disclaimer: Metrics reflect cursor displacement spectra and click-protection counts to support clinical discussion; not a standalone medical diagnostic device.",
+      40,
+      78,
+      { maxWidth: 532 }
+    );
 
     // Executive Summary Table
     autoTable(doc, {
-      startY: 82,
+      startY: 96,
       head: [["Clinical Summary Metric", "Observed Value", "Interpretation"]],
       body: [
-        ["Recorded Motor Sessions", `${sessions.length} sessions (${totalSamples} FFT windows)`, "Each window averages 4s of pointer velocity spectral density."],
-        ["Overall Mean Stability Score", `${meanStability.toFixed(1)} / 100`, formatStabilityBand(meanStability)],
-        ["Mean 4-7 Hz Tremor Band Power", `${meanTremorIdx.toFixed(1)}% of motor energy`, "Share of 0.5-12 Hz movement energy concentrated in 4-7 Hz."],
-        ["Mean Dominant Tremor Frequency", meanHz !== null ? `${meanHz.toFixed(2)} Hz` : "None detected", formatFrequencyClinicalNote(meanHz)],
-        ["Active Gaze Calibration Profiles", `${calibrations.length} stored profiles`, "Affine gaze mapping accuracy measured in mean pixel error."],
+        [
+          "Recorded Motor Sessions",
+          `${sessions.length} sessions (${totalSamples} FFT windows)`,
+          "Each window summarizes 2.5-4s of active pointer displacement spectral density.",
+        ],
+        [
+          "Overall Mean Stability Score",
+          `${meanStability.toFixed(1)} / 100`,
+          formatStabilityBand(meanStability),
+        ],
+        [
+          "Mean RMS Tremor Amplitude",
+          `${meanRmsMm.toFixed(2)} mm`,
+          "4-12 Hz bandpassed RMS displacement calibrated by active display DPI.",
+        ],
+        [
+          "Multi-Band Tremor Power (4-12 Hz)",
+          `${meanTremorIdx.toFixed(1)}% total (4-6 Hz: ${meanRestingPct.toFixed(1)}% | 6-12 Hz: ${meanActionPct.toFixed(1)}%)`,
+          "Separates lower-frequency resting band (4-6 Hz) from action/essential tremor band (6-12 Hz).",
+        ],
+        [
+          "Mean Dominant Tremor Frequency",
+          meanHz !== null ? `${meanHz.toFixed(2)} Hz` : "None detected",
+          formatFrequencyClinicalNote(meanHz),
+        ],
+        [
+          "Everyday Functional Protections",
+          `${functional?.total_click_rescues ?? 0} slip-clicks rescued, ${functional?.total_drags_prevented ?? 0} drags blocked, ${functional?.total_bounces_blocked ?? 0} bounces prevented`,
+          "Objective counts of involuntary tremor actions intercepted before hitting OS controls.",
+        ],
       ],
       headStyles: { fillColor: [15, 45, 89], textColor: [255, 255, 255] },
-      styles: { fontSize: 9, cellPadding: 6 },
+      styles: { fontSize: 8.5, cellPadding: 5 },
     });
 
+    // Embedded Vector Charts (when running with full jsPDF canvas vector primitives)
+    const rawDoc = doc as unknown as {
+      rect?: (x: number, y: number, w: number, h: number, style?: string) => void;
+      line?: (x1: number, y1: number, x2: number, y2: number) => void;
+      setDrawColor?: (r: number, g: number, b: number) => void;
+      setFillColor?: (r: number, g: number, b: number) => void;
+      setLineWidth?: (w: number) => void;
+    };
+    const hasVectorApi =
+      typeof rawDoc.rect === "function" &&
+      typeof rawDoc.line === "function" &&
+      typeof rawDoc.setDrawColor === "function" &&
+      typeof rawDoc.setFillColor === "function";
+
+    let cursorY = getNextY(290, 150);
+    if (hasVectorApi && (trends.length > 0 || hourly.length > 0)) {
+      doc.setFontSize(12);
+      doc.setTextColor(15, 45, 89);
+      doc.text("Visual Longitudinal & Diurnal Telemetry Charts", 40, cursorY);
+
+      const chartTop = cursorY + 10;
+      const chartH = 92;
+      const leftChartX = 40;
+      const chartW = 250;
+      const rightChartX = 322;
+
+      // Left Chart: Daily Stability Score (0-100)
+      rawDoc.setDrawColor!(203, 213, 225);
+      rawDoc.setFillColor!(248, 250, 252);
+      rawDoc.rect!(leftChartX, chartTop, chartW, chartH, "FD");
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 45, 89);
+      doc.text("Daily Stability Score (0-100)", leftChartX + 8, chartTop + 13);
+
+      if (trends.length >= 1) {
+        const plotX = leftChartX + 14;
+        const plotY = chartTop + 22;
+        const plotW = chartW - 28;
+        const plotH = chartH - 34;
+        rawDoc.setDrawColor!(29, 78, 216);
+        rawDoc.setLineWidth?.(1.6);
+        const pts = trends.map((t, idx) => {
+          const px = trends.length === 1 ? plotX + plotW / 2 : plotX + (idx / (trends.length - 1)) * plotW;
+          const py = plotY + plotH - (Math.max(0, Math.min(100, t.avg_stability_score)) / 100) * plotH;
+          return [px, py] as const;
+        });
+        for (let i = 1; i < pts.length; i += 1) {
+          rawDoc.line!(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+        }
+        rawDoc.setFillColor!(29, 78, 216);
+        for (const [px, py] of pts) {
+          rawDoc.rect!(px - 2, py - 2, 4, 4, "F");
+        }
+      }
+
+      // Right Chart: Time-of-Day Diurnal Tremor Index (%)
+      rawDoc.setDrawColor!(203, 213, 225);
+      rawDoc.setFillColor!(248, 250, 252);
+      rawDoc.rect!(rightChartX, chartTop, chartW, chartH, "FD");
+      doc.setFontSize(8.5);
+      doc.setTextColor(159, 18, 57);
+      doc.text("Time-of-Day 4-12 Hz Tremor Power (%)", rightChartX + 8, chartTop + 13);
+
+      if (hourly.length >= 1) {
+        const plotX = rightChartX + 12;
+        const plotY = chartTop + 22;
+        const plotW = chartW - 24;
+        const plotH = chartH - 34;
+        const barW = Math.max(4, Math.min(14, plotW / 24 - 1));
+        rawDoc.setFillColor!(159, 18, 57);
+        for (const h of hourly) {
+          const bx = plotX + (h.hour / 23) * (plotW - barW);
+          const bh = (Math.max(0, Math.min(100, h.avg_tremor_index)) / 100) * plotH;
+          rawDoc.rect!(bx, plotY + plotH - bh, barW, bh, "F");
+        }
+      }
+      cursorY = chartTop + chartH + 24;
+    }
+
     // How to Read This Data Guide
-    const afterSummaryY = getNextY(220, 140);
+    if (cursorY + 130 > 740) {
+      doc.addPage();
+      cursorY = 48;
+    }
     doc.setFontSize(13);
     doc.setTextColor(15, 45, 89);
-    doc.text("How to Read This Clinical Motor Report", 40, afterSummaryY);
+    doc.text("How to Read This Clinical Motor Report", 40, cursorY);
 
     autoTable(doc, {
-      startY: afterSummaryY + 8,
+      startY: cursorY + 8,
       head: [["Column / Term", "Clinical Meaning & Reference Range"]],
       body: [
         [
           "Cursor Stability Score (0-100)",
-          "Composite index combining suppressed 4-7 Hz tremor power and One Euro damping benefit. Higher scores (85-100) indicate steady control; <65 suggests pronounced tremor burden.",
+          "Composite index combining 4-12 Hz tremor burden, RMS displacement, and suppression ratio. 85-100 indicates steady control; <65 flags elevated tremor activity.",
         ],
         [
-          "4-7 Hz Tremor Power (%)",
-          "Percentage of Welch spectral power (0.5-12 Hz band) occurring specifically between 4 and 7 Hz. Values >= 50% estimate an OFF-medication or high-tremor period.",
+          "4-6 Hz Resting vs 6-12 Hz Action (%)",
+          "Share of 0.5-15 Hz pointer spectral energy in the classic resting tremor band (4-6 Hz) vs. postural/kinetic essential tremor band (6-12 Hz).",
         ],
         [
-          "Dominant Tremor Frequency (Hz)",
-          "Peak involuntary oscillation frequency when 4-7 Hz band power reaches >= 10%. Classic resting Parkinsonian tremor falls between 4.0 and 7.0 Hz.",
+          "RMS Tremor Amplitude (mm)",
+          "Root-mean-square 4-12 Hz oscillatory displacement converted to physical millimeters using display DPI.",
         ],
         [
-          "Assistance Mode Status",
-          "Indicates whether One Euro stabilization & click-freeze were active ('Stabilized') vs. unassisted raw baseline movement ('Unassisted Baseline').",
-        ],
-        [
-          "Gaze Calibration Error (px)",
-          "Mean Euclidean distance error during 5- or 9-point gaze fitting. Under 65 px enables comfortable large-button hands-free selection.",
+          "Medication & Symptom Diary",
+          "Patient-entered timestamps for medication doses, tremor flares, and fatigue, aligned to evaluate ON/OFF timing patterns.",
         ],
       ],
       headStyles: { fillColor: [1, 48, 90], textColor: [255, 255, 255] },
       styles: { fontSize: 8.5, cellPadding: 5 },
     });
 
+    // Medication & Symptom Event Diary Table
+    if (events.length > 0) {
+      const afterGuideY = getNextY(420, 120);
+      doc.setFontSize(13);
+      doc.setTextColor(15, 45, 89);
+      doc.text("Medication & Symptom Event Diary", 40, afterGuideY);
+      autoTable(doc, {
+        startY: afterGuideY + 8,
+        head: [["Timestamp (Local)", "Type", "Label", "Dosage", "Severity", "Notes"]],
+        body: events.map((ev) => [
+          new Date(ev.timestamp * 1000).toLocaleString(),
+          ev.event_type,
+          ev.label,
+          ev.dosage || "-",
+          ev.severity !== null ? `${ev.severity}/5` : "-",
+          ev.notes || "-",
+        ]),
+        headStyles: { fillColor: [15, 45, 89], textColor: [255, 255, 255] },
+        styles: { fontSize: 8, cellPadding: 4 },
+      });
+    }
+
     // Daily Trends Table
-    const afterGuideY = getNextY(420, 120);
+    const afterDiaryY = getNextY(480, 120);
     doc.setFontSize(13);
     doc.setTextColor(1, 74, 53);
-    doc.text("Daily Longitudinal Stability & 4-7 Hz Tremor Trends", 40, afterGuideY);
+    doc.text("Daily Longitudinal Stability & Multi-Band Tremor Trends", 40, afterDiaryY);
 
     autoTable(doc, {
-      startY: afterGuideY + 8,
+      startY: afterDiaryY + 8,
       head: [[
-        "Calendar Date",
+        "Date",
         "Sessions",
-        "FFT Windows",
-        "Mean Stability Score (0-100)",
-        "4-7 Hz Tremor Power (%)",
-        "Mean Peak Frequency",
-        "Clinical Assessment",
+        "Windows",
+        "Stability (/100)",
+        "4-6 Hz / 6-12 Hz",
+        "RMS (mm)",
+        "Peak Freq",
       ]],
       body:
         trends.length > 0
@@ -175,9 +396,9 @@ export function SessionHistory() {
               String(t.session_count),
               String(t.sample_count),
               t.avg_stability_score.toFixed(1),
-              `${t.avg_tremor_index.toFixed(1)}%`,
+              `${(t.avg_resting_band_pct ?? 0).toFixed(0)}% / ${(t.avg_action_band_pct ?? 0).toFixed(0)}%`,
+              `${(t.avg_rms_amplitude_mm ?? 0).toFixed(2)} mm`,
               t.avg_tremor_hz !== null ? `${t.avg_tremor_hz.toFixed(2)} Hz` : "None",
-              formatStabilityBand(t.avg_stability_score),
             ])
           : [["No daily trends recorded yet", "-", "-", "-", "-", "-", "-"]],
       headStyles: { fillColor: [1, 74, 53], textColor: [255, 255, 255] },
@@ -193,24 +414,24 @@ export function SessionHistory() {
     autoTable(doc, {
       startY: afterDailyY + 8,
       head: [[
-        "Session Completed (Local Time)",
-        "Session ID",
-        "FFT Windows",
-        "Stability Score (/100)",
-        "4-7 Hz Tremor Power (%)",
-        "Dominant Freq (Hz)",
-        "Assistance Mode",
+        "Completed (Local Time)",
+        "Windows",
+        "Stability (/100)",
+        "4-12 Hz Power",
+        "RMS (mm)",
+        "Peak Freq",
+        "Mode",
       ]],
       body:
         sessions.length > 0
           ? sessions.map((s) => [
               new Date(s.ended_at * 1000).toLocaleString(),
-              s.session_id,
               String(s.sample_count),
               s.avg_stability_score.toFixed(1),
               `${s.avg_tremor_index.toFixed(1)}%`,
+              `${(s.avg_rms_amplitude_mm ?? 0).toFixed(2)} mm`,
               s.avg_tremor_hz !== null ? `${s.avg_tremor_hz.toFixed(2)} Hz` : "None",
-              s.had_stabilization ? "Stabilized (SteadyHand ON)" : "Unassisted Baseline",
+              s.had_stabilization ? "Stabilized" : "Baseline",
             ])
           : [["No completed sessions stored yet", "-", "-", "-", "-", "-", "-"]],
       headStyles: { fillColor: [1, 74, 53], textColor: [255, 255, 255] },
@@ -238,19 +459,22 @@ export function SessionHistory() {
     }
 
     const stamp = new Date().toISOString().slice(0, 10);
-    doc.save(`truecursor-clinician-motor-report-${stamp}.pdf`);
+    doc.save(`clearcursor-clinician-motor-report-${stamp}.pdf`);
   };
 
   const exportClinicianCsv = () => {
     const header = [
       "Record Type",
       "Date / Timestamp",
-      "Session or Profile ID",
-      "Sample Windows / Error px",
+      "Session or Event ID",
+      "Sample Windows / Dosage / Error",
       "Stability Score (0-100)",
-      "4-7 Hz Tremor Band Power (%)",
+      "4-12 Hz Tremor Power (%)",
+      "4-6 Hz Resting (%)",
+      "6-12 Hz Action (%)",
+      "RMS Amplitude (mm)",
       "Dominant Frequency (Hz)",
-      "Assistance / Tracking Mode",
+      "Mode / Category",
       "Clinical Note",
     ];
     const rows: string[][] = [
@@ -261,6 +485,9 @@ export function SessionHistory() {
         `${t.sample_count} windows`,
         t.avg_stability_score.toFixed(1),
         t.avg_tremor_index.toFixed(1),
+        (t.avg_resting_band_pct ?? 0).toFixed(1),
+        (t.avg_action_band_pct ?? 0).toFixed(1),
+        (t.avg_rms_amplitude_mm ?? 0).toFixed(2),
         t.avg_tremor_hz !== null ? t.avg_tremor_hz.toFixed(2) : "None",
         "Aggregated",
         formatStabilityBand(t.avg_stability_score),
@@ -272,15 +499,35 @@ export function SessionHistory() {
         `${s.sample_count} windows`,
         s.avg_stability_score.toFixed(1),
         s.avg_tremor_index.toFixed(1),
+        (s.avg_resting_band_pct ?? 0).toFixed(1),
+        (s.avg_action_band_pct ?? 0).toFixed(1),
+        (s.avg_rms_amplitude_mm ?? 0).toFixed(2),
         s.avg_tremor_hz !== null ? s.avg_tremor_hz.toFixed(2) : "None",
         s.had_stabilization ? "SteadyHand Stabilized" : "Unassisted Baseline",
         formatFrequencyClinicalNote(s.avg_tremor_hz),
+      ]),
+      ...events.map((ev) => [
+        "Clinical Event",
+        new Date(ev.timestamp * 1000).toISOString(),
+        String(ev.id),
+        ev.dosage || (ev.severity ? `Severity ${ev.severity}/5` : ""),
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ev.event_type,
+        `${ev.label}${ev.notes ? ` - ${ev.notes}` : ""}`,
       ]),
       ...calibrations.map((c) => [
         "Gaze Calibration",
         new Date(c.created_at * 1000).toISOString(),
         c.name,
         `${c.error_px.toFixed(1)} px`,
+        "",
+        "",
+        "",
         "",
         "",
         "",
@@ -299,7 +546,7 @@ export function SessionHistory() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `truecursor-clinician-data-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `clearcursor-clinician-data-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -309,14 +556,14 @@ export function SessionHistory() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-[var(--tc-ink)]">
-            Clinician Motor Report &amp; Session History
+            Clinician Motor Report &amp; Medication Diary
           </h2>
           <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
-            Longitudinal 4-7 Hz Welch spectral tremor records, stability trends, and neurologist-ready PDF/CSV exports from SQLite.
+            Longitudinal 4-12 Hz multi-band Welch tremor spectra, RMS displacement, diurnal patterns, and neurologist-ready PDF/CSV exports.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={exportClinicianPdf}
@@ -347,6 +594,43 @@ export function SessionHistory() {
         </div>
       </div>
 
+      {/* Date Window Selector & Simulation Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] px-5 py-3.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-2 text-sm font-bold text-[var(--tc-ink)]">Report Window:</span>
+          {DATE_WINDOWS.map((w) => (
+            <button
+              key={w.days}
+              type="button"
+              aria-pressed={days === w.days}
+              onClick={() => setDays(w.days)}
+              className={`min-h-10 rounded-lg border px-3.5 text-sm font-bold ${
+                days === w.days
+                  ? "border-[var(--tc-primary)] bg-[var(--tc-primary)] text-white"
+                  : "border-[var(--tc-border-strong)] bg-[var(--tc-bg)] text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="inline-flex cursor-pointer items-center gap-2.5 text-sm font-semibold text-[var(--tc-ink)]">
+          <input
+            type="checkbox"
+            checked={includeSimulated}
+            onChange={(e) => setIncludeSimulated(e.target.checked)}
+            className="h-4 w-4 accent-[var(--tc-primary)]"
+          />
+          <span>
+            Include Demo/Simulated Data
+            {!includeSimulated && simulatedCount > 0
+              ? ` (${simulatedCount} demo windows excluded)`
+              : ""}
+          </span>
+        </label>
+      </div>
+
       {error && (
         <div
           role="alert"
@@ -356,7 +640,35 @@ export function SessionHistory() {
         </div>
       )}
 
-      {/* How to Read the Clinical Data (Flattened editorial glossary, zero nested cards) */}
+      {/* Functional Protection Summary Strip */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+          <p className="text-xs font-bold uppercase text-[var(--tc-ink-muted)]">Mean RMS Amplitude</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--tc-ink)] tabular-nums">
+            {meanRmsMm.toFixed(2)} mm
+          </p>
+        </div>
+        <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+          <p className="text-xs font-bold uppercase text-[var(--tc-ink-muted)]">Slip-Clicks Rescued</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--tc-primary)] tabular-nums">
+            {functional?.total_click_rescues ?? 0}
+          </p>
+        </div>
+        <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+          <p className="text-xs font-bold uppercase text-[var(--tc-ink-muted)]">Accidental Drags Blocked</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--tc-primary)] tabular-nums">
+            {functional?.total_drags_prevented ?? 0}
+          </p>
+        </div>
+        <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+          <p className="text-xs font-bold uppercase text-[var(--tc-ink-muted)]">Double-Click Bounces Stopped</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--tc-primary)] tabular-nums">
+            {functional?.total_bounces_blocked ?? 0}
+          </p>
+        </div>
+      </div>
+
+      {/* How to Read the Clinical Data */}
       <section
         aria-labelledby="how-to-read-heading"
         className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-mint)] p-6"
@@ -367,6 +679,9 @@ export function SessionHistory() {
             How to Read This Clinical Motor Data
           </h3>
         </div>
+        <p className="mt-2 text-xs font-semibold text-[var(--tc-ink-muted)]">
+          Non-Diagnostic Assistive Telemetry: Metrics summarize real-world mouse displacement spectra to support discussions with your physician or occupational therapist; ClearCursor is not a diagnostic medical device.
+        </p>
         <dl className="mt-4 grid grid-cols-1 gap-6 text-base text-[var(--tc-ink)] md:grid-cols-2">
           <div className="border-t-2 border-[var(--tc-primary)] pt-3">
             <dt className="font-bold text-[var(--tc-primary)]">Cursor Stability Score (0 to 100)</dt>
@@ -375,42 +690,167 @@ export function SessionHistory() {
             </dd>
           </div>
           <div className="border-t-2 border-[var(--tc-primary)] pt-3">
-            <dt className="font-bold text-[var(--tc-primary)]">4-7 Hz Tremor Band Power (%) &amp; Frequency (Hz)</dt>
+            <dt className="font-bold text-[var(--tc-primary)]">4-6 Hz Resting vs 6-12 Hz Action Bands</dt>
             <dd className="mt-1 text-sm text-[var(--tc-ink)]">
-              Percentage of Welch movement energy concentrated in the <strong>4-7 Hz Parkinsonian tremor band</strong>. Readings <strong>50% or higher</strong> indicate a likely OFF-medication or high-tremor interval.
-            </dd>
-          </div>
-          <div className="border-t-2 border-[var(--tc-primary)] pt-3">
-            <dt className="font-bold text-[var(--tc-primary)]">Assistance Mode (Stabilized vs. Baseline)</dt>
-            <dd className="mt-1 text-sm text-[var(--tc-ink)]">
-              Shows whether One Euro smoothing and 180ms click-freeze were turned ON (<strong>Stabilized</strong>) or OFF (<strong>Unassisted Baseline</strong>) during that session window.
-            </dd>
-          </div>
-          <div className="border-t-2 border-[var(--tc-primary)] pt-3">
-            <dt className="font-bold text-[var(--tc-primary)]">Gaze Calibration Mean Error (px)</dt>
-            <dd className="mt-1 text-sm text-[var(--tc-ink)]">
-              Average pixel offset from the 5- or 9-point gaze wizard. Values <strong>under 65 px</strong> provide comfortable hands-free button selection.
+              Separates lower-frequency resting tremor energy (<strong>4-6 Hz</strong>) from kinetic/postural essential tremor energy (<strong>6-12 Hz</strong>) alongside physical RMS amplitude in millimeters.
             </dd>
           </div>
         </dl>
       </section>
 
-      {/* Recharts Daily Stability & Tremor Charts */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Medication & Symptom Event Diary */}
+      <section
+        aria-labelledby="diary-heading"
+        className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-6"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <Pill className="h-6 w-6 text-[var(--tc-primary)]" aria-hidden="true" />
+            <h3 id="diary-heading" className="text-xl font-bold text-[var(--tc-ink)]">
+              Medication &amp; Symptom Diary
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={savingEvent}
+              onClick={() => void handleQuickEvent("medication", "Medication Dose Taken")}
+              className="min-h-11 rounded-lg border-2 border-[var(--tc-primary)] bg-[var(--tc-mint)] px-3.5 text-sm font-bold text-[var(--tc-primary)] hover:bg-[#DCE8FD]"
+            >
+              + Medication Taken
+            </button>
+            <button
+              type="button"
+              disabled={savingEvent}
+              onClick={() => void handleQuickEvent("flare", "Tremor Flare", 4)}
+              className="min-h-11 rounded-lg border-2 border-[var(--tc-alert)] bg-[var(--tc-alert-bg)] px-3.5 text-sm font-bold text-[var(--tc-alert)]"
+            >
+              + Tremor Flare
+            </button>
+            <button
+              type="button"
+              disabled={savingEvent}
+              onClick={() => void handleQuickEvent("fatigue", "Hand Fatigue", 3)}
+              className="min-h-11 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-3.5 text-sm font-bold text-[var(--tc-ink)]"
+            >
+              + Fatigue
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmitEvent(e)} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-12">
+          <select
+            aria-label="Event type"
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value as ClinicalEventType)}
+            className="min-h-12 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-sm font-semibold md:col-span-2"
+          >
+            <option value="medication">Medication</option>
+            <option value="flare">Tremor Flare</option>
+            <option value="symptom">Symptom</option>
+            <option value="fatigue">Fatigue</option>
+            <option value="note">Clinical Note</option>
+          </select>
+          <input
+            type="text"
+            value={eventLabel}
+            onChange={(e) => setEventLabel(e.target.value)}
+            placeholder="Label (e.g. Carbidopa-Levodopa)"
+            className="min-h-12 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-sm md:col-span-3"
+          />
+          <input
+            type="text"
+            value={eventDosage}
+            onChange={(e) => setEventDosage(e.target.value)}
+            placeholder="Dosage (optional)"
+            className="min-h-12 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-sm md:col-span-2"
+          />
+          <select
+            aria-label="Severity"
+            value={eventSeverity}
+            onChange={(e) => setEventSeverity(e.target.value)}
+            className="min-h-12 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-sm md:col-span-2"
+          >
+            <option value="">Severity (opt.)</option>
+            <option value="1">1 - Very Mild</option>
+            <option value="2">2 - Mild</option>
+            <option value="3">3 - Moderate</option>
+            <option value="4">4 - Marked</option>
+            <option value="5">5 - Severe</option>
+          </select>
+          <input
+            type="text"
+            value={eventNotes}
+            onChange={(e) => setEventNotes(e.target.value)}
+            placeholder="Notes (optional)"
+            className="min-h-12 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-sm md:col-span-2"
+          />
+          <button
+            type="submit"
+            disabled={savingEvent || !eventLabel.trim()}
+            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-[var(--tc-primary)] px-4 text-sm font-bold text-white hover:bg-[var(--tc-primary-hover)] disabled:opacity-50 md:col-span-1"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span>Log</span>
+          </button>
+        </form>
+
+        {events.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b-2 border-[var(--tc-border)] text-[var(--tc-ink-muted)]">
+                  <th className="py-2 pr-3 font-bold">Time</th>
+                  <th className="py-2 pr-3 font-bold">Type</th>
+                  <th className="py-2 pr-3 font-bold">Label</th>
+                  <th className="py-2 pr-3 font-bold">Dosage / Severity</th>
+                  <th className="py-2 pr-3 font-bold">Notes</th>
+                  <th className="py-2 font-bold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((ev) => (
+                  <tr key={ev.id} className="border-b border-[var(--tc-border)]">
+                    <td className="py-2 pr-3 tabular-nums">{new Date(ev.timestamp * 1000).toLocaleString()}</td>
+                    <td className="py-2 pr-3 font-semibold uppercase">{ev.event_type}</td>
+                    <td className="py-2 pr-3 font-bold">{ev.label}</td>
+                    <td className="py-2 pr-3">{ev.dosage || (ev.severity ? `${ev.severity}/5` : "-")}</td>
+                    <td className="py-2 pr-3 text-[var(--tc-ink-muted)]">{ev.notes || "-"}</td>
+                    <td className="py-2">
+                      <button
+                        type="button"
+                        aria-label={`Delete event ${ev.label}`}
+                        onClick={() => void handleDeleteEvent(ev.id)}
+                        className="rounded p-1 text-[var(--tc-alert)] hover:bg-[var(--tc-alert-bg)]"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Recharts Daily Stability, Multi-Band & Diurnal Charts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section
           aria-labelledby="daily-trend-heading"
           className="space-y-4 border-t-2 border-[var(--tc-border)] pt-5"
         >
-          <h3 id="daily-trend-heading" className="text-xl font-bold text-[var(--tc-ink)]">
-            Daily Average Stability Score (0-100)
+          <h3 id="daily-trend-heading" className="text-lg font-bold text-[var(--tc-ink)]">
+            Daily Stability Score (0-100)
           </h3>
 
           {trends.length === 0 ? (
-            <p className="rounded-md bg-[var(--tc-surface-alt)] p-5 text-base text-[var(--tc-ink-muted)]">
-              No daily stability trends recorded yet. Use the Sandbox Lab or move the pointer with 4-7 Hz simulation enabled for at least 4 seconds to store a window.
+            <p className="rounded-md bg-[var(--tc-surface-alt)] p-5 text-sm text-[var(--tc-ink-muted)]">
+              No daily stability trends recorded in this window yet.
             </p>
           ) : (
-            <div className="h-64 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
+            <div className="h-60 w-full rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-3">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart data={trends}>
                   <defs>
@@ -420,27 +860,10 @@ export function SessionHistory() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="date" stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
-                  <ReferenceLine
-                    y={85}
-                    stroke="#0F2D59"
-                    strokeDasharray="5 4"
-                    strokeOpacity={0.55}
-                    label={{ value: "Optimal (85)", position: "insideTopRight", fill: "#0F2D59", fontSize: 11, fontWeight: 600 }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#0F2D59",
-                      border: "1px solid #1E3A8A",
-                      borderRadius: "10px",
-                      color: "#FFFFFF",
-                      fontWeight: 600,
-                      boxShadow: "0 10px 25px rgba(11, 19, 36, 0.2)",
-                    }}
-                    itemStyle={{ color: "#DBEAFE" }}
-                    labelStyle={{ color: "#93C5FD" }}
-                  />
+                  <XAxis dataKey="date" stroke="#42526E" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={11} tickLine={false} axisLine={false} />
+                  <ReferenceLine y={85} stroke="#0F2D59" strokeDasharray="5 4" strokeOpacity={0.55} />
+                  <Tooltip />
                   <Area
                     type="monotone"
                     dataKey="avg_stability_score"
@@ -448,7 +871,6 @@ export function SessionHistory() {
                     stroke="#1D4ED8"
                     strokeWidth={3}
                     fill="url(#tcDailyStabilityGrad)"
-                    activeDot={{ r: 6, fill: "#0F2D59", stroke: "#FFFFFF", strokeWidth: 2 }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -458,59 +880,55 @@ export function SessionHistory() {
 
         <section
           aria-labelledby="tremor-trend-heading"
-          className="space-y-4 border-t border-[var(--tc-border)] pt-5"
+          className="space-y-4 border-t-2 border-[var(--tc-border)] pt-5"
         >
-          <h3 id="tremor-trend-heading" className="text-xl font-bold text-[var(--tc-ink)]">
-            Daily 4-7 Hz Tremor Power (%) Trend
+          <h3 id="tremor-trend-heading" className="text-lg font-bold text-[var(--tc-ink)]">
+            Resting (4-6 Hz) vs Action (6-12 Hz)
           </h3>
 
           {trends.length === 0 ? (
-            <p className="rounded-xl bg-[var(--tc-surface-alt)] p-5 text-base text-[var(--tc-ink-muted)]">
-              Once sessions are recorded, this chart tracks longitudinal tremor intensity across medication cycles.
+            <p className="rounded-xl bg-[var(--tc-surface-alt)] p-5 text-sm text-[var(--tc-ink-muted)]">
+              Spectral bands populate automatically during everyday pointer movement.
             </p>
           ) : (
-            <div className="h-64 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-4 shadow-[var(--tc-shadow)]">
+            <div className="h-60 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-3 shadow-[var(--tc-shadow)]">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <AreaChart data={trends}>
-                  <defs>
-                    <linearGradient id="tcDailyTremorGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#9F1239" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="#9F1239" stopOpacity={0.01} />
-                    </linearGradient>
-                  </defs>
+                <BarChart data={trends}>
                   <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="date" stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={12} tickLine={false} axisLine={false} />
-                  <ReferenceLine
-                    y={50}
-                    stroke="#9F1239"
-                    strokeDasharray="5 4"
-                    strokeOpacity={0.55}
-                    label={{ value: "OFF-Period (50%)", position: "insideTopRight", fill: "#9F1239", fontSize: 11, fontWeight: 600 }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#0F2D59",
-                      border: "1px solid #1E3A8A",
-                      borderRadius: "10px",
-                      color: "#FFFFFF",
-                      fontWeight: 600,
-                      boxShadow: "0 10px 25px rgba(11, 19, 36, 0.2)",
-                    }}
-                    itemStyle={{ color: "#FFE4E6" }}
-                    labelStyle={{ color: "#93C5FD" }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="avg_tremor_index"
-                    name="4-7 Hz Band Power (%)"
-                    stroke="#9F1239"
-                    strokeWidth={3}
-                    fill="url(#tcDailyTremorGrad)"
-                    dot={{ r: 4, fill: "#9F1239", stroke: "#FFFFFF", strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: "#9F1239", stroke: "#FFFFFF", strokeWidth: 2 }}
-                  />
-                </AreaChart>
+                  <XAxis dataKey="date" stroke="#42526E" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="avg_resting_band_pct" name="4-6 Hz Resting (%)" fill="#0F2D59" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="avg_action_band_pct" name="6-12 Hz Action (%)" fill="#9F1239" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </section>
+
+        <section
+          aria-labelledby="diurnal-heading"
+          className="space-y-4 border-t-2 border-[var(--tc-border)] pt-5"
+        >
+          <h3 id="diurnal-heading" className="text-lg font-bold text-[var(--tc-ink)]">
+            Time-of-Day Diurnal Pattern (0-23h)
+          </h3>
+
+          {hourly.length === 0 ? (
+            <p className="rounded-xl bg-[var(--tc-surface-alt)] p-5 text-sm text-[var(--tc-ink-muted)]">
+              Hourly tremor distribution appears once sessions are recorded across the day.
+            </p>
+          ) : (
+            <div className="h-60 w-full rounded-xl border border-[var(--tc-border)] bg-[var(--tc-surface)] p-3 shadow-[var(--tc-shadow)]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart data={hourly}>
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" stroke="#42526E" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} stroke="#42526E" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="avg_tremor_index" name="4-12 Hz Tremor (%)" fill="#1D4ED8" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -525,7 +943,7 @@ export function SessionHistory() {
           </h3>
           {sessions.length === 0 ? (
             <p className="mt-4 text-base text-[var(--tc-ink-muted)]">
-              No completed sessions stored yet.
+              No completed real-world sessions stored yet in this window.
             </p>
           ) : (
             <div className="mt-4 overflow-x-auto">
@@ -534,7 +952,7 @@ export function SessionHistory() {
                   <tr className="border-b-2 border-[var(--tc-border)] text-[var(--tc-ink-muted)]">
                     <th className="py-3 pr-3 font-bold">Completed (Local Time)</th>
                     <th className="py-3 pr-3 font-bold">Stability (/100)</th>
-                    <th className="py-3 pr-3 font-bold">4-7 Hz Power</th>
+                    <th className="py-3 pr-3 font-bold">4-12 Hz / RMS</th>
                     <th className="py-3 pr-3 font-bold">Peak Freq</th>
                     <th className="py-3 font-bold">Mode / Windows</th>
                   </tr>
@@ -549,7 +967,7 @@ export function SessionHistory() {
                         {s.avg_stability_score.toFixed(1)}
                       </td>
                       <td className="py-3 pr-3 tabular-nums">
-                        {s.avg_tremor_index.toFixed(1)}%
+                        {s.avg_tremor_index.toFixed(1)}% ({(s.avg_rms_amplitude_mm ?? 0).toFixed(2)} mm)
                       </td>
                       <td className="py-3 pr-3 tabular-nums">
                         {s.avg_tremor_hz !== null ? `${s.avg_tremor_hz.toFixed(2)} Hz` : "None"}

@@ -1,8 +1,14 @@
-import { Check, ChevronDown, ChevronUp, Monitor, RotateCcw, Save } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Monitor, Plus, RotateCcw, Save, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchDisplays } from "../api/client";
 import { CLINICAL_PRESETS, type ClinicalPreset } from "../presets";
-import type { DisplaysResponse, SettingsPayload, SettingsUpdate } from "../types/telemetry";
+import type {
+  BypassKeyOption,
+  DisplaysResponse,
+  PrecisionKeyOption,
+  SettingsPayload,
+  SettingsUpdate,
+} from "../types/telemetry";
 import { SteppedControl } from "./SteppedControl";
 
 interface SensitivityPanelProps {
@@ -10,6 +16,21 @@ interface SensitivityPanelProps {
   saving: boolean;
   onSave: (updates: SettingsUpdate) => Promise<void>;
 }
+
+const SUGGESTED_EXCLUDED_APPS = ["Figma", "Photoshop", "Illustrator", "Blender", "Procreate"];
+const BYPASS_OPTIONS: { value: BypassKeyOption; label: string }[] = [
+  { value: "alt", label: "Alt / Option" },
+  { value: "fn", label: "Fn (macOS)" },
+  { value: "shift", label: "Shift" },
+  { value: "ctrl", label: "Ctrl" },
+  { value: "none", label: "Disabled" },
+];
+const PRECISION_OPTIONS: { value: PrecisionKeyOption; label: string }[] = [
+  { value: "none", label: "Disabled" },
+  { value: "shift", label: "Shift (0.35x speed)" },
+  { value: "ctrl", label: "Ctrl (0.35x speed)" },
+  { value: "alt", label: "Alt / Option (0.35x speed)" },
+];
 
 export function SensitivityPanel({
   settings,
@@ -20,6 +41,7 @@ export function SensitivityPanel({
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
   const [displaySummary, setDisplaySummary] = useState<DisplaysResponse | null>(null);
+  const [newAppInput, setNewAppInput] = useState<string>("");
 
   useEffect(() => {
     setDraft(settings);
@@ -57,22 +79,52 @@ export function SensitivityPanel({
     setSavedNotice(`Applied "${preset.label}" and persisted settings.`);
   };
 
+  const addExcludedApp = (appName: string) => {
+    const trimmed = appName.trim();
+    if (!trimmed) {
+      return;
+    }
+    const exists = draft.excluded_apps.some(
+      (item) => item.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!exists) {
+      updateField("excluded_apps", [...draft.excluded_apps, trimmed]);
+    }
+    setNewAppInput("");
+  };
+
+  const removeExcludedApp = (appName: string) => {
+    updateField(
+      "excluded_apps",
+      draft.excluded_apps.filter((item) => item !== appName)
+    );
+  };
+
   const handleSave = async () => {
     await onSave({
       profile: draft.profile,
       tremor_strength: draft.tremor_strength,
       one_euro_min_cutoff: draft.one_euro_min_cutoff,
       one_euro_beta: draft.one_euro_beta,
+      adaptive_smoothing: draft.adaptive_smoothing,
       anti_drag: draft.anti_drag,
       anti_drag_threshold_px: draft.anti_drag_threshold_px,
       anti_drag_hold_ms: draft.anti_drag_hold_ms,
       click_freeze_ms: draft.click_freeze_ms,
+      click_debounce_ms: draft.click_debounce_ms,
+      right_click_guard: draft.right_click_guard,
+      scroll_smoothing: draft.scroll_smoothing,
       gravity_wells: draft.gravity_wells,
       gravity_strength: draft.gravity_strength,
+      bypass_key: draft.bypass_key,
+      precision_key: draft.precision_key,
+      excluded_apps: draft.excluded_apps,
       gaze_dwell_ms: draft.gaze_dwell_ms,
       blink_select: draft.blink_select,
       gaze_source: draft.gaze_source,
       global_shortcut: draft.global_shortcut,
+      resume_stabilization_on_launch: draft.resume_stabilization_on_launch,
+      minimize_to_tray: draft.minimize_to_tray,
     });
     setSavedNotice("Settings saved to SQLite and applied to active engine workers.");
   };
@@ -85,14 +137,23 @@ export function SensitivityPanel({
       tremor_strength: 100,
       one_euro_min_cutoff: 0.6,
       one_euro_beta: 0.004,
+      adaptive_smoothing: true,
       anti_drag: true,
       anti_drag_threshold_px: 8,
-      anti_drag_hold_ms: 300,
+      anti_drag_hold_ms: 180,
       click_freeze_ms: 180,
+      click_debounce_ms: 70,
+      right_click_guard: true,
+      scroll_smoothing: true,
       gravity_wells: true,
       gravity_strength: 35,
+      bypass_key: "alt",
+      precision_key: "none",
+      excluded_apps: [],
       gaze_dwell_ms: 1100,
       global_shortcut: "CommandOrControl+Shift+S",
+      resume_stabilization_on_launch: false,
+      minimize_to_tray: true,
     }));
   };
 
@@ -101,10 +162,10 @@ export function SensitivityPanel({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-[var(--tc-ink)]">
-            Comfort Presets &amp; Advanced Tuning
+            Comfort Presets &amp; Everyday Tuning
           </h2>
           <p className="mt-1 text-base text-[var(--tc-ink-muted)]">
-            Pick a preset matching how your hands feel right now, or open Advanced Tuning for manual filter adjustment.
+            Pick a preset matching how your hands feel right now, configure hold-to-bypass and excluded apps, or open Advanced Tuning.
           </p>
         </div>
 
@@ -193,9 +254,232 @@ export function SensitivityPanel({
           <span>Gaze Input Source</span>
           <span className="uppercase">{draft.gaze_source}</span>
         </button>
+
+        <button
+          type="button"
+          aria-pressed={draft.scroll_smoothing}
+          onClick={() => updateField("scroll_smoothing", !draft.scroll_smoothing)}
+          className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
+            draft.scroll_smoothing
+              ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+              : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
+          }`}
+        >
+          <span>Scroll Jitter Guard</span>
+          <span>{draft.scroll_smoothing ? "ON" : "OFF"}</span>
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={draft.right_click_guard}
+          onClick={() => updateField("right_click_guard", !draft.right_click_guard)}
+          className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
+            draft.right_click_guard
+              ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+              : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
+          }`}
+        >
+          <span>Right-Click Twitch Guard</span>
+          <span>{draft.right_click_guard ? "ON" : "OFF"}</span>
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={draft.adaptive_smoothing}
+          onClick={() => updateField("adaptive_smoothing", !draft.adaptive_smoothing)}
+          className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
+            draft.adaptive_smoothing
+              ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+              : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
+          }`}
+        >
+          <span>Smooth Adaptive Ramping</span>
+          <span>{draft.adaptive_smoothing ? "ON" : "OFF"}</span>
+        </button>
       </div>
 
-      {/* Expandable Advanced Tuning Section (Flattened without outer nested box) */}
+      {/* Everyday Workflow: Bypass Key, Precision Mode, Tray & Exclusions */}
+      <section className="space-y-5 border-t-2 border-[var(--tc-border)] pt-6">
+        <h3 className="text-xl font-bold text-[var(--tc-ink)]">
+          Everyday Workflow, Hotkeys &amp; App Exclusions
+        </h3>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+            <label htmlFor="bypass-key-select" className="block text-sm font-bold text-[var(--tc-ink)]">
+              Hold-to-Bypass Key
+            </label>
+            <p className="mt-1 text-xs text-[var(--tc-ink-muted)]">
+              Hold this modifier key to temporarily pause smoothing for freehand drawing.
+            </p>
+            <select
+              id="bypass-key-select"
+              value={draft.bypass_key}
+              onChange={(e) => updateField("bypass_key", e.target.value as BypassKeyOption)}
+              className="mt-3 min-h-12 w-full rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-base font-semibold text-[var(--tc-ink)]"
+            >
+              {BYPASS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+            <label htmlFor="precision-key-select" className="block text-sm font-bold text-[var(--tc-ink)]">
+              Precision Slow-Mode Key
+            </label>
+            <p className="mt-1 text-xs text-[var(--tc-ink-muted)]">
+              Hold to scale cursor speed down to 35% for fine-grained button targeting.
+            </p>
+            <select
+              id="precision-key-select"
+              value={draft.precision_key}
+              onChange={(e) => updateField("precision_key", e.target.value as PrecisionKeyOption)}
+              className="mt-3 min-h-12 w-full rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-base font-semibold text-[var(--tc-ink)]"
+            >
+              {PRECISION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-4">
+            <label htmlFor="global-shortcut-input" className="block text-sm font-bold text-[var(--tc-ink)]">
+              Global Toggle Hotkey
+            </label>
+            <p className="mt-1 text-xs text-[var(--tc-ink-muted)]">
+              Emergency Stop All is always bound to Command/Ctrl+Alt+Esc.
+            </p>
+            <input
+              id="global-shortcut-input"
+              type="text"
+              value={draft.global_shortcut}
+              onChange={(e) => updateField("global_shortcut", e.target.value)}
+              className="mt-3 min-h-12 w-full rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3 text-base font-semibold text-[var(--tc-ink)]"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <button
+            type="button"
+            aria-pressed={draft.minimize_to_tray}
+            onClick={() => updateField("minimize_to_tray", !draft.minimize_to_tray)}
+            className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
+              draft.minimize_to_tray
+                ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+                : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
+            }`}
+          >
+            <div>
+              <span className="block">Keep Running in Tray on Window Close</span>
+              <span className="text-xs font-normal text-[var(--tc-ink-muted)]">
+                Closing the window hides to menu bar / tray so smoothing &amp; logging stay active.
+              </span>
+            </div>
+            <span>{draft.minimize_to_tray ? "ON" : "OFF"}</span>
+          </button>
+
+          <button
+            type="button"
+            aria-pressed={draft.resume_stabilization_on_launch}
+            onClick={() =>
+              updateField("resume_stabilization_on_launch", !draft.resume_stabilization_on_launch)
+            }
+            className={`flex min-h-16 items-center justify-between gap-4 rounded-lg border-2 px-6 py-4 text-left text-base font-bold ${
+              draft.resume_stabilization_on_launch
+                ? "border-[var(--tc-primary)] bg-[var(--tc-mint)] text-[var(--tc-ink)]"
+                : "border-[var(--tc-border-strong)] bg-[var(--tc-surface)] text-[var(--tc-ink)]"
+            }`}
+          >
+            <div>
+              <span className="block">Resume OS Smoothing on Launch</span>
+              <span className="text-xs font-normal text-[var(--tc-ink-muted)]">
+                Automatically re-arm system cursor interception when ClearCursor starts.
+              </span>
+            </div>
+            <span>{draft.resume_stabilization_on_launch ? "ON" : "OFF"}</span>
+          </button>
+        </div>
+
+        {/* Per-App Exclusions */}
+        <div className="rounded-lg border-2 border-[var(--tc-border)] bg-[var(--tc-surface)] p-5">
+          <h4 className="text-base font-bold text-[var(--tc-ink)]">
+            Per-App Auto-Exclusions (Creative, Drawing &amp; Gaming Apps)
+          </h4>
+          <p className="mt-1 text-sm text-[var(--tc-ink-muted)]">
+            ClearCursor automatically bypasses cursor interception whenever one of these apps is in focus.
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {draft.excluded_apps.map((app) => (
+              <span
+                key={app}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--tc-primary)] bg-[var(--tc-mint)] px-3.5 py-1.5 text-sm font-bold text-[var(--tc-primary)]"
+              >
+                <span>{app}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove excluded app ${app}`}
+                  onClick={() => removeExcludedApp(app)}
+                  className="rounded-full p-0.5 hover:bg-white"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+            {draft.excluded_apps.length === 0 && (
+              <span className="text-sm text-[var(--tc-ink-muted)]">
+                No excluded apps configured yet.
+              </span>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              value={newAppInput}
+              onChange={(e) => setNewAppInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addExcludedApp(newAppInput);
+                }
+              }}
+              placeholder="App name or bundle ID (e.g. Figma, Photoshop)"
+              className="min-h-12 min-w-[260px] flex-1 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-bg)] px-3.5 text-base text-[var(--tc-ink)]"
+            />
+            <button
+              type="button"
+              onClick={() => addExcludedApp(newAppInput)}
+              className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[var(--tc-primary)] px-4 text-sm font-bold text-white hover:bg-[var(--tc-primary-hover)]"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              <span>Add App</span>
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-[var(--tc-ink-muted)]">Quick add:</span>
+            {SUGGESTED_EXCLUDED_APPS.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => addExcludedApp(name)}
+                className="rounded-md border border-[var(--tc-border-strong)] bg-[var(--tc-surface-alt)] px-2.5 py-1 text-xs font-semibold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
+              >
+                + {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Expandable Advanced Tuning Section */}
       <section className="border-t-2 border-[var(--tc-border)] pt-6">
         <button
           type="button"
@@ -203,7 +487,7 @@ export function SensitivityPanel({
           onClick={() => setAdvancedOpen((prev) => !prev)}
           className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg border-2 border-[var(--tc-border-strong)] bg-[var(--tc-surface)] px-5 text-left text-lg font-bold text-[var(--tc-ink)] hover:bg-[var(--tc-mint)]"
         >
-          <span>Advanced Tuning (One Euro, Click-Freeze, Gravity Wells &amp; Dwell)</span>
+          <span>Advanced Tuning (One Euro, Click-Freeze, Bounce Guard, Gravity Wells &amp; Dwell)</span>
           {advancedOpen ? (
             <ChevronUp className="h-6 w-6 shrink-0" aria-hidden="true" />
           ) : (
@@ -238,6 +522,18 @@ export function SensitivityPanel({
             />
 
             <SteppedControl
+              id="click-debounce-ms"
+              label="Double-Click Bounce Guard"
+              description="Blocks involuntary repeat clicks faster than this interval after button release."
+              value={draft.click_debounce_ms}
+              min={0}
+              max={250}
+              step={10}
+              unit="ms"
+              onChange={(v) => updateField("click_debounce_ms", v)}
+            />
+
+            <SteppedControl
               id="gravity-strength"
               label="Gravity Well Magnetism"
               description="Gentle pull toward nearby buttons when slowing down to click."
@@ -252,7 +548,7 @@ export function SensitivityPanel({
             <SteppedControl
               id="min-cutoff"
               label="One Euro Min Cutoff"
-              description="Lower cutoff increases stillness against 4-7 Hz trembling."
+              description="Lower cutoff increases stillness against 4-12 Hz trembling."
               value={draft.one_euro_min_cutoff}
               min={0.05}
               max={2.0}
@@ -305,7 +601,7 @@ export function SensitivityPanel({
               value={draft.anti_drag_hold_ms}
               min={100}
               max={1500}
-              step={50}
+              step={40}
               unit="ms"
               onChange={(v) => updateField("anti_drag_hold_ms", v)}
             />

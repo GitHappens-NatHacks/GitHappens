@@ -1,12 +1,12 @@
 [package]
-name = "truecursor-desktop"
-version = "0.1.0"
-description = "TrueCursor Parkinson's motor stabilization and gaze tracking desktop app"
-authors = ["TrueCursor Team"]
+name = "clearcursor-desktop"
+version = "0.2.0"
+description = "ClearCursor motor stabilization, gaze control, and clinician telemetry desktop app"
+authors = ["ClearCursor Contributors"]
 edition = "2021"
 
 [lib]
-name = "truecursor_desktop_lib"
+name = "clearcursor_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

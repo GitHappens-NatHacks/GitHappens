@@ -1,5 +1,5 @@
 /**
- * TrueCursor Web Assist core math: One-Euro 2D smoothing, 180ms Click-Freeze,
+ * ClearCursor Web Assist core math: One-Euro 2D smoothing, 180ms Click-Freeze,
  * and DOM Gravity Well solver. Shared between browser content scripts and Node tests.
  */
 (function (root, factory) {
@@ -7,6 +7,7 @@
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   }
+  root.ClearCursorStabilizer = api;
   root.TrueCursorStabilizer = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";

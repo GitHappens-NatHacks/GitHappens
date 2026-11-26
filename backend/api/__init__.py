@@ -1,1 +1,1 @@
-"""FastAPI and WebSocket service layer for TrueCursor."""
+"""FastAPI and WebSocket service layer for ClearCursor."""

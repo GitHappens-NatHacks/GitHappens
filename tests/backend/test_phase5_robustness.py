@@ -6,6 +6,7 @@ import builtins
 import sqlite3
 import sys
 import threading
+import time
 import types
 from types import SimpleNamespace
 
@@ -80,13 +81,14 @@ def test_database_recovers_corrupt_settings_and_handles_concurrent_writes(tmp_pa
 
     # Threaded concurrent tremor writes must remain consistent under RLock + WAL
     errors: list[Exception] = []
+    base_ts = time.time() - 60.0
 
     def writer(worker_idx: int) -> None:
         try:
             for sample_idx in range(10):
                 db.record_tremor_sample(
                     session_id=f"sess-{worker_idx}",
-                    timestamp=1700000000.0 + sample_idx,
+                    timestamp=base_ts + sample_idx,
                     sample_time=float(sample_idx),
                     tremor_index=25.0 + worker_idx,
                     dominant_hz=5.2,
@@ -105,7 +107,8 @@ def test_database_recovers_corrupt_settings_and_handles_concurrent_writes(tmp_pa
         th.join()
 
     assert errors == []
-    summary = db.get_session_summaries(days=14, limit=20)
+    assert db.get_session_summaries(days=14, limit=20)["sessions"] == []
+    summary = db.get_session_summaries(days=14, limit=20, include_simulated=True)
     assert len(summary["sessions"]) == 4
     db.close()
 

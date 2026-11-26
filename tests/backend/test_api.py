@@ -105,7 +105,12 @@ def test_rest_settings_calibration_toggle_and_history(tmp_path):
         latest_row = hist_json["tremor_history"][0]
         assert 4.0 <= latest_row["dominant_hz"] <= 7.0
 
-        sessions = client.get("/api/sessions")
+        sessions_real = client.get("/api/sessions")
+        assert sessions_real.status_code == 200
+        assert sessions_real.json()["sessions"] == []
+        assert sessions_real.json()["simulated_sample_count"] >= 1
+
+        sessions = client.get("/api/sessions?include_simulated=true")
         assert sessions.status_code == 200
         sess_json = sessions.json()
         assert len(sess_json["sessions"]) >= 1

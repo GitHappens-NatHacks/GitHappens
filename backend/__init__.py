@@ -1,1 +1,1 @@
-"""TrueCursor decoupled backend package."""
+"""ClearCursor decoupled backend package."""

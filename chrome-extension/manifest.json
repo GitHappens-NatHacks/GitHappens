@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "ClearCursor Web Assist",
+  "version": "1.1.0",
+  "description": "ClearCursor One-Euro pointer smoothing, 180ms click-freeze, button gravity wells, and accessible page styling synced with the ClearCursor desktop app.",
+  "icons": {
+    "32": "icons/32.png",
+    "128": "icons/128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "action": {
+    "default_title": "ClearCursor Web Assist",
+    "default_popup": "popup.html"
+  }
+}

@@ -1,1 +1,0 @@
-{"name":"accessshift-extension-tests","private":true,"scripts":{"test":"node --test extension.test.cjs"},"devDependencies":{"jsdom":"^26.1.0"}}

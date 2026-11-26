@@ -1,4 +1,4 @@
-"""REST API endpoints for TrueCursor settings, calibration, engine toggles, and history."""
+"""REST API endpoints for ClearCursor settings, calibration, engine toggles, events, and history."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from backend.api.schemas import (
     CalibrateRequest,
     CalibrateResponse,
+    ClinicalEventRequest,
     EngineToggleRequest,
     EngineToggleResponse,
     PermissionPromptRequest,
@@ -19,13 +20,14 @@ from backend.api.schemas import (
     SettingsUpdateRequest,
 )
 from backend.core.engine.coordinator import EngineCoordinator
+from backend.core.licensing import get_edition_capabilities
 from backend.core.steadyhand.displays import detect_displays, virtual_screen_rect
 from backend.core.steadyhand.permissions import (
     get_system_permissions,
     open_permission_settings,
 )
 
-router = APIRouter(prefix="/api", tags=["truecursor"])
+router = APIRouter(prefix="/api", tags=["clearcursor"])
 
 
 def _coordinator(request: Request) -> EngineCoordinator:
@@ -36,8 +38,11 @@ def _coordinator(request: Request) -> EngineCoordinator:
 def health(request: Request) -> dict:
     coord = _coordinator(request)
     snap = coord.telemetry_snapshot()
+    caps = get_edition_capabilities()
     return {
         "status": "ok",
+        "app": "ClearCursor",
+        "edition": caps.edition,
         "session_id": coord.session_id,
         "steadyhand_running": coord.steady_worker.running,
         "gaze_running": coord.gaze_controller.running,
@@ -104,6 +109,18 @@ def toggle_engine(payload: EngineToggleRequest, request: Request) -> EngineToggl
     )
 
 
+@router.post("/engine/emergency-stop", response_model=EngineToggleResponse)
+def emergency_stop_all(request: Request) -> EngineToggleResponse:
+    """Stop GazeControl and release OS pointer interception immediately."""
+    coord = _coordinator(request)
+    result = coord.emergency_stop_all()
+    return EngineToggleResponse(
+        settings=SettingsPayload(**result["settings"]),
+        camera_running=result["camera_running"],
+        steadyhand_running=result["steadyhand_running"],
+    )
+
+
 class GazePauseRequest(BaseModel):
     paused: bool
 
@@ -117,7 +134,7 @@ def pause_gaze(payload: GazePauseRequest, request: Request) -> dict:
 
 @router.post("/gaze/stop", response_model=EngineToggleResponse)
 def stop_gaze_emergency(request: Request) -> EngineToggleResponse:
-    """Emergency stop for GazeControl, webcam capture, and system cursor interception."""
+    """Emergency stop for GazeControl, webcam capture, and gaze cursor output."""
     coord = _coordinator(request)
     result = coord.emergency_stop_gaze()
     return EngineToggleResponse(
@@ -141,7 +158,6 @@ async def gaze_preview(request: Request) -> StreamingResponse:
 
     async def frame_stream():
         last_seq = -1
-        # Wait briefly if the worker thread is still opening the camera.
         for _ in range(40):
             if coord.gaze_controller.running:
                 break
@@ -175,12 +191,15 @@ def get_history(
     request: Request,
     limit: int = Query(200, ge=1, le=1000),
     session_only: bool = False,
+    include_simulated: bool = True,
 ) -> dict:
     coord = _coordinator(request)
     session_id = coord.session_id if session_only else None
     return {
         "session_id": coord.session_id,
-        "tremor_history": coord.db.get_tremor_history(limit=limit, session_id=session_id),
+        "tremor_history": coord.db.get_tremor_history(
+            limit=limit, session_id=session_id, include_simulated=include_simulated
+        ),
         "calibration_profiles": coord.db.list_calibration_profiles(limit=20),
     }
 
@@ -190,19 +209,64 @@ def get_sessions(
     request: Request,
     days: int = Query(14, ge=1, le=365),
     limit: int = Query(30, ge=1, le=500),
+    include_simulated: bool = False,
 ) -> dict:
     coord = _coordinator(request)
-    summary = coord.db.get_session_summaries(days=days, limit=limit)
+    summary = coord.db.get_session_summaries(
+        days=days, limit=limit, include_simulated=include_simulated
+    )
     return {
         "active_session_id": coord.session_id,
         **summary,
+        "clinical_events": coord.db.list_clinical_events(days=days, limit=200),
         "calibration_profiles": coord.db.list_calibration_profiles(limit=10),
     }
+
+
+@router.get("/events")
+def list_events(
+    request: Request,
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(200, ge=1, le=500),
+) -> dict:
+    coord = _coordinator(request)
+    return {
+        "events": coord.db.list_clinical_events(days=days, limit=limit),
+    }
+
+
+@router.post("/events")
+def create_event(payload: ClinicalEventRequest, request: Request) -> dict:
+    coord = _coordinator(request)
+    return coord.db.add_clinical_event(
+        event_type=payload.event_type,
+        label=payload.label,
+        timestamp=payload.timestamp,
+        dosage=payload.dosage,
+        severity=payload.severity,
+        notes=payload.notes,
+    )
+
+
+@router.delete("/events/{event_id}")
+def delete_event(event_id: int, request: Request) -> dict:
+    coord = _coordinator(request)
+    deleted = coord.db.delete_clinical_event(event_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Clinical event not found.")
+    return {"deleted": True, "id": event_id}
 
 
 @router.post("/steadyhand/sample")
 def push_steadyhand_sample(payload: PointerSampleRequest, request: Request) -> dict:
     coord = _coordinator(request)
+    if payload.sandbox:
+        return coord.sandbox_worker.process_sample(
+            payload.x,
+            payload.y,
+            timestamp=payload.timestamp,
+            pressed=payload.pressed,
+        )
     snap = coord.steady_worker.process_sample(
         payload.x,
         payload.y,
@@ -232,6 +296,7 @@ def prompt_system_permissions(payload: PermissionPromptRequest) -> dict:
 def system_displays(request: Request) -> dict:
     coord = _coordinator(request)
     displays = detect_displays(coord.settings.screen_width, coord.settings.screen_height)
+    coord._cached_displays = displays
     vrect = virtual_screen_rect(
         displays,
         fallback_width=coord.settings.screen_width,

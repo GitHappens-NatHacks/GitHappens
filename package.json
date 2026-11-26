@@ -1,8 +1,8 @@
 {
-  "name": "truecursor",
+  "name": "clearcursor",
   "private": true,
-  "version": "0.1.0",
-  "description": "TrueCursor desktop monorepo orchestrator",
+  "version": "0.2.0",
+  "description": "ClearCursor motor stabilization, gaze control, and clinician telemetry desktop monorepo",
   "scripts": {
     "dev": "make dev",
     "dev:backend": ".venv/bin/python -m backend.sidecar_main 8000",

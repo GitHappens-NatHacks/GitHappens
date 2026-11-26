@@ -1,6 +1,6 @@
 {
-  "name": "truecursor-chrome-extension",
-  "version": "1.0.0",
+  "name": "clearcursor-chrome-extension",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.mjs"

@@ -1,4 +1,4 @@
-name: Release TrueCursor Desktop
+name: Release ClearCursor Desktop
 
 on:
   push:
@@ -110,7 +110,7 @@ jobs:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
           tagName: v__VERSION__
-          releaseName: "TrueCursor v__VERSION__"
-          releaseBody: "Standalone TrueCursor desktop installers for macOS and Windows."
+          releaseName: "ClearCursor v__VERSION__"
+          releaseBody: "Standalone ClearCursor desktop installers for macOS and Windows."
           releaseDraft: true
           prerelease: false

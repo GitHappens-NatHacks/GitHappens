@@ -1,7 +1,7 @@
-"""Cross-platform PyInstaller bundler for the TrueCursor FastAPI sidecar.
+"""Cross-platform PyInstaller bundler for the ClearCursor FastAPI sidecar.
 
 Produces a standalone single-file executable named:
-    src-tauri/binaries/truecursor-backend-<rust-target-triple>[.exe]
+    src-tauri/binaries/clearcursor-backend-<rust-target-triple>[.exe]
 
 Usage:
     python scripts/build_backend.py
@@ -42,7 +42,7 @@ def detect_target_triple() -> str:
 def build_sidecar(target_triple: str) -> Path:
     """Compile backend/sidecar_main.py via PyInstaller and copy to Tauri binaries."""
     ext = ".exe" if "windows" in target_triple else ""
-    output_name = f"truecursor-backend-{target_triple}"
+    output_name = f"clearcursor-backend-{target_triple}"
     dist_dir = ROOT / "build" / "sidecar-dist"
     work_dir = ROOT / "build" / "sidecar-work"
     spec_dir = ROOT / "build" / "sidecar-spec"
@@ -87,6 +87,9 @@ def build_sidecar(target_triple: str) -> Path:
         "websockets",
     ]
 
+    if sys.platform == "darwin":
+        command.extend(["--hidden-import", "AppKit"])
+
     if sys.platform.startswith("win"):
         # Suppress console window in end-user Windows builds while keeping pipes active.
         command.append("--noconsole")
@@ -113,7 +116,7 @@ def build_sidecar(target_triple: str) -> Path:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build TrueCursor Python sidecar binary.")
+    parser = argparse.ArgumentParser(description="Build ClearCursor Python sidecar binary.")
     parser.add_argument(
         "--target",
         default=None,

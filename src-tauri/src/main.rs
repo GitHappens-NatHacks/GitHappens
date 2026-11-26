@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    truecursor_desktop_lib::run()
+    clearcursor_desktop_lib::run()
 }

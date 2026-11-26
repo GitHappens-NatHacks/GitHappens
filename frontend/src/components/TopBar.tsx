@@ -58,7 +58,7 @@ export function TopBar({
           <BrandLogo className="h-12 w-12 shrink-0 rounded-xl shadow-sm" />
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-[var(--tc-ink)]">
-              TrueCursor
+              ClearCursor
             </h1>
             <p className="text-sm font-medium text-[var(--tc-ink-muted)]">
               Steady Pointer &amp; Hands-Free Gaze

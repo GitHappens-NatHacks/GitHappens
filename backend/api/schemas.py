@@ -1,4 +1,4 @@
-"""Pydantic request and response schemas for the TrueCursor FastAPI service."""
+"""Pydantic request and response schemas for the ClearCursor FastAPI service."""
 
 from __future__ import annotations
 
@@ -20,14 +20,23 @@ class SettingsPayload(BaseModel):
     tremor_intensity: int
     one_euro_min_cutoff: float
     one_euro_beta: float
+    adaptive_smoothing: bool
     simulate_tremor: bool
     anti_drag: bool
     anti_drag_threshold_px: float
     anti_drag_hold_ms: int
     click_freeze_ms: int
+    click_debounce_ms: int
+    right_click_guard: bool
+    scroll_smoothing: bool
     gravity_wells: bool
     gravity_strength: int
+    bypass_key: str
+    precision_key: str
+    excluded_apps: list[str]
     global_shortcut: str
+    resume_stabilization_on_launch: bool
+    minimize_to_tray: bool
     system_mouse: bool
     gaze_source: str
     gaze_dwell_ms: int
@@ -55,14 +64,23 @@ class SettingsUpdateRequest(BaseModel):
     tremor_intensity: int | None = Field(default=None, ge=0, le=100)
     one_euro_min_cutoff: float | None = Field(default=None, ge=0.05, le=5.0)
     one_euro_beta: float | None = Field(default=None, ge=0.0, le=0.2)
+    adaptive_smoothing: bool | None = None
     simulate_tremor: bool | None = None
     anti_drag: bool | None = None
     anti_drag_threshold_px: float | None = Field(default=None, ge=2.0, le=40.0)
-    anti_drag_hold_ms: int | None = Field(default=None, ge=100, le=1500)
+    anti_drag_hold_ms: int | None = Field(default=None, ge=80, le=1500)
     click_freeze_ms: int | None = Field(default=None, ge=0, le=500)
+    click_debounce_ms: int | None = Field(default=None, ge=0, le=250)
+    right_click_guard: bool | None = None
+    scroll_smoothing: bool | None = None
     gravity_wells: bool | None = None
     gravity_strength: int | None = Field(default=None, ge=0, le=80)
+    bypass_key: Literal["none", "alt", "shift", "ctrl", "fn"] | None = None
+    precision_key: Literal["none", "alt", "shift", "ctrl"] | None = None
+    excluded_apps: list[str] | None = None
     global_shortcut: str | None = Field(default=None, max_length=64)
+    resume_stabilization_on_launch: bool | None = None
+    minimize_to_tray: bool | None = None
     system_mouse: bool | None = None
     gaze_source: Literal["head", "eyes"] | None = None
     gaze_dwell_ms: int | None = Field(default=None, ge=600, le=2000)
@@ -115,8 +133,18 @@ class PointerSampleRequest(BaseModel):
     y: float
     timestamp: float | None = None
     pressed: bool | None = None
+    sandbox: bool = False
 
 
 class PermissionPromptRequest(BaseModel):
     target: Literal["accessibility", "input_monitoring", "camera"] = "accessibility"
     open_settings: bool = False
+
+
+class ClinicalEventRequest(BaseModel):
+    event_type: Literal["medication", "symptom", "flare", "fatigue", "note"] = "medication"
+    label: str = Field(min_length=1, max_length=120)
+    timestamp: float | None = None
+    dosage: str = Field(default="", max_length=80)
+    severity: int | None = Field(default=None, ge=1, le=5)
+    notes: str = Field(default="", max_length=400)

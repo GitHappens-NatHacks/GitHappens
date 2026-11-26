@@ -1,4 +1,7 @@
 export type GazeSource = "head" | "eyes";
+export type BypassKeyOption = "none" | "alt" | "shift" | "ctrl" | "fn";
+export type PrecisionKeyOption = "none" | "alt" | "shift" | "ctrl";
+export type ClinicalEventType = "medication" | "symptom" | "flare" | "fatigue" | "note";
 
 export interface SettingsPayload {
   profile: string;
@@ -13,14 +16,23 @@ export interface SettingsPayload {
   tremor_intensity: number;
   one_euro_min_cutoff: number;
   one_euro_beta: number;
+  adaptive_smoothing: boolean;
   simulate_tremor: boolean;
   anti_drag: boolean;
   anti_drag_threshold_px: number;
   anti_drag_hold_ms: number;
   click_freeze_ms: number;
+  click_debounce_ms: number;
+  right_click_guard: boolean;
+  scroll_smoothing: boolean;
   gravity_wells: boolean;
   gravity_strength: number;
+  bypass_key: BypassKeyOption;
+  precision_key: PrecisionKeyOption;
+  excluded_apps: string[];
   global_shortcut: string;
+  resume_stabilization_on_launch: boolean;
+  minimize_to_tray: boolean;
   system_mouse: boolean;
   gaze_source: GazeSource;
   gaze_dwell_ms: number;
@@ -92,9 +104,14 @@ export interface SteadyHandTelemetry {
   tremor_intensity: number;
   spastic_drags_prevented: number;
   slip_clicks_rescued: number;
+  double_clicks_blocked?: number;
+  scroll_jitters_filtered?: number;
   click_freeze_active: boolean;
   gravity_well_active: boolean;
   gravity_target_role: string | null;
+  bypass_active?: boolean;
+  precision_active?: boolean;
+  excluded_app_active?: string | null;
   os_tap_mode: string;
   os_tap_error: string | null;
   system_mouse_enabled: boolean;
@@ -108,12 +125,19 @@ export interface SteadyHandSampleSnapshot {
   tremor_intensity: number;
   tremor_hz: number | null;
   tremor_index: number;
+  resting_band_pct?: number;
+  action_band_pct?: number;
+  rms_amplitude_px?: number;
+  rms_amplitude_mm?: number;
+  tremor_severity?: "minimal" | "mild" | "moderate" | "elevated";
   medication_state_estimate: "ON" | "OFF" | null;
   stability_score: number;
   raw_pos: [number, number];
   stable_pos: [number, number];
   spastic_drags_prevented: number;
   slip_clicks_rescued: number;
+  double_clicks_blocked?: number;
+  scroll_jitters_filtered?: number;
 }
 
 export interface ActiveModes {
@@ -131,6 +155,11 @@ export interface TelemetryFrame {
   session_id: string;
   tremor_hz: number | null;
   tremor_index: number;
+  resting_band_pct?: number;
+  action_band_pct?: number;
+  rms_amplitude_px?: number;
+  rms_amplitude_mm?: number;
+  tremor_severity?: "minimal" | "mild" | "moderate" | "elevated";
   stabilization_active: boolean;
   stability_score: number;
   medication_state_estimate: "ON" | "OFF" | null;
@@ -179,8 +208,16 @@ export interface SessionSummary {
   sample_count: number;
   avg_stability_score: number;
   avg_tremor_index: number;
+  avg_resting_band_pct?: number;
+  avg_action_band_pct?: number;
+  avg_rms_amplitude_px?: number;
+  avg_rms_amplitude_mm?: number;
   avg_tremor_hz: number | null;
   had_stabilization: boolean;
+  click_rescues?: number;
+  drags_prevented?: number;
+  bounces_blocked?: number;
+  simulated_only?: boolean;
 }
 
 export interface DailyTrendPoint {
@@ -189,7 +226,52 @@ export interface DailyTrendPoint {
   session_count: number;
   avg_stability_score: number;
   avg_tremor_index: number;
+  avg_resting_band_pct?: number;
+  avg_action_band_pct?: number;
+  avg_rms_amplitude_px?: number;
+  avg_rms_amplitude_mm?: number;
   avg_tremor_hz: number | null;
+}
+
+export interface HourlyProfilePoint {
+  hour: number;
+  label: string;
+  sample_count: number;
+  avg_stability_score: number;
+  avg_tremor_index: number;
+  avg_resting_band_pct: number;
+  avg_action_band_pct: number;
+  avg_rms_amplitude_mm: number;
+}
+
+export interface FunctionalSummary {
+  total_samples: number;
+  total_sessions: number;
+  total_click_rescues: number;
+  total_drags_prevented: number;
+  total_bounces_blocked: number;
+  avg_rms_amplitude_mm: number;
+  avg_resting_band_pct: number;
+  avg_action_band_pct: number;
+}
+
+export interface ClinicalEventRecord {
+  id: number;
+  timestamp: number;
+  event_type: ClinicalEventType;
+  label: string;
+  dosage: string;
+  severity: number | null;
+  notes: string;
+}
+
+export interface ClinicalEventCreateRequest {
+  event_type: ClinicalEventType;
+  label: string;
+  timestamp?: number;
+  dosage?: string;
+  severity?: number | null;
+  notes?: string;
 }
 
 export interface CalibrationProfileSummary {
@@ -205,11 +287,17 @@ export interface SessionsResponse {
   active_session_id: string;
   sessions: SessionSummary[];
   daily_trends: DailyTrendPoint[];
+  hourly_profile?: HourlyProfilePoint[];
+  functional_summary?: FunctionalSummary;
+  clinical_events?: ClinicalEventRecord[];
+  simulated_sample_count?: number;
   calibration_profiles: CalibrationProfileSummary[];
 }
 
 export interface HealthResponse {
   status: string;
+  app?: string;
+  edition?: string;
   session_id: string;
   steadyhand_running: boolean;
   gaze_running: boolean;
