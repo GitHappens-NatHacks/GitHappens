@@ -19,6 +19,10 @@ from backend.core.gaze.calibration import (
 from backend.core.gaze.controller import GazeController, ScreenRect
 from backend.core.steadyhand.checkin import evaluate_motor_checkin
 from backend.core.steadyhand.keyboard_cadence import KeyboardCadenceMonitor
+from backend.core.steadyhand.resting_hand import (
+    run_webcam_resting_check,
+    score_resting_hand_samples,
+)
 from backend.core.steadyhand.worker import SteadyHandWorker
 from backend.db.database import Database
 
@@ -429,6 +433,36 @@ class EngineCoordinator:
             context_tag=context_tag,
             notes=notes,
         )
+        return self.db.record_motor_checkin(session_id=self.session_id, scored=scored)
+
+    def record_resting_hand_checkin(
+        self,
+        *,
+        mode: str = "webcam",
+        samples: list[dict[str, float]] | None = None,
+        duration_sec: float = 10.0,
+        camera_index: int = 0,
+        prefer_backend: str = "auto",
+        context_tag: str = "resting_hand",
+        notes: str = "",
+    ) -> dict[str, Any]:
+        if mode == "samples":
+            if not samples:
+                raise ValueError("samples list is required when mode='samples'.")
+            scored = score_resting_hand_samples(
+                samples,
+                backend_used="opencv_optical_flow" if prefer_backend == "opencv" else "client_samples",
+                context_tag=context_tag,
+                notes=notes,
+            )
+        else:
+            scored = run_webcam_resting_check(
+                duration_sec=duration_sec,
+                camera_index=camera_index,
+                prefer_backend=prefer_backend,  # type: ignore[arg-type]
+                context_tag=context_tag,
+                notes=notes,
+            )
         return self.db.record_motor_checkin(session_id=self.session_id, scored=scored)
 
     def persist_pending_fft(self) -> dict | None:

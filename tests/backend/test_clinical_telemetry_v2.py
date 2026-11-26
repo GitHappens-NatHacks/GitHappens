@@ -195,3 +195,73 @@ def test_keyboard_cadence_privacy_and_persistence(tmp_path):
             assert sess["coverage_summary"]["keyboard_cadence_windows"] == 1
     finally:
         coord.shutdown()
+
+
+def test_opencv_optical_flow_resting_hand_fallback_and_api(tmp_path, monkeypatch):
+    import cv2
+    import numpy as np
+
+    from backend.core.steadyhand import resting_hand
+
+    # Simulate Python 3.13+ where MediaPipe is unavailable: auto must fall back to OpenCV optical flow
+    def _boom_mp():
+        raise ImportError("No module named 'mediapipe'")
+
+    monkeypatch.setattr(resting_hand, "MediaPipeHandTremorTracker", _boom_mp)
+    tracker = resting_hand.create_resting_hand_tracker(prefer_backend="auto")
+    assert tracker.backend_name == "opencv_optical_flow"
+
+    # Generate 120 synthetic 30fps webcam frames containing a textured hand proxy oscillating at 5.0 Hz
+    samples: list[dict[str, float]] = []
+    for i in range(120):
+        t = i / 30.0
+        frame = np.full((240, 320, 3), 25, dtype=np.uint8)
+        cx = int(round(160 + 5.0 * math.sin(2.0 * math.pi * 5.0 * t)))
+        cy = 120
+        # Draw a high-contrast textured hand silhouette with corners inside the center ROI
+        cv2.rectangle(frame, (cx - 28, cy - 22), (cx + 28, cy + 22), (210, 210, 210), -1)
+        for ox in (-18, 0, 18):
+            for oy in (-12, 12):
+                cv2.rectangle(frame, (cx + ox - 4, cy + oy - 4), (cx + ox + 4, cy + oy + 4), (40, 40, 40), -1)
+        pt = tracker.process_frame(frame)
+        assert pt is not None
+        samples.append({"x": pt[0], "y": pt[1], "t": t})
+    tracker.close()
+
+    scored = resting_hand.score_resting_hand_samples(
+        samples,
+        backend_used="opencv_optical_flow",
+        context_tag="resting_hand",
+        notes="Desk rest test",
+    )
+    assert scored["backend_used"] == "opencv_optical_flow"
+    assert scored["hold_dominant_hz"] is not None
+    assert 4.0 <= scored["hold_dominant_hz"] <= 6.0
+    assert scored["hold_resting_band_pct"] > scored["hold_action_band_pct"]
+
+    # REST API endpoints: vision capabilities + resting-hand check-in persistence
+    app = create_app(db_path=tmp_path / "resting.db", auto_start_workers=False)
+    with TestClient(app) as client:
+        caps = client.get("/api/system/vision-capabilities").json()
+        assert caps["opencv_available"] is True
+        assert caps["selected_resting_hand_backend"] in ("mediapipe_hands", "opencv_optical_flow")
+
+        res = client.post(
+            "/api/checkins/resting-hand",
+            json={
+                "mode": "samples",
+                "samples": samples,
+                "prefer_backend": "opencv",
+                "context_tag": "resting_hand",
+                "notes": "Morning resting check",
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["context_tag"] == "resting_hand"
+        assert 4.0 <= data["hold_dominant_hz"] <= 6.0
+        assert "opencv_optical_flow" in data["notes"]
+
+        listed = client.get("/api/checkins?days=7").json()["checkins"]
+        assert len(listed) == 1
+        assert listed[0]["id"] == data["id"]

@@ -174,3 +174,15 @@ class MotorCheckinRequest(BaseModel):
     tap_hit_radius_px: float = Field(default=28.0, ge=4.0, le=120.0)
     context_tag: Literal["routine", "baseline", "pre_medication", "post_medication", "flare"] = "routine"
     notes: str = Field(default="", max_length=400)
+
+
+class RestingHandCheckinRequest(BaseModel):
+    mode: Literal["samples", "webcam"] = "webcam"
+    samples: list[HoldSamplePoint] | None = Field(default=None, max_length=3000)
+    duration_sec: float = Field(default=10.0, ge=2.0, le=30.0)
+    camera_index: int = Field(default=0, ge=0)
+    prefer_backend: Literal["auto", "mediapipe", "opencv"] = "auto"
+    context_tag: Literal[
+        "resting_hand", "routine", "baseline", "pre_medication", "post_medication", "flare"
+    ] = "resting_hand"
+    notes: str = Field(default="", max_length=400)

@@ -17,6 +17,7 @@ from backend.api.schemas import (
     MotorCheckinRequest,
     PermissionPromptRequest,
     PointerSampleRequest,
+    RestingHandCheckinRequest,
     SettingsPayload,
     SettingsUpdateRequest,
 )
@@ -27,6 +28,7 @@ from backend.core.steadyhand.permissions import (
     get_system_permissions,
     open_permission_settings,
 )
+from backend.core.steadyhand.resting_hand import detect_vision_capabilities
 
 router = APIRouter(prefix="/api", tags=["clearcursor"])
 
@@ -263,6 +265,31 @@ def delete_checkin(checkin_id: int, request: Request) -> dict:
     if not deleted:
         raise HTTPException(status_code=404, detail="Motor check-in not found.")
     return {"deleted": True, "id": checkin_id}
+
+
+@router.post("/checkins/resting-hand")
+def create_resting_hand_checkin(payload: RestingHandCheckinRequest, request: Request) -> dict:
+    """Run or score a resting-hand webcam tremor check (MediaPipe or OpenCV optical flow)."""
+    coord = _coordinator(request)
+    try:
+        return coord.record_resting_hand_checkin(
+            mode=payload.mode,
+            samples=[pt.model_dump() for pt in payload.samples] if payload.samples else None,
+            duration_sec=payload.duration_sec,
+            camera_index=payload.camera_index,
+            prefer_backend=payload.prefer_backend,
+            context_tag=payload.context_tag,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/system/vision-capabilities")
+def system_vision_capabilities() -> dict:
+    return detect_vision_capabilities()
 
 
 @router.get("/cadence")
